@@ -1,0 +1,12 @@
+.cb-widget { padding: 6px 4px; }
+.cb-widget .cb-list { list-style: none; margin: 0; padding: 0; }
+.cb-widget .cb-list li { padding: 6px 4px; border-bottom: 1px solid #eee; }
+.cb-widget .cb-list li .row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.cb-widget .cb-list.small li { padding: 4px 2px; }
+.cb-widget-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.cb-widget-kpis .kpi { background: #fff; border: 1px solid #e6e6e6; border-radius: 6px; padding: 10px; }
+.cb-widget-kpis .kpi .label { display: block; color: #666; font-size: 12px; margin-bottom: 6px; }
+.cb-widget-kpis .kpi .value { font-weight: 600; font-size: 18px; }
+.cb-columns { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.status.scheduled { color: #2c7; }
+.status.canceled { color: #e33; }
