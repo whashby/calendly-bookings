@@ -2,44 +2,111 @@
 
 - calendly-bookings/
     - calendly-bookings.php
+    - calendly-bookings.php.md
     - calendly-bookings.sql.txt
     - directory_tree.md
     - uninstall.php
+    - uninstall.php.md
     - includes/
         - bootstrap.php
+        - bootstrap.php.md
         - constants.php
+        - constants.php.md
         - installer.php
+        - installer.php.md
         - admin/
             - assets/
                 - cb-admin.js
+                - cb-admin.js.md
                 - control-panel.js
+                - control-panel.js.md
                 - dashboard-charts.js
+                - dashboard-charts.js.md
                 - dashboard-widgets.css
+                - dashboard-widgets.css.md
                 - dashboard-widgets.js
+                - dashboard-widgets.js.md
                 - settings.js
+                - settings.js.md
         - frontend/
             - assets/
                 - cb-frontend.css
+                - cb-frontend.css.md
                 - cb-frontend.js
+                - cb-frontend.js.md
         - modules/
             - class-cb-account-dashboard.php
+            - class-cb-account-dashboard.php.md
             - class-cb-admin.php
+            - class-cb-admin.php.md
             - class-cb-api-proxy.php
+            - class-cb-api-proxy.php.md
             - class-cb-api.php
+            - class-cb-api.php.md
             - class-cb-audit-log.php
+            - class-cb-audit-log.php.md
             - class-cb-checkout.php
+            - class-cb-checkout.php.md
             - class-cb-dashboard.php
+            - class-cb-dashboard.php.md
             - class-cb-debug.php
+            - class-cb-debug.php.md
             - class-cb-frontend.php
+            - class-cb-frontend.php.md
             - class-cb-logger.php
+            - class-cb-logger.php.md
             - class-cb-maintenance.php
+            - class-cb-maintenance.php.md
             - class-cb-plugin.php
+            - class-cb-plugin.php.md
             - class-cb-rest-dashboard.php
+            - class-cb-rest-dashboard.php.md
             - class-cb-shortcodes.php
+            - class-cb-shortcodes.php.md
             - class-cb-wc-sync.php
+            - class-cb-wc-sync.php.md
             - class-cb-webhooks.php
+            - class-cb-webhooks.php.md
         - templates/
             - meeting-scheduled.php
+            - meeting-scheduled.php.md
         - utils/
             - class-cb-timezone-converter.php
+            - class-cb-timezone-converter.php.md
             - functions.php
+            - functions.php.md
+
+# 📚 Documentation Links
+
+- [calendly-bookings.php.md](calendly-bookings.php.md)
+- [includes/admin/assets/cb-admin.js.md](includes/admin/assets/cb-admin.js.md)
+- [includes/admin/assets/control-panel.js.md](includes/admin/assets/control-panel.js.md)
+- [includes/admin/assets/dashboard-charts.js.md](includes/admin/assets/dashboard-charts.js.md)
+- [includes/admin/assets/dashboard-widgets.css.md](includes/admin/assets/dashboard-widgets.css.md)
+- [includes/admin/assets/dashboard-widgets.js.md](includes/admin/assets/dashboard-widgets.js.md)
+- [includes/admin/assets/settings.js.md](includes/admin/assets/settings.js.md)
+- [includes/bootstrap.php.md](includes/bootstrap.php.md)
+- [includes/constants.php.md](includes/constants.php.md)
+- [includes/frontend/assets/cb-frontend.css.md](includes/frontend/assets/cb-frontend.css.md)
+- [includes/frontend/assets/cb-frontend.js.md](includes/frontend/assets/cb-frontend.js.md)
+- [includes/installer.php.md](includes/installer.php.md)
+- [includes/modules/class-cb-account-dashboard.php.md](includes/modules/class-cb-account-dashboard.php.md)
+- [includes/modules/class-cb-admin.php.md](includes/modules/class-cb-admin.php.md)
+- [includes/modules/class-cb-api-proxy.php.md](includes/modules/class-cb-api-proxy.php.md)
+- [includes/modules/class-cb-api.php.md](includes/modules/class-cb-api.php.md)
+- [includes/modules/class-cb-audit-log.php.md](includes/modules/class-cb-audit-log.php.md)
+- [includes/modules/class-cb-checkout.php.md](includes/modules/class-cb-checkout.php.md)
+- [includes/modules/class-cb-dashboard.php.md](includes/modules/class-cb-dashboard.php.md)
+- [includes/modules/class-cb-debug.php.md](includes/modules/class-cb-debug.php.md)
+- [includes/modules/class-cb-frontend.php.md](includes/modules/class-cb-frontend.php.md)
+- [includes/modules/class-cb-logger.php.md](includes/modules/class-cb-logger.php.md)
+- [includes/modules/class-cb-maintenance.php.md](includes/modules/class-cb-maintenance.php.md)
+- [includes/modules/class-cb-plugin.php.md](includes/modules/class-cb-plugin.php.md)
+- [includes/modules/class-cb-rest-dashboard.php.md](includes/modules/class-cb-rest-dashboard.php.md)
+- [includes/modules/class-cb-shortcodes.php.md](includes/modules/class-cb-shortcodes.php.md)
+- [includes/modules/class-cb-wc-sync.php.md](includes/modules/class-cb-wc-sync.php.md)
+- [includes/modules/class-cb-webhooks.php.md](includes/modules/class-cb-webhooks.php.md)
+- [includes/templates/meeting-scheduled.php.md](includes/templates/meeting-scheduled.php.md)
+- [includes/utils/class-cb-timezone-converter.php.md](includes/utils/class-cb-timezone-converter.php.md)
+- [includes/utils/functions.php.md](includes/utils/functions.php.md)
+- [uninstall.php.md](uninstall.php.md)
