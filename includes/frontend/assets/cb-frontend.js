@@ -1,23 +1,14 @@
-/**
- * Calendly Bookings – Frontend UI
- * Populate #cb_meeting_date and #cb_meeting_time from raw slots
- *
- * Requires:
- *   CB_REST         – REST root string (e.g., '/wp-json/calendly-bookings/v1/')
- *   CB_REST_NONCE   – WP REST API nonce
- *   CB_REST_UUID    – Event UUID
- */
 (function ($) {
     'use strict';
 
-    const uuid = window.CB_REST_UUID;
+    const uuid = CB_REST.uuid;
     // If your PHP localized CB_REST as an object (root/nonce), switch to: CB_REST.root
     const apiFetch = (endpoint, options = {}) => {
         const defaults = {
-            headers: { 'X-WP-Nonce': window.CB_REST_NONCE, 'Content-Type': 'application/json' },
+            headers: { 'X-WP-Nonce': CB_REST.nonce, 'Content-Type': 'application/json' },
             credentials: 'same-origin'
         };
-        return fetch(window.CB_REST + endpoint, { ...defaults, ...options }).then(r => r.json());
+        return fetch(CB_REST.root + endpoint, { ...defaults, ...options }).then(r => r.json());
     };
 
     const $dateSelect = $('#cb_meeting_date');

@@ -1,6 +1,4 @@
-body.product_cat-meeting div.product_meta {
-	display: none;
-}
+
 .has-small-font-size {
 	font-size: 13px !important;
 	line-height: 1.2em;
@@ -61,4 +59,58 @@ body.product_cat-meeting div.product_meta {
 #cb_notes {
     min-height: 120px;
     resize: vertical;
+}
+
+
+.cb-location-options {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.cb-location-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    cursor: pointer;
+}
+
+.cb-location-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.cb-location-option input[type="radio"] {
+    margin: 0;
+}
+
+.cb-location-icon {
+    width: 18px;
+    height: 18px;
+    display: inline-block;
+    background-size: contain;
+    background-repeat: no-repeat;
+}
+
+/* Blue video camera for Zoom */
+.cb-location-icon.zoom {
+    background-image: url('data:image/svg+xml;utf8,<svg fill="%23007bff" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 10.5V7c0-1.1-.9-2-2-2H3C1.9 5 1 5.9 1 7v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-3.5l4 4v-11l-4 4z"/></svg>');
+}
+
+/* Pink location pin for HIER Life */
+.cb-location-icon.location {
+    background-image: url('data:image/svg+xml;utf8,<svg fill="%23e83e8c" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5c-1.4 0-2.5-1.1-2.5-2.5S10.6 6.5 12 6.5s2.5 1.1 2.5 2.5S13.4 11.5 12 11.5z"/></svg>');
+}
+
+.cb-location-label {
+    font-weight: 600;
+}
+
+.cb-location-note {
+    font-size: 0.85em;
+    color: #666;
+    margin-left: 2rem; /* indent under radio+label */
+    margin-top: 0.25rem;
+    line-height: 1.3;
 }
