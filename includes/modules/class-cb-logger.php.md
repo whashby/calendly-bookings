@@ -1,3 +1,6 @@
+# Copy of class-cb-logger.php
+
+```php
 <?php
 // includes/modules/class-cb-logger.php
 namespace Calendly_Bookings\Modules;
@@ -14,3 +17,5 @@ final class CB_Logger {
         do_action('cb_log', $event, $ctx);
     }
 }
+
+```
