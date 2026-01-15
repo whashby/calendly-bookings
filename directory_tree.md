@@ -1,0 +1,45 @@
+# Directory Tree for C:\staging\calendly-bookings
+
+- calendly-bookings/
+    - calendly-bookings.php
+    - calendly-bookings.sql.txt
+    - directory_tree.md
+    - uninstall.php
+    - includes/
+        - bootstrap.php
+        - constants.php
+        - installer.php
+        - admin/
+            - assets/
+                - cb-admin.js
+                - control-panel.js
+                - dashboard-charts.js
+                - dashboard-widgets.css
+                - dashboard-widgets.js
+                - settings.js
+        - frontend/
+            - assets/
+                - cb-frontend.css
+                - cb-frontend.js
+        - modules/
+            - class-cb-account-dashboard.php
+            - class-cb-admin.php
+            - class-cb-api-proxy.php
+            - class-cb-api.php
+            - class-cb-audit-log.php
+            - class-cb-checkout.php
+            - class-cb-dashboard.php
+            - class-cb-debug.php
+            - class-cb-frontend.php
+            - class-cb-logger.php
+            - class-cb-maintenance.php
+            - class-cb-plugin.php
+            - class-cb-rest-dashboard.php
+            - class-cb-shortcodes.php
+            - class-cb-wc-sync.php
+            - class-cb-webhooks.php
+        - templates/
+            - meeting-scheduled.php
+        - utils/
+            - class-cb-timezone-converter.php
+            - functions.php

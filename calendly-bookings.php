@@ -3,7 +3,7 @@
 /**
  * Plugin Name: Calendly Bookings
  * Description: Manage Calendly events and WooCommerce products.
- * Version: 5.1.0
+ * Version: 6.2.1
  * Author:      Wafiq Harris-Ashby
  * Author URI:  https://whashby.github.io
  * Text Domain: calendly-bookings
