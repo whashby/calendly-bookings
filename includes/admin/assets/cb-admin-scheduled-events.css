@@ -1,0 +1,116 @@
+/* Invitee History */
+.invitee-history {
+  margin: 1em 0;
+}
+
+.history-item {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background-color: #f9f9f9;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.history-item p {
+  margin: 4px 0;
+}
+
+.notes-section {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #ccc;
+}
+
+.notes-section p {
+  margin: 3px 0;
+}
+
+/* Walk-in Modal Styling */
+#cb-walkin-modal {
+  padding: 20px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#cb-walkin-modal h2 {
+  margin-top: 0;
+  font-size: 18px;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 10px;
+}
+
+#cb-walkin-form label {
+  display: block !important;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+#cb-walkin-form input[type="text"],
+#cb-walkin-form input[type="email"],
+#cb-walkin-form input[type="date"],
+#cb-walkin-form input[type="time"],
+#cb-walkin-form select,
+#cb-walkin-form textarea {
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 8px 10px !important;          /* uniform padding */
+  border: 1px solid #ccc !important;
+  border-radius: 4px !important;         /* consistent radius */
+  background: #fff !important;
+  box-sizing: border-box !important;
+  font-size: 14px !important;            /* uniform font size */
+  line-height: 1.4 !important;
+}
+
+#cb-walkin-form textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+#cb-walkin-form button {
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+/* Actions bottom-left */
+.cb-thickbox-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+/* Side-by-side field groups */
+.cb-field-row,
+.tablenav,
+.admin-notes {
+  display: flex;
+  gap: 20px;
+}
+
+.cb-field-row,
+.admin-notes {
+  margin-bottom: 15px;
+}
+
+.cb-field-row label,
+.tablenav div,
+.admin-notes p{
+  flex: 1; /* equal width for paired fields */
+}
+
+.tablenav div{
+  margin-bottom: -25px !important;
+}
+
+.tablenav-pages,
+.admin-notes p{
+    text-align: right !important;
+}
+
+.admin-notes {
+  margin-top: -25px;
+}
+
+

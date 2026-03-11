@@ -2,7 +2,6 @@ document.addEventListener('DOMContentLoaded', () => {
   renderAvailabilityWidget();
   renderIntegrityWidget();
   renderHealthWidget();
-  renderTrendsWidget();
 });
 
 function apiFetch(endpoint) {
@@ -13,16 +12,59 @@ function apiFetch(endpoint) {
   }).then(res => res.json());
 }
 
+// Reusable time formatting helper
+function formatLocalTime(isoString) {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  return d.toLocaleString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+// Widget renderer using the helper
 function renderAvailabilityWidget() {
   apiFetch('dashboard/availability').then(data => {
     const container = document.getElementById('cb-widget-availability');
     container.innerHTML = '';
+
+    let tableHtml = `
+      <table class="cb-availability-table" style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="text-align:left; border-bottom:1px solid #ccc;">Name</th>
+            <th style="text-align:left; border-bottom:1px solid #ccc;">Available Slots</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
     data.forEach(item => {
-      const slots = item.slots.length ? item.slots.join(', ') : 'No upcoming slots';
-      container.innerHTML += `<div><strong>${item.name}</strong>: ${slots}</div>`;
+      const slots = item.slots.length
+        ? item.slots.map(slot => formatLocalTime(slot)).join(', ')
+        : 'No upcoming slots';
+
+      tableHtml += `
+        <tr>
+          <td style="padding:4px 8px;"><strong>${item.name}</strong></td>
+          <td style="padding:4px 8px;">${slots}</td>
+        </tr>
+      `;
     });
+
+    tableHtml += `
+        </tbody>
+      </table>
+    `;
+
+    container.innerHTML = tableHtml;
   });
 }
+
+
 
 function renderIntegrityWidget() {
   apiFetch('dashboard/integrity').then(data => {
@@ -103,16 +145,42 @@ function renderRevenueWidget(months = 1) {
         <button id="cb-rev-6m" class="button">6M</button>
         <button id="cb-rev-12m" class="button">12M</button>
       </div>
-      <div>Total Revenue (${months === 0 ? 'All Time' : months + 'M'}): $${data.revenue.toFixed(2)}</div>
+      <div>Total Revenue (${data.period}): $${data.total_revenue.toFixed(2)}</div>
       <strong>Top Event Types:</strong>
-      <ul class="cb-list"></ul>
+      <table class="cb-revenue-table" style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="text-align:left; border-bottom:1px solid #ccc;" width="40">Event</th>
+            <th style="text-align:left; border-bottom:1px solid #ccc;">Revenue</th>
+            <th style="text-align:left; border-bottom:1px solid #ccc;">Last Booking</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+        <tfoot>
+          <tr>
+            <td style="padding:4px 8px; font-weight:bold;">Total</td>
+            <td style="padding:4px 8px; font-weight:bold;">$${data.total_revenue.toFixed(2)}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
     `;
-    const list = container.querySelector('ul');
-    data.top_events.forEach(ev => {
-      list.innerHTML += `<li>${ev.name}: $${ev.revenue.toFixed(2)}</li>`;
+
+    const tbody = container.querySelector('tbody');
+    data.events.forEach(ev => {
+      const lastBooking = ev.last_booking && ev.last_booking !== '—'
+        ? formatLocalTime(ev.last_booking)
+        : '—';
+      tbody.innerHTML += `
+        <tr>
+          <td style="padding:4px 8px;">${ev.name}</td>
+          <td style="padding:4px 8px;">$${ev.revenue.toFixed(2)}</td>
+          <td style="padding:4px 8px;">${lastBooking}</td>
+        </tr>
+      `;
     });
 
-    // Attach filter handlers
+    // Re-bind controls
     document.getElementById('cb-rev-1m').addEventListener('click', () => renderRevenueWidget(1));
     document.getElementById('cb-rev-3m').addEventListener('click', () => renderRevenueWidget(3));
     document.getElementById('cb-rev-6m').addEventListener('click', () => renderRevenueWidget(6));
@@ -138,14 +206,23 @@ function renderHealthWidget() {
       apiFetch('dashboard/sync', { method: 'POST' }) // use POST if that's how your route is registered
         .then(syncData => { 
           // show success popup instead of alert
-          showNotice(syncData.message || 'Sync completed successfully');
+          wp.data.dispatch('core/notices').createNotice(
+			  syncData.message, 
+			  'Sync completed successfully',
+			  { type: 'snackbar' }
+		  );
           // Refresh widget after sync
           renderHealthWidget(); 
-        })
-        .catch(err => showNotice('Sync failed: ' + err.message, 'error'));
-    }); 
+        }).catch(error => { 
+		  wp.data.dispatch('core/notices').createNotice(
+			  'error', 'Failed to load data: ' + error.message, 
+			  { type: 'snackbar' } 
+		  );
+	  }); 
+	});
   });
 }
+
 
 function renderPerformanceWidget(months = 1) {
   apiFetch(`dashboard/performance?months=${months}`).then(data => {
@@ -175,8 +252,7 @@ function renderPerformanceWidget(months = 1) {
           <td>${row.name}</td>
           <td>${row.bookings}</td>
           <td>${row.revenue.toFixed(2)}</td>
-        </tr>
-      `;
+        </tr>`;
     });
 
     // Attach filter handlers
@@ -194,15 +270,29 @@ document.addEventListener('DOMContentLoaded', () => {
 function renderRecentBookingsWidget() {
   apiFetch('dashboard/recent-bookings').then(data => {
     const container = document.getElementById('cb-widget-recent');
-    container.innerHTML = '<ul class="cb-list"></ul>';
-    const list = container.querySelector('ul');
+    container.innerHTML = `
+      <table class="cb-bookings-table" style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="text-align:left; border-bottom:1px solid #ccc;">Customer</th>
+            <th style="text-align:left; border-bottom:1px solid #ccc;">Start Time</th>
+            <th style="text-align:left; border-bottom:1px solid #ccc;">Status</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    `;
+
+    const tbody = container.querySelector('tbody');
     data.forEach(row => {
-      list.innerHTML += `
-        <li>
-          <span class="cb-booking-name">${row.name}</span>
-          <span class="cb-booking-time">${row.start_time}</span>
-          <span class="cb-booking-status ${row.status}">${row.status}</span>
-        </li>
+      tbody.innerHTML += `
+        <tr>
+          <td style="padding:4px 8px;">${row.invitee}<br />${row.event_name}</td>
+          <td style="padding:4px 8px;">${formatLocalTime(row.scheduled)}</td>
+<td style="padding:4px 8px;" class="cb-booking-status ${row.status || 'cancelled'}">
+    ${row.status || 'cancelled'}
+</td>
+        </tr>
       `;
     });
   });

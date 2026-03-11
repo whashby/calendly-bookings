@@ -136,7 +136,7 @@ class CB_Account_Dashboard {
         $cb_api  = new CB_API();
 
         // Data sources
-        $upcoming = $cb_api->get_scheduled_events(['status' => 'active'], 'my-account', 10);
+        $upcoming = $cb_api->get_scheduled_events(['status' => 'active'], 'my-account', 5);
         $past     = $cb_api->get_scheduled_events(['status' => 'completed'], 'my-account', 10);
         $orders   = self::get_recent_orders($user_id, 5);
 		$has_calendly_product = self::user_has_calendly_product($user_id);
@@ -242,29 +242,34 @@ class CB_Account_Dashboard {
 		);
 	}
 
-    private static function list_items(array $items): string {
-        if (empty($items)) {
-            return '<p class="hier-card__meta">No items found.</p>';
-        }
-        $html = '<ul class="hier-card__list" role="list">';
-        foreach ($items as $item) {
-            $label = $item['label'] ?? '';
-            $value = $item['value'] ?? '';
-            $meta  = $item['meta'] ?? '';
-            $html .= sprintf(
-                '<li>
-                    <span>%1$s</span>
-                    <span>%2$s</span>
-                    %3$s
-                </li>',
-                esc_html($label),
-                esc_html($value),
-                !empty($meta) ? '<div class="hier-card__meta">'.esc_html($meta).'</div>' : ''
-            );
-        }
-        $html .= '</ul>';
-        return $html;
+private static function items_list(array $items): string {
+    if (empty($items)) {
+        return '<p class="hier-card__meta">No items found.</p>';
     }
+
+    $html = '';
+    foreach ($items as $item) {
+        $title    = $item['title'] ?? '';
+        $date     = $item['date'] ?? '';
+        $location = $item['location'] ?? '';
+        $actions  = $item['actions'] ?? '';
+
+        $html .= sprintf(
+            '<div class="hier-card__booking">
+                <strong class="hier-card__title">%1$s</strong>%2$s<br />
+                %3$s
+                %4$s
+            </div>',
+            esc_html($title),
+            !empty($date) ? ' – ' . esc_html($date) : '',
+            !empty($location) ? '<p class="hier-card__location">'.esc_html($location).'</p>' : '',
+            !empty($actions) ? '<p class="hier-card__actions">'.$actions.'</p>' : ''
+        );
+    }
+
+    return $html;
+}
+
 
     /* ---------------------------
      * Feature 1: Profile Snapshot
@@ -325,38 +330,37 @@ private static function profile_snapshot(\WP_User $user): string {
     /* ---------------------------
      * Feature 2: Upcoming Bookings
      * --------------------------- */
-    private static function upcoming_bookings_list(array $events): string {
-        if (empty($events)) {
-            return '<p class="hier-card__meta">No upcoming bookings.</p>';
-        }
-
-        $items = array_map(function($ev) {
-            $label = $ev['event_name'] ?? 'Booking';
-            $start = !empty($ev['start_time']) ? self::format_site_time($ev['start_time']) : '';
-            $loc   = $ev['location'] ?? '—';
-
-            $actions = [];
-            if (!empty($ev['reschedule_url'])) {
-                $actions[] = '<a class="button" href="'.esc_url($ev['reschedule_url']).'">Reschedule</a>';
-            }
-            if (!empty($ev['cancel_url'])) {
-                $actions[] = '<a class="button" href="'.esc_url($ev['cancel_url']).'">Cancel</a>';
-            }
-
-            $meta = 'Location: '.$loc;
-            if (!empty($actions)) {
-                $meta .= ' | <span class="hier-card__actions">'.implode(' ', $actions).'</span>';
-            }
-
-            return [
-                'label' => $label,
-                'value' => $start,
-                'meta'  => wp_kses_post($meta),
-            ];
-        }, $events);
-
-        return self::list_items($items);
+private static function upcoming_bookings_list(array $events): string {
+    if (empty($events)) {
+        return '<p class="hier-card__meta">No upcoming bookings.</p>';
     }
+
+    $items = array_map(function($ev) {
+        return [
+            'title'    => $ev['event_name'] ?? 'Booking',
+            'date'     => !empty($ev['start_time']) ? self::format_site_time($ev['start_time']) : '',
+            'location' => $ev['location'] ?? '—',
+            'actions'  => self::render_actions($ev),
+        ];
+    }, $events);
+
+    return self::items_list($items);
+}
+
+/**
+ * Helper to render reschedule/cancel links
+ */
+private static function render_actions(array $ev): string {
+    $links = [];
+    if (!empty($ev['reschedule_url'])) {
+        $links[] = '<a href="'.esc_url($ev['reschedule_url']).'">Reschedule</a>';
+    }
+    if (!empty($ev['cancel_url'])) {
+        $links[] = '<a href="'.esc_url($ev['cancel_url']).'">Cancel</a>';
+    }
+    return !empty($links) ? implode(' | ', $links) : '';
+}
+
 
 	/* ---------------------------
      * Feature 3: Available Products

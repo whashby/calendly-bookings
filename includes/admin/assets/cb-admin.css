@@ -1,0 +1,38 @@
+/* Basic form styling inside ThickBox */
+.cb-thickbox-form label {
+  display: block;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.cb-thickbox-form input[type="text"],
+.cb-thickbox-form textarea {
+  width: 100%;
+  padding: 6px 8px;
+  margin-top: 4px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.cb-thickbox-form textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.cb-thickbox-actions {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+}
+
+.cb-thickbox-actions .button-primary {
+  background: #2271b1;
+  border-color: #2271b1;
+  color: #fff;
+}
+
+.cb-thickbox-actions .button-primary:hover {
+  background: #135e96;
+  border-color: #135e96;
+}

@@ -8,25 +8,26 @@ use WP_REST_Response;
 
 if (!defined('ABSPATH')) exit;
 
-final class CB_REST_Dashboard {
+final class CB_Dashboard_REST {
     public static function init(): void {
         add_action('rest_api_init', [__CLASS__, 'register_routes']);
     }
 
 	public static function register_routes(): void {
-		register_rest_route('calendly-bookings/v1', '/dashboard/availability', [
+	    $ns = 'calendly-bookings/v1';
+		register_rest_route($ns, '/dashboard/availability', [
 			'methods'  => 'GET',
 			'callback' => [__CLASS__, 'get_availability_snapshot'],
 			'permission_callback' => fn() => current_user_can('manage_options'),
 		]);
 
-		register_rest_route('calendly-bookings/v1', '/dashboard/integrity', [
+		register_rest_route($ns, '/dashboard/integrity', [
 			'methods'  => 'GET',
 			'callback' => [__CLASS__, 'get_data_integrity'],
 			'permission_callback' => fn() => current_user_can('manage_options'),
 		]);
 
-		register_rest_route('calendly-bookings/v1', '/dashboard/revenue', [
+		register_rest_route($ns, '/dashboard/revenue', [
 			'methods'  => 'GET',
 			'callback' => [self::class, 'get_revenue_tracker'],
 			'permission_callback' => fn() => current_user_can('manage_options'),
@@ -40,19 +41,19 @@ final class CB_REST_Dashboard {
 		]);
 
 
-		register_rest_route('calendly-bookings/v1', '/dashboard/health', [
+		register_rest_route($ns, '/dashboard/health', [
 			'methods'  => 'GET',
 			'callback' => [__CLASS__, 'get_sync_health'],
 			'permission_callback' => fn() => current_user_can('manage_options'),
 		]);
 
-		register_rest_route('calendly-bookings/v1', '/dashboard/sync', [
+		register_rest_route($ns, '/dashboard/sync', [
 			'methods'  => 'GET',
 			'callback' => [__CLASS__, 'sync_health'],
 			'permission_callback' => fn() => current_user_can('manage_options'),
 		]);
 
-		register_rest_route('calendly-bookings/v1', '/dashboard/trends', [
+		register_rest_route($ns, '/dashboard/trends', [
 			'methods'  => 'GET',
 			'callback' => [self::class, 'get_booking_trends'],
 			'permission_callback' => fn() => current_user_can('manage_options'),
@@ -65,7 +66,7 @@ final class CB_REST_Dashboard {
 			],
 		]);
 
-		register_rest_route('calendly-bookings/v1', '/dashboard/fix-missing-uuid', [ 
+		register_rest_route($ns, '/dashboard/fix-missing-uuid', [ 
 			'methods' => 'POST', 
 			'callback' => [self::class, 'fix_missing_uuid'], 
 			'permission_callback' => fn() => current_user_can('manage_options'), 
@@ -77,7 +78,7 @@ final class CB_REST_Dashboard {
 			], 
 		]); 
 		
-		register_rest_route('calendly-bookings/v1', '/dashboard/fix-duplicate', [ 
+		register_rest_route($ns, '/dashboard/fix-duplicate', [ 
 			'methods' => 'POST', 
 			'callback' => [self::class, 'fix_duplicate'], 
 			'permission_callback' => fn() => current_user_can('manage_options'), 
@@ -89,7 +90,7 @@ final class CB_REST_Dashboard {
 			], 
 		]);
 
-		register_rest_route('calendly-bookings/v1', '/dashboard/performance', [
+		register_rest_route($ns, '/dashboard/performance', [
 			'methods'  => 'GET',
 			'callback' => [self::class, 'get_event_type_performance'],
 			'permission_callback' => fn() => current_user_can('manage_options'),
@@ -102,7 +103,7 @@ final class CB_REST_Dashboard {
 			],
 		]);
 
-		register_rest_route('calendly-bookings/v1', '/dashboard/recent-bookings', [
+		register_rest_route($ns, '/dashboard/recent-bookings', [
 			'methods'  => 'GET',
 			'callback' => [self::class, 'get_recent_bookings'],
 			'permission_callback' => fn() => current_user_can('manage_options'),
@@ -248,58 +249,61 @@ final class CB_REST_Dashboard {
 		]; 
 	}
 
-	public static function get_revenue_tracker(\WP_REST_Request $request): array {
-		global $wpdb;
-
-		$months = max(1, (int) $request->get_param('months'));
-		$tz     = wp_timezone();
-		$end    = wp_date('Y-m-d H:i:s', null, $tz);
-		$start  = wp_date('Y-m-d H:i:s', strtotime("-{$months} months"), $tz);
-
-		$table_event_types = $wpdb->prefix . 'cb_event_types';
-		$table_events      = $wpdb->prefix . 'cb_scheduled_events';
-
-		$rows = $wpdb->get_results("
-			SELECT et.uuid, et.name, et.product_id
-			FROM {$table_event_types} et
-			WHERE et.active = 1 AND et.product_id IS NOT NULL AND et.product_id > 0
-		", ARRAY_A);
-
-		$top = [];
-		$total_revenue = 0.0;
-
-		foreach ($rows as $et) {
-			$product = wc_get_product((int) $et['product_id']);
-			if (!$product) continue;
-
-			$price = (float) $product->get_price();
-
-			$stats = $wpdb->get_row($wpdb->prepare("
-				SELECT COUNT(*) AS cnt, MAX(start_time) AS last_booking
-				FROM {$table_events}
-				WHERE event_type_id = %s AND start_time BETWEEN %s AND CURDATE()
-			", $et['uuid'], $start, $end), ARRAY_A);
-
-			$count = (int) $stats['cnt'];
-			$last  = $stats['last_booking'];
-			$revenue_et = $count * $price;
-			$total_revenue += $revenue_et;
-
-			$top[] = [
-				'name'         => $et['name'],
-				'revenue'      => round($revenue_et, 2),
-				'last_booking' => $last,
-			];
-		}
-
-		usort($top, fn($a, $b) => $b['revenue'] <=> $a['revenue']);
-
-		return [
-			'months'     => $months,
-			'revenue'    => round($total_revenue, 2),
-			'top_events' => $top,
-		];
-	}
+    public static function get_revenue_tracker(\WP_REST_Request $request): array {
+        global $wpdb;
+        $table_event_types = $wpdb->prefix . 'cb_event_types';
+        $table_events      = $wpdb->prefix . 'cb_scheduled_events';
+    
+        $months = max(1, (int) $request->get_param('months'));
+        $tz     = wp_timezone();
+        $end    = wp_date('Y-m-d H:i:s', null, $tz);
+        $start  = wp_date('Y-m-d H:i:s', strtotime("-{$months} months"), $tz);
+    
+        // Query event types with booking counts and last booking date
+        $rows = $wpdb->get_results($wpdb->prepare("
+            SELECT et.id, et.name, et.product_id,
+                   COUNT(se.id) AS bookings,
+                   MAX(se.start_time) AS last_booking
+            FROM {$table_event_types} et
+            LEFT JOIN {$table_events} se 
+                ON se.event_type_id = et.id
+                AND (se.status = 'active' OR se.status = 'completed')
+                AND se.start_time BETWEEN %s AND %s
+            GROUP BY et.id, et.name, et.product_id
+            ORDER BY bookings DESC
+        ", $start, $end), ARRAY_A);
+    
+        $results = [];
+        $total_revenue = 0;
+    
+        foreach ($rows as $r) {
+            $product_price = 0;
+            if (!empty($r['product_id'])) {
+                $product = wc_get_product((int) $r['product_id']);
+                if ($product) {
+                    $product_price = (float) $product->get_price();
+                }
+            }
+    
+            $revenue = round($product_price * (int) $r['bookings'], 2);
+            $total_revenue += $revenue;
+    
+            $results[] = [
+                'id'            => (int) $r['id'],
+                'name'          => $r['name'],
+                'revenue'       => $revenue,
+                'last_booking'  => !empty($r['last_booking']) 
+                                    ? wp_date('Y-m-d', strtotime($r['last_booking']), $tz) 
+                                    : '—',
+            ];
+        }
+    
+        return [
+            'period'       => $months . 'M',
+            'total_revenue'=> $total_revenue,
+            'events'       => $results,
+        ];
+    }
 
 	public static function get_sync_health(): array {
 		global $wpdb;
@@ -350,7 +354,7 @@ final class CB_REST_Dashboard {
 		$rows = $wpdb->get_results($wpdb->prepare("
 			SELECT DATE(start_time) AS day, COUNT(*) AS count
 			FROM {$table_events}
-			WHERE status = 'active' AND start_time BETWEEN %s AND %s
+			WHERE (status = 'active' OR status = 'completed') AND start_time BETWEEN %s AND %s
 			GROUP BY day
 			ORDER BY day ASC
 		", $start, $end), ARRAY_A);
@@ -375,7 +379,7 @@ final class CB_REST_Dashboard {
 			SELECT et.id, et.name, et.product_id, COUNT(se.id) AS bookings
 			FROM {$table_event_types} et
 			LEFT JOIN {$table_events} se ON se.event_type_id = et.id
-				AND se.status = 'active' AND se.start_time BETWEEN %s AND %s
+				AND (se.status = 'active' OR se.status = 'completed') AND se.start_time BETWEEN %s AND %s
 			GROUP BY et.id, et.name, et.product_id
 			ORDER BY bookings DESC
 		", $start, $end), ARRAY_A);

@@ -1,3 +1,12 @@
+
+function apiFetch(endpoint) {
+  return fetch(CB_REST.root + endpoint, {
+    headers: {
+      'X-WP-Nonce': CB_REST.nonce
+    }
+  }).then(res => res.json());
+}
+
 let trendsChart;
 
 function renderTrendsWidget(months = 1) {

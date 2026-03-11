@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Calendly_Bookings\Modules;
 
 use Calendly_Bookings\CB_Constants;
+use Calendly_Bookings\Utils\CB_Timezone_Converter;
 
 if (!defined('ABSPATH')) exit;
 
@@ -124,10 +125,10 @@ public function sync(): array {
 
     try {
         // Core syncs
-        $results['event_types']                = $this->sync_event_types();
         $results['scheduled_events']           = $this->sync_scheduled_events();
-        $results['event_type_available_times'] = $this->sync_event_type_available_times();
         $results['scheduled_event_invitees']   = $this->sync_scheduled_event_invitees();
+        $results['event_types']                = $this->sync_event_types();
+        $results['event_type_available_times'] = $this->sync_event_type_available_times();
 
         // Collect errors from each sync
         foreach ($results as $key => $res) {
@@ -394,6 +395,10 @@ public static function get_event_type_available_times($event_identifier, $start_
         ARRAY_A
     );
 
+	foreach ($rows as &$row) {
+		$row['start_time'] = implode('T', explode(' ', $row['start_time'])) . 'Z';
+	}
+
     // Step 4: Format output
     $available_times['collection'] = $rows;
 
@@ -443,17 +448,32 @@ public function sync_event_type_available_times(): array {
         'errors'    => $results['errors'],
     ];
 }
-	
-public function query_scheduled_events(int $count = 100, bool $fromToday = true): array {
-    $params = ['count' => $count];
 
-    // If fromToday flag is set, restrict to events starting today onwards
-    if ($fromToday) {
-        $params['min_start_time'] = gmdate('Y-m-d\TH:i:s\Z', strtotime('today'));
+public function query_scheduled_events(?int $count = null, ?string $min_start_date = null): array {
+    $params = [];
+    if ($count !== null) {
+        $params['count'] = $count;
+    }
+    if ($min_start_date) {
+        $params['min_start_time'] = gmdate('Y-m-d\TH:i:s\Z', strtotime($min_start_date));
     }
 
-    $res = $this->get('/scheduled_events', $params, false, 120);
-    return $res['collection'] ?? [];
+    $allEvents = [];
+    $cursor = null;
+
+    do {
+        if ($cursor) {
+            $params['cursor'] = $cursor;
+        }
+
+        $res = $this->get('/scheduled_events', $params, false, 120);
+        $batch = $res['collection'] ?? [];
+        $allEvents = array_merge($allEvents, $batch);
+
+        $cursor = $res['pagination']['next_page'] ?? null;
+    } while ($count === null && $cursor);
+
+    return $allEvents;
 }
 	
 public function set_scheduled_events(array $events): int {
@@ -485,18 +505,31 @@ public function set_scheduled_events(array $events): int {
             }
         }
 
-        // Normalize status
-        $status = $se['status'] ?? 'active';
-        $raw_payload_status = null;
-        if (!empty($se['payload'])) {
-            $payload = is_array($se['payload']) ? $se['payload'] : json_decode($se['payload'], true);
-            if (!empty($payload['status'])) {
-                $raw_payload_status = $payload['status'];
-                $status = strtolower($payload['status']) === 'canceled'
-                    ? 'cancelled'
-                    : sanitize_text_field($payload['status']);
-            }
-        }
+				// Normalize status
+		$status = $se['status'] ?? 'active';
+		$raw_payload_status = null;
+
+		if (!empty($se['payload'])) {
+			$payload = is_array($se['payload']) ? $se['payload'] : json_decode($se['payload'], true);
+
+			// Handle explicit status from payload
+			if (!empty($payload['status'])) {
+				$raw_payload_status = $payload['status'];
+				$status = strtolower($payload['status']) === 'canceled'
+					? 'cancelled'
+					: sanitize_text_field($payload['status']);
+			}
+
+			// NEW CONDITION: mark as completed if end_date is in the past and not cancelled
+			if (!empty($payload['end_date']) && strtolower($status) !== 'cancelled') {
+				$end_timestamp = strtotime($payload['end_date']);
+
+				if ($end_timestamp !== false && $end_timestamp < time()) {
+					$status = 'completed';
+				}
+			}
+		}
+
 
         // Defaults
         $reschedule_url = null;
@@ -612,6 +645,7 @@ public function get_scheduled_events(array $filters = [], string $context = 'adm
             // Logged-in user’s events (based on contact email)
             $user = wp_get_current_user();
             if ($user && $user->user_email) {
+                $where[] = "se.start_time >= UTC_TIMESTAMP()";
                 $where[] = "inv.email = %s";
                 $params[] = $user->user_email;
             } else {
@@ -639,7 +673,7 @@ public function get_scheduled_events(array $filters = [], string $context = 'adm
 
     $sql = "
         SELECT se.id, se.uuid, se.order_id, se.name AS event_name, se.start_time, se.end_time, se.status,
-               se.reschedule_url, se.cancel_url, se.payload as event_payload, 
+               se.reschedule_url, se.cancel_url, se.payload as event_payload, se.notes, 
 			   et.name AS event_type, 
 			   ml.name AS location_name,
                inv.name AS invitee_name, inv.payload AS invitee_payload
@@ -648,7 +682,7 @@ public function get_scheduled_events(array $filters = [], string $context = 'adm
         LEFT JOIN {$table_locations} ml ON se.location_id = ml.id
         LEFT JOIN {$table_invitees} inv ON inv.scheduled_event_uuid = se.uuid
         WHERE " . implode(' AND ', $where) . "
-        ORDER BY se.start_time ASC
+        ORDER BY se.start_time DESC
         " . (($context === 'today' || $context === 'admin') ? "LIMIT %d" : "");
 
     if ($context === 'today' || $context === 'admin') {
@@ -680,8 +714,8 @@ public function get_scheduled_events(array $filters = [], string $context = 'adm
 			'uuid'            => $row['uuid'],
 			'order_id'        => $order_id,
 			'event_name'      => $row['event_name'],
-			'start_time'      => $row['start_time'],
-			'end_time'        => $row['end_time'],
+			'start_time'      => implode('T', explode(' ', $row['start_time'])) . 'Z',
+			'end_time'        => implode('T', explode(' ', $row['end_time'])) . 'Z',
 			'location'        => $row['location_name'] ?? '—',
 			'status'          => $row['status'],
 			'invitee_name'    => $row['invitee_name'] ?? '—',
@@ -692,6 +726,11 @@ public function get_scheduled_events(array $filters = [], string $context = 'adm
 		];
 	}
 
+/*
+	foreach ($rows as &$row) {
+		$row['start_time'] = implode('T', explode(' ', $row['start_time'])) . 'Z';
+	}
+*/
 
     // Audit log
     CB_Audit_Log::log('get_scheduled_events', 'scheduled_events', $context, [
@@ -705,34 +744,60 @@ public function get_scheduled_events(array $filters = [], string $context = 'adm
 
 	
 	
-public function sync_scheduled_events(int $count = 100, bool $fromToday = true): array {
+public function sync_scheduled_events(?int $count = null, ?string $min_start_date = null): array {
     $results = ['upserted' => 0, 'errors' => []];
 
     try {
-
-        // Retrieve events
-        $events = $this->query_scheduled_events(100, $fromToday);
+        $events = $this->query_scheduled_events($count, $min_start_date);
 
         if (empty($events)) {
             $results['errors'][] = 'No scheduled events returned from Calendly';
         } else {
-            // Normalize status if cancelled in payload
+            // Normalize status if canceled in payload
             foreach ($events as &$event) {
                 if (!empty($event['payload'])) {
                     $payload = is_array($event['payload']) ? $event['payload'] : json_decode($event['payload'], true);
-                    if (!empty($payload['status']) && strtolower($payload['status']) === 'canceled') {
-                        $event['status'] = 'cancelled';
+                    if (!empty($payload['status']) && ( strtolower($payload['status']) === 'canceled' || str_contains($payload['status'], 'cancel' )) ) {
+                        $event['status'] = 'canceled';
                     }
                 }
+				
+				if(!empty($event['end_time'])) {
+					$current_iso = date('c');
+					if ($current_iso > $event['end_time'] && $event['status'] != 'canceled') {
+						$event['status'] = 'completed';
+					}
+					
+				}
             }
 
             // Upsert into DB
             $results['upserted'] = $this->set_scheduled_events($events);
         }
 
+        // Update sync state table
+        global $wpdb;
+        $wpdb->replace("{$wpdb->prefix}cb_sync_state", [
+            'domain'       => 'scheduled_events',
+            'cursor'       => null,
+            'last_success' => current_time('mysql'),
+            'last_error'   => null,
+            'error_msg'    => null,
+        ]);
+
         update_option(CB_Constants::OPT_LAST_SYNC_SCHEDULED_EVENTS, current_time('timestamp'));
     } catch (\Throwable $e) {
         $results['errors'][] = $e->getMessage();
+
+        // Record error in sync state table
+        global $wpdb;
+        $wpdb->replace("{$wpdb->prefix}cb_sync_state", [
+            'domain'       => 'scheduled_events',
+            'cursor'       => null,
+            'last_success' => null,
+            'last_error'   => current_time('mysql'),
+            'error_msg'    => $e->getMessage(),
+        ]);
     }
 
     return [
@@ -791,7 +856,7 @@ public function sync_scheduled_event_invitees(): array {
 
     try {
         global $wpdb;
-        $scheduled_events = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_scheduled_events WHERE status='active'");
+        $scheduled_events = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_scheduled_events");
 
         foreach ($scheduled_events as $uuid) {
             $invitees = $this->query_scheduled_event_invitees($uuid);
@@ -839,6 +904,137 @@ public function sync_scheduled_event_invitees(): array {
 	
 	
 	
+
+    /** Update cb_scheduled_events.created_ts from payload.created_at */
+    public static function update_all_events_created_ts_from_payload(): void {
+        global $wpdb; $t = $wpdb->prefix.'cb_scheduled_events';
+        $rows = $wpdb->get_results("SELECT uuid, payload FROM {$t}", ARRAY_A);
+        foreach ($rows as $row) {
+            $payload = self::json_decode_safe($row['payload']);
+            $created = self::to_mysql_dt($payload['created_at'] ?? null);
+            if ($created) {
+                $wpdb->update($t, ['created_at' => $created], ['uuid' => $row['uuid']], ['%s'], ['%s']);
+            }
+        }
+    }
+
+    /** Refresh reschedule_url and cancel_url on cb_scheduled_events from invitee payloads */
+    public static function refresh_event_urls_from_invitees_payload(): void {
+        global $wpdb;
+        $ti = $wpdb->prefix.'cb_scheduled_event_invitees';
+        $te = $wpdb->prefix.'cb_scheduled_events';
+
+        $events = $wpdb->get_col("SELECT DISTINCT scheduled_event_uuid FROM {$ti}");
+        foreach ($events as $uuid) {
+            $inv = $wpdb->get_results($wpdb->prepare("SELECT payload FROM {$ti} WHERE scheduled_event_uuid=%s", $uuid), ARRAY_A);
+            $reschedule = null; $cancel = null;
+            foreach ($inv as $row) {
+                $payload = self::json_decode_safe($row['payload']);
+                $reschedule = $reschedule ?: ($payload['reschedule_url'] ?? null);
+                $cancel     = $cancel     ?: ($payload['cancel_url'] ?? null);
+            }
+            $wpdb->update($te, ['reschedule_url' => $reschedule, 'cancel_url' => $cancel], ['uuid' => $uuid], ['%s','%s'], ['%s']);
+        }
+    }
+
+    /** Backfill cb_scheduled_events.order_id from invitee answers where question === "Order ID" */
+    public static function backfill_event_order_ids_from_invitees(): void {
+        global $wpdb;
+        $ti = $wpdb->prefix.'cb_scheduled_event_invitees';
+        $te = $wpdb->prefix.'cb_scheduled_events';
+
+        $events = $wpdb->get_col("SELECT DISTINCT scheduled_event_uuid FROM {$ti}");
+        foreach ($events as $uuid) {
+            $inv = $wpdb->get_results($wpdb->prepare("SELECT payload FROM {$ti} WHERE scheduled_event_uuid=%s", $uuid), ARRAY_A);
+            $order_id = null;
+            foreach ($inv as $row) {
+                $payload = self::json_decode_safe($row['payload']);
+                $answers = is_array($payload['answers'] ?? null) ? $payload['answers'] : [];
+                foreach ($answers as $a) {
+                    if (($a['question'] ?? '') === 'Order ID') {
+                        $order_id = (string) ($a['answer'] ?? '');
+                        if ($order_id) break;
+                    }
+                }
+                if ($order_id) break;
+            }
+            if ($order_id) {
+                $wpdb->update($te, ['order_id' => $order_id], ['uuid' => $uuid], ['%s'], ['%s']);
+            }
+        }
+    }
+
+
+    public static function normalize_all_event_statuses() {
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'cb_scheduled_events';
+
+		// Fetch all events
+		$events = $wpdb->get_results("SELECT id, status, payload FROM {$table}", ARRAY_A);
+
+		if (empty($events)) {
+			return; // nothing to do
+		}
+
+		foreach ($events as $se) {
+
+			// --- Your exact logic begins here ---
+			$status = $se['status'] ?? 'active';
+			$raw_payload_status = null;
+
+			if (!empty($se['payload'])) {
+				$payload = is_array($se['payload'])
+					? $se['payload']
+					: json_decode($se['payload'], true);
+
+				// Handle explicit status from payload
+				if (!empty($payload['status'])) {
+					$raw_payload_status = $payload['status'];
+					$status = strtolower($payload['status']) === 'canceled'
+						? 'cancelled'
+						: sanitize_text_field($payload['status']);
+				}
+
+				// Mark as completed if end_date is in the past and not cancelled
+				if (!empty($payload['end_date']) && strtolower($status) !== 'cancelled') {
+					$end_timestamp = strtotime($payload['end_date']);
+
+					if ($end_timestamp !== false && $end_timestamp < time()) {
+						$status = 'completed';
+					}
+				}
+			}
+			// --- Your exact logic ends here ---
+
+			// Update only if changed
+			if ($status !== $se['status']) {
+				$wpdb->update(
+					$table,
+					['status' => $status],
+					['id' => $se['id']],
+					['%s'],
+					['%d']
+				);
+			}
+		}
+	}
+
+	
+
+    /** Helpers (align to your existing utilities if present) */
+    private static function json_decode_safe(?string $json): array {
+        if (!$json) return [];
+        $data = json_decode($json, true);
+        return is_array($data) ? $data : [];
+    }
+
+    private static function to_mysql_dt(?string $iso): ?string {
+        if (!$iso) return null;
+        $ts = strtotime($iso);
+        return $ts ? gmdate('Y-m-d H:i:s', $ts) : null;
+    }
+
 	
 	
 	

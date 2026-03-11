@@ -3,6 +3,7 @@
 namespace Calendly_Bookings\Modules;
 
 use WC_Order;
+use Calendly_Bookings\CB_Constants;
 
 class CB_Checkout {
 
@@ -17,6 +18,7 @@ class CB_Checkout {
         
         //create new Account
         add_action('woocommerce_payment_complete', [__CLASS__, 'attach_order_to_account']);
+        #add_action('woocommerce_payment_complete', [__CLASS__, 'create_calendly_invitee']);
 
         // Display in emails, My Account, admin
         add_action('woocommerce_email_order_meta', [__CLASS__, 'add_to_emails'], 10, 4);
@@ -35,22 +37,26 @@ class CB_Checkout {
 		echo '<input type="hidden" name="cb_meeting_time" value="' . esc_attr($checkout->get_value('cb_meeting_time')) . '" />';
 		echo '<input type="hidden" name="cb_hier_intro" value="' . esc_attr($checkout->get_value('cb_hier_intro')) . '" />';
 	}
-
+    
     public static function capture_form_data($cart_item_data, $product_id, $variation_id) {
+        // Define expected fields and their sanitization callbacks
         $fields = [
-            'cb_meeting_location' => FILTER_SANITIZE_STRING,
-            'cb_meeting_date' => FILTER_SANITIZE_STRING,
-            'cb_meeting_time' => FILTER_SANITIZE_STRING,
-            'cb_hier_intro' => FILTER_SANITIZE_STRING,
-            'order_comments'  => FILTER_SANITIZE_STRING,
+            'cb_meeting_location' => 'sanitize_text_field',
+            'cb_meeting_date'     => 'sanitize_text_field',
+            'cb_meeting_time'     => 'sanitize_text_field',
+            'cb_hier_intro'       => 'sanitize_textarea_field', // longer text, allow line breaks
+            'order_comments'      => 'sanitize_textarea_field', // comments field
         ];
-        foreach ($fields as $key => $filter) {
+    
+        foreach ($fields as $key => $callback) {
             if (!empty($_POST[$key])) {
-                $cart_item_data[$key] = filter_var(wp_unslash($_POST[$key]), $filter);
+                // wp_unslash() removes slashes added by WP
+                $raw_value = wp_unslash($_POST[$key]);
+                $cart_item_data[$key] = call_user_func($callback, $raw_value);
             }
         }
-
-		CB_Audit_Log::log('capture_form_data', 'checkout', (string)$product_id, $cart_item_data, 'info');
+    
+        CB_Audit_Log::log('capture_form_data', 'checkout', (string) $product_id, $cart_item_data, 'info');
         return $cart_item_data;
     }
 
@@ -66,6 +72,9 @@ class CB_Checkout {
     }
 
 	public static function save_order_meta(\WC_Order $order, $data) {
+        $token = wp_generate_uuid4();
+        $order->update_meta_data('_cb_security_token', $token);
+		
 		// Meeting location (hidden field)
 		if (!empty($_POST['cb_meeting_location'])) {
 			$order->update_meta_data(
@@ -138,7 +147,7 @@ class CB_Checkout {
         if ( ! $order ) {
             return;
         }
-    
+
         $name  = trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() );
         $email = $order->get_billing_email();
         
@@ -177,7 +186,8 @@ class CB_Checkout {
             // Send activation email (using WP built-in new user notification)
             wp_new_user_notification( $user_id, null, 'user' );
         }
-    
+        
+
         // Attach order to user (WooCommerce)
         if ( function_exists( 'wc_get_order' ) ) {
             $order = wc_get_order( $order_id );
@@ -186,9 +196,99 @@ class CB_Checkout {
                 $order->save();
             }
         }
-    
         return $user->ID;
     }
+
+
+    public static function create_calendly_invitee() {
+       $order_id = absint(get_query_var('order-received'));
+
+        $api_key    = (string) get_option(CB_Constants::OPT_API_TOKEN, '');
+        $user_uuid  = (string) get_option(CB_Constants::OPT_USER_UUID, '');
+        
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) {
+            return;
+        }
+
+        $token = $order->get_meta('_cb_security_token');
+
+        if (!$token) return;
+        
+        $event_type = "https://api.calendly.com/event_types/" . self::get_event_uuid_from_order($order_id);
+
+        // Build Calendly API payload
+        $payload = [
+            'event_type' => $event_type,
+            'start_time' => $order->get_meta('_cb_meeting_time'),
+            'invitee' => [
+                'name'  => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
+                'email' => $order->get_billing_email(),
+                'timezone' => 'UTC',
+            ],
+            'location'   => [
+                'kind'     => $order->get_meta('_cb_meeting_location') === 1 ? 'zoom' : 'physical',
+                'location' => $order->get_meta('_cb_meeting_location') === 1 ? 'Zoom' : "HIER Life - Skeete's Road Jackmans, St. Michael",
+            ],
+            'questions_and_answers' => [
+                [
+                    'question' => 'Order ID (see payment)',
+                    'answer'   => "{$order_id}",
+                    'position' => 0,
+                ],
+                [
+                    'question' => 'Please let me know how you became aware of HIER Life.',
+                    'answer'   => "{$order->get_meta('_cb_hier_intro')}",
+                    'position' => 1,
+                ],
+            ],
+        ];
+        
+        $response = wp_remote_post('https://api.calendly.com/invitees', [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type'  => 'application/json',
+            ],
+            'body' => wp_json_encode($payload),
+        ]);
+
+        if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 201) {
+            // Destroy token
+            $order->delete_meta_data('_cb_security_token');
+        }
+    }
+
+
+    /**
+     * Get the event UUID from product meta via order ID.
+     *
+     * @param int $order_id WooCommerce order ID
+     * @return string|null Event UUID or null if not found
+     */
+    public static function get_event_uuid_from_order( $order_id ) {
+        $order = wc_get_order( $order_id );
+
+        if ( ! $order ) {
+            return null;
+        }
+
+        foreach ( $order->get_items() as $item ) {
+            $product = $item->get_product();
+
+            if ( $product ) {
+                // Extract the UUID from product meta
+                $event_uuid = $product->get_meta( '_cb_event_uuid' );
+
+                if ( ! empty( $event_uuid ) ) {
+                    return $event_uuid; // Return the first UUID found
+                }
+            }
+        }
+
+        return null; // No UUID found
+    }
+
+
 
 
     public static function add_to_emails($order, $sent_to_admin, $plain_text, $email) {
@@ -281,13 +381,34 @@ class CB_Checkout {
 
         $order_id = absint(get_query_var('order-received'));
         $order    = wc_get_order($order_id);
-
-        if ($order && self::order_has_meeting($order)) {
+		$status = $order->get_status();
+		if (!$order) return;
+		
+		$total = (float) $order->get_total();
+		if($total > 0){
+			$approval_code = (string) $order->get_meta('approval_code'); 
+			if (stripos($approval_code, 'DECLINED') !== false) {
+				CB_Audit_Log::log('thankyou_skipped', 'checkout', (string)$order_id, [ 
+					'approval_code' => $approval_code 
+				], 'warning'); 
+				return; 
+			}		
+		}
+		
+        if (self::order_has_meeting($order)) {
     		remove_all_actions('woocommerce_thankyou');
-			remove_action('woocommerce_thankyou', 'woocommerce_thankyou_order_received_text', 10);remove_all_actions('woocommerce_order_details_after_order_table');            add_action('woocommerce_thankyou', [__CLASS__, 'render_meeting_thankyou'], 10, 1);
+			remove_action('woocommerce_thankyou', 'woocommerce_thankyou_order_received_text', 10);
+			remove_all_actions('woocommerce_order_details_after_order_table');
+			
+			#add_action('woocommerce_thankyou', [__CLASS__, 'render_meeting_thankyou'], 10, 1);
+			add_action('woocommerce_thankyou', [__CLASS__, 'create_calendly_invitee'], 10, 1);
 
-			CB_Audit_Log::log('override_thankyou', 'checkout', (string)$order_id, [], 'info');
+			CB_Audit_Log::log('create_invitee', 'checkout', (string)$order_id, [], 'info');
         }	
+    }
+    
+    public static function run_after_payment_processes($order_id) {
+        
     }
 
 	public static function render_meeting_thankyou($order_id) {

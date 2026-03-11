@@ -4,13 +4,30 @@ use Calendly_Bookings\CB_Constants;
 
 if (!defined('ABSPATH')) exit;
 
-
 final class CB_Frontend {
 
     public static function init() {
         add_shortcode('calendly_booking_form', [__CLASS__, 'render_calendly_form']);
+        add_action('woocommerce_single_product_summary', [__CLASS__, 'cb_insert_after_title' ], 4);
         add_action('woocommerce_before_add_to_cart_button', [__CLASS__, 'output_before_cart']);
         add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
+        add_action('wp_ajax_cb_login', [__CLASS__, 'cb_ajax_login']);
+        add_action('wp_ajax_nopriv_cb_login', [__CLASS__, 'cb_ajax_login']);
+    }
+
+    public static function cb_ajax_login() {
+        $creds = [
+            'user_login'    => sanitize_text_field($_POST['log']),
+            'user_password' => sanitize_text_field($_POST['pwd']),
+            'remember'      => true,
+        ];
+        $user = wp_signon($creds, false);
+    
+        if (is_wp_error($user)) {
+            wp_send_json_error(['message' => $user->get_error_message()]);
+        } else {
+            wp_send_json_success(['redirect' => $_POST['redirect_to'] ?? home_url()]);
+        }
     }
 
     public static function enqueue_assets() {
@@ -27,7 +44,7 @@ final class CB_Frontend {
 			$product_id = get_the_ID();
 			$event_uuid = get_post_meta($product_id, '_cb_event_uuid', true);
 		}
-		
+
         wp_enqueue_script(
             'cb-frontend',
             CB_Constants::url('includes/frontend/assets/cb-frontend.js'),
@@ -35,112 +52,89 @@ final class CB_Frontend {
             CB_Constants::VERSION,
             true
         );
-		
-		$data = [
-			'root'    => trailingslashit( rest_url( 'calendly-bookings/v1/' ) ),
-			'nonce'   => wp_create_nonce( 'wp_rest' ),
+
+        $messages = include CB_Constants::path('includes/frontend/view/validation-messages.php');
+
+        $data = [
+            'root'  => trailingslashit(rest_url('calendly-bookings/v1/')),
+            'nonce' => wp_create_nonce('wp_rest'),
 			'product' => $product_id,
 			'uuid'    => $event_uuid,
-		];
-		wp_add_inline_script(
-			'cb-frontend',
-			'const CB_REST = ' . wp_json_encode( $data ) . ';',
-			'before'
-		);
+        ];
 
-		wp_enqueue_style(
+        wp_add_inline_script(
+            'cb-frontend',
+            'const CB_REST = ' . wp_json_encode($data) . '; const CB_MESSAGES = ' . wp_json_encode($messages) . ';',
+            'before'
+        );
+
+        wp_enqueue_style(
             'cb-frontend',
             CB_Constants::url('includes/frontend/assets/cb-frontend.css'),
             [],
             CB_Constants::VERSION
         );
-
+        
+        
+        wp_localize_script(
+            'cb-frontend', 
+            'cb_ajax_object', 
+            array( 'ajaxurl' => admin_url('admin-ajax.php') 
+            )
+        );
+        
+        
+        
     }
+
     public static function output_before_cart() {
         echo self::render_calendly_form();
     }
-	
-	
-	public static function render_calendly_form($atts = []) {
-		global $product;
-		ob_start();
-		?>
-	<div class="cb-field-row">
-		<div class="cb-field half">
-			<label for="cb_firstname"><?php esc_html_e('First Name', 'calendly-bookings'); ?></label>
-			<input type="text" id="cb_firstname" name="billing_first_name" required>
-		</div>
 
-		<div class="cb-field half">
-			<label for="cb_lastname"><?php esc_html_e('Last Name', 'calendly-bookings'); ?></label>
-			<input type="text" id="cb_lastname" name="billing_last_name" required>
-		</div>
-	</div>
+    public static function render_calendly_form($atts = []) {
+        $context = [
+            'account_exists'   => false,
+            'logged_in'        => is_user_logged_in(),
+            'has_meeting_order'=> false,
+        ];
 
-	<div class="cb-field">
-		<label for="cb_email"><?php esc_html_e('Email', 'calendly-bookings'); ?></label>
-		<input type="email" id="cb_email" name="billing_email" required>
-	</div>
+        if ($context['logged_in']) {
+            $orders = wc_get_orders([
+                'customer_id' => get_current_user_id(),
+                'status'      => ['completed', 'processing'],
+            ]);
+            foreach ($orders as $order) {
+                foreach ($order->get_items() as $item) {
+                    if (stripos($item->get_name(), 'meeting') !== false) {
+                        $context['has_meeting_order'] = true;
+                        break 2;
+                    }
+                }
+            }
+        }
 
-	<!-- 📍 Location radio group -->
-	<div class="cb-field-row">
-		<div class="cb-field">
-			<label for="cb_meeting_location"><?php esc_html_e('Location', 'calendly-bookings'); ?></label>
-			<select id="cb_meeting_location" name="cb_meeting_location" required>
-				<option value=""><?php esc_html_e('Select a location', 'calendly-bookings'); ?></option>
-				<option value="1">
-					<?php esc_html_e('Zoom - Web conferencing details provided upon confirmation.', 'calendly-bookings'); ?>
-				</option>
-				<option value="2">
-					<?php esc_html_e("HIER Life - Skeete's Road Jackmans, St. Michael", 'calendly-bookings'); ?>
-				</option>
-			</select>
-		</div>
-	</div>
-	<!-- end location -->
+        ob_start();
+        include CB_Constants::path('includes/frontend/view/index.php');
+        return ob_get_clean();
+    }
 
-	<div class="cb-field-row">
-		<div class="cb-field half">
-			<label for="cb_meeting_date"><?php esc_html_e('Meeting Date', 'calendly-bookings'); ?></label>
-			<select id="cb_meeting_date" name="cb_meeting_date" required>
-				<option value=""><?php esc_html_e('Select a date', 'calendly-bookings'); ?></option>
-			</select>
-		</div>
+    public static function cb_insert_after_title() {
+        if ( isset($_GET['ref']) && ! empty($_GET['ref'])):
+            $ref = ucwords(implode(' ', explode('-', base64_decode($_GET['ref']))));
+        ?>
+        <div class="cb-upsell">
+            <p><em>
+              <?php printf(
+                esc_html__('%ss are not available again. We recommend booking a Spiritual Companionship session instead.', 'calendly-bookings'),
+                esc_html($ref)
+              ); ?>
+            </em></p>
+                    </div>
+        <?php endif;
+        
+        if ( ! is_user_logged_in() ) {
+            include CB_Constants::path('includes/frontend/view/login-modal.php');
+        }
 
-		<div class="cb-field half">
-			<label for="cb_meeting_time"><?php esc_html_e('Meeting Time', 'calendly-bookings'); ?></label>
-			<select id="cb_meeting_time" name="cb_meeting_time" required>
-				<option value=""><?php esc_html_e('Select a time', 'calendly-bookings'); ?></option>
-			</select>
-		</div>
-	</div>
-
-	<div class="cb-field">
-			<label for="cb_hier_intro"><?php esc_html_e('How did you hear about HIER Life?', 'calendly-bookings'); ?></label>
-			<select id="cb_hier_intro" name="cb_hier_intro" required>
-				<option value=""><?php esc_html_e('Select...', 'calendly-bookings'); ?></option>
-				<option value="<?php esc_html_e('Google Search', 'calendly-bookings'); ?>"><?php esc_html_e('Google Search', 'calendly-bookings'); ?></option>
-				<option value="<?php esc_html_e('Word of mouth', 'calendly-bookings'); ?>"><?php esc_html_e('Word of mouth', 'calendly-bookings'); ?></option>
-				<option value="<?php esc_html_e('Referred by a professional', 'calendly-bookings'); ?>"><?php esc_html_e('Referred by a professional', 'calendly-bookings'); ?></option>
-				<option value="<?php esc_html_e('Spoke with Michael directly', 'calendly-bookings'); ?>"><?php esc_html_e('Spoke with Michael directly', 'calendly-bookings'); ?></option>
-				<option value="<?php esc_html_e('Social Media', 'calendly-bookings'); ?>"><?php esc_html_e('Social Media', 'calendly-bookings'); ?></option>
-			</select>
-
-	</div>
-
-	<div class="cb-field-row">
-		<div class="cb-field">
-			<label for="cb_notes"><?php esc_html_e('Notes', 'calendly-bookings'); ?></label>
-			<div class="has-small-font-size">
-				<?php esc_html_e('As you prepare for our first meeting please share anything that you believe would be important for me to know about you that would assist us in making the most of this first session.', 'calendly-bookings'); ?>
-			</div>
-			<textarea id="cb_notes" name="order_comments" rows="4" placeholder="<?php esc_attr_e('Enter notes or leave blank for Nil', 'calendly-bookings'); ?>"></textarea>
-		</div>
-	</div>
-
-	<input type="hidden" name="cb_prefill" value="1">
-		<?php
-		return ob_get_clean();
-	}
-   
+    }
 }

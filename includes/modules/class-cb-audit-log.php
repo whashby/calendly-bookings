@@ -3,9 +3,82 @@
 
 namespace Calendly_Bookings\Modules;
 
-if (!defined('ABSPATH')) exit;
+class CB_Audit_Log {
+  public static function rest_fetch(\WP_REST_Request $request) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'cb_audit_log';
 
-final class CB_Audit_Log {
+    // Filters
+    $level   = sanitize_text_field($request->get_param('level'));
+    $action  = sanitize_text_field($request->get_param('action'));
+    $context = sanitize_text_field($request->get_param('context'));
+    $search  = sanitize_text_field($request->get_param('s'));
+
+    $where   = [];
+    $params  = [];
+
+    if ($level) {
+      $where[]  = 'level = %s';
+      $params[] = $level;
+    }
+    if ($action) {
+      $where[]  = 'action = %s';
+      $params[] = $action;
+    }
+    if ($context) {
+      $where[]  = 'context = %s';
+      $params[] = $context;
+    }
+    if ($search) {
+      $where[]  = '(identifier LIKE %s OR details LIKE %s)';
+      $params[] = '%' . $search . '%';
+      $params[] = '%' . $search . '%';
+    }
+
+    $where_sql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
+
+    // Pagination
+    $per_page = 20;
+    $page     = max(1, intval($request->get_param('paged') ?? 1));
+    $offset   = ($page - 1) * $per_page;
+
+    // Count total rows
+    $count_sql = "SELECT COUNT(*) FROM {$table} {$where_sql}";
+    $total = $params
+      ? (int) $wpdb->get_var($wpdb->prepare($count_sql, ...$params))
+      : (int) $wpdb->get_var($count_sql);
+
+    // Fetch rows
+    $sql = "SELECT id, timestamp, level, action, context, identifier, details
+            FROM {$table} {$where_sql}
+            ORDER BY timestamp DESC
+            LIMIT %d OFFSET %d";
+
+    $query_params = array_merge($params, [$per_page, $offset]);
+    $logs = $wpdb->get_results($wpdb->prepare($sql, ...$query_params));
+
+    // Render partials
+    ob_start();
+    echo \Calendly_Bookings\Modules\CB_Admin::view('audit/table', [
+      'entries'  => $logs,
+      'page'     => $page,
+      'per_page' => $per_page,
+      'total'    => $total,
+      'filters'  => [
+        's'       => $search,
+        'level'   => $level,
+        'action'  => $action,
+        'context' => $context,
+      ],
+    ]);
+    $html = ob_get_clean();
+
+    return rest_ensure_response([
+      'success' => true,
+      'data'    => ['html' => $html]
+    ]);
+  }
+	
 
     /**
      * Write an audit log entry.
@@ -42,4 +115,6 @@ final class CB_Audit_Log {
             ));
         }
     }
+	
+	
 }

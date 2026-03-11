@@ -1,4 +1,3 @@
-
 .has-small-font-size {
 	font-size: 13px !important;
 	line-height: 1.2em;
@@ -113,4 +112,128 @@
     margin-left: 2rem; /* indent under radio+label */
     margin-top: 0.25rem;
     line-height: 1.3;
+}
+
+
+
+.woocommerce-order-details h2,
+.woocommerce-order-details h3,
+.woocommerce-order-details h4 {
+  display: block;
+  clear: both;
+  margin-top: 1.5em;
+}
+
+/* Hide quantity box on meeting products */
+div.product_cat-meeting form div.quantity, 
+div.product_cat-meetings form div.quantity {
+  display: none !important;
+  visibility: hidden !important;
+  margin: 0 !important;
+  min-width: 0 !important;
+}
+
+/* Background overlay */
+#cb-login-modal {
+  display: none; /* hidden until triggered */
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6); /* semi-transparent background */
+  z-index: 9999; /* ensure it sits above everything */
+}
+
+/* Modal box */
+.cb-login-box {
+  position: relative;
+  background: #fff;
+  max-width: 400px;
+  margin: 10% auto; /* center horizontally, push down vertically */
+  padding: 20px;
+  padding-bottom: 50px;
+  border-radius: 6px;
+  box-shadow: 0 0 20px rgba(0,0,0,0.3);
+}
+
+/* Close button */
+.cb-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  cursor: pointer;
+}
+
+
+/* Container list */
+.hier-card__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Booking card container */
+.hier-card__booking {
+  margin-bottom: 1.5em;
+  padding: 1em;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+}
+
+/* Title + Date */
+.hier-card__title {
+  font-weight: 600;
+  font-size: 1rem;
+  margin: 0 0 .25em;
+  color: #222;
+}
+
+/* Location */
+.hier-card__location {
+  margin: 0.25em 0;
+  color: #555;
+  font-size: 0.95rem;
+}
+
+/* Actions (links) */
+.hier-card__actions {
+  margin-top: 0.5em;
+  font-size: 0.9rem;
+}
+
+.hier-card__actions a {
+  color: #2a7a2a;
+  text-decoration: none;
+  margin: 0 0.25em;
+}
+
+.hier-card__actions a:hover {
+  text-decoration: underline;
+}
+
+/* Empty state */
+.hier-card__meta {
+  color: #777;
+  font-style: italic;
+}
+
+/* Responsive tweaks */
+@media (max-width: 600px) {
+  .hier-card__booking {
+    padding: 0.75em;
+  }
+  .hier-card__title {
+    font-size: 0.95rem;
+  }
+  .hier-card__actions {
+    display: block;
+    margin-top: 0.75em;
+  }
+  .hier-card__actions a {
+    display: inline-block;
+    margin: 0.25em 0;
+  }
 }

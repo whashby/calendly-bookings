@@ -5,13 +5,13 @@ namespace Calendly_Bookings;
 if (!defined('ABSPATH')) exit;
 
 final class CB_Constants {
-    public const VERSION                        = '4.40.546';
+    public const VERSION                        = '6.9.2';
     public const OPT_GROUP                      = 'calendly_bookings';
     public const OPT_API_TOKEN                  = 'cb_api_token';
     public const OPT_USER_UUID                  = 'cb_user_uuid';
     public const OPT_SYNC_INTERVAL              = 'cb_sync_interval';
     public const OPT_LAST_SYNC  	            = 'cb_last_sync';
-    public const OPT_LAST_SYNC_ALL  	            = 'cb_last_sync_all';
+    public const OPT_LAST_SYNC_ALL  	        = 'cb_last_sync_all';
     public const OPT_LAST_SYNC_EVENT_TYPES 	    = 'cb_last_sync_event_types';
     public const OPT_LAST_SYNC_EVENT_TYPE_AVAILABLE_TIMES 	    = 'cb_last_sync_event_type_available_times';
     public const OPT_LAST_SYNC_SCHEDULED_EVENTS = 'cb_last_sync_scheduled_events';

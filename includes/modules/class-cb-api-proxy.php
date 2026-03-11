@@ -29,7 +29,7 @@ final class CB_API_Proxy {
 			],
 		]);
 		
-		register_rest_route($ns, 'meeting-details', [
+		register_rest_route($ns, '/meeting-details', [
 		    'methods' => 'GET',
 		    'callback' => [__CLASS__, 'get_meeting_details'],
 		    'permission_callback' => '__return_true',
@@ -59,7 +59,7 @@ final class CB_API_Proxy {
         register_rest_route($ns, '/event-types', [
             'methods'             => 'GET',
             'callback'            => [__CLASS__, 'rest_event_types_list'],
-            'permission_callback' => [__CLASS__, 'can_manage'],
+            'permission_callback' => '__return_true',
         ]);
 
         // Event types sync (all)
@@ -96,6 +96,7 @@ final class CB_API_Proxy {
             'args'                => ['count' => ['required' => false, 'type' => 'integer']],
         ]);
 
+
         // Invitees
         register_rest_route($ns, '/event-invitees', [
             'methods'             => 'GET',
@@ -112,7 +113,7 @@ final class CB_API_Proxy {
         ]);
 
         register_rest_route($ns, '/manual-test', [
-            'methods'=>'GET',
+            'methods'=>'POST',
             'callback'=>[__CLASS__,'rest_manual_test'],
             'permission_callback'=>[__CLASS__,'can_manage'],
         ]);
@@ -124,40 +125,9 @@ final class CB_API_Proxy {
             'args'=>['token'=>['required'=>false],'uuid'=>['required'=>false]],
         ]);
 
-        // WooCommerce linking/sync
-        register_rest_route($ns, '/wc/links', [
-            'methods'=>'GET','callback'=>[__CLASS__,'rest_wc_links'],'permission_callback'=>[__CLASS__,'can_manage'],
-        ]);
-        register_rest_route($ns, '/wc/link', [
-            'methods'=>'POST','callback'=>[__CLASS__,'rest_wc_link'],'permission_callback'=>[__CLASS__,'can_manage'],
-            'args'=>['uuid'=>['required'=>true],'product_id'=>['required'=>true,'type'=>'integer']],
-        ]);
-        register_rest_route($ns, '/wc/sync', [
-            'methods'=>'POST','callback'=>[__CLASS__,'rest_wc_sync'],'permission_callback'=>[__CLASS__,'can_manage'],
-            'args'=>['uuid'=>['required'=>true],'product_id'=>['required'=>false,'type'=>'integer']],
-        ]);
-        register_rest_route($ns, '/wc/create-product', [
-            'methods' => 'POST','callback' => [__CLASS__, 'rest_wc_create_product'],'permission_callback' => [__CLASS__, 'can_manage'],
-            'args'=>['uuid' => ['required' => true, 'type' => 'string']],
-        ]);
-        register_rest_route($ns, '/wc/delete-product', [
-            'methods' => 'POST','callback' => [__CLASS__, 'rest_wc_delete_product'],'permission_callback' => [__CLASS__, 'can_manage'],
-            'args' => ['uuid' => ['required' => true, 'type' => 'string']],
-        ]);
-        register_rest_route($ns, '/wc/create-all', [
-            'methods' => 'POST',
-            'callback' => [__CLASS__, 'rest_wc_create_all'],
-            'permission_callback' => [__CLASS__, 'can_manage'],
-        ]);
-        register_rest_route($ns, '/wc/delete-all', [
-            'methods' => 'POST',
-            'callback' => [__CLASS__, 'rest_wc_delete_all'],
-            'permission_callback' => [__CLASS__, 'can_manage'],
-        ]);
-
-        // Clear API cache
+ /*       // Clear API cache
         register_rest_route($ns, '/maintenance/clear-cache', [
-            'methods'             => \WP_REST_Server::CREATABLE,
+            'methods'             => 'POST',
             'permission_callback' => [__CLASS__, 'can_manage'],
             'callback'            => [__CLASS__, 'rest_clear_api_cache'],
             'args'                => [
@@ -210,7 +180,7 @@ final class CB_API_Proxy {
                 ],
             ],
         ]);			
-			
+*/			
 			
 		
     }
@@ -283,33 +253,33 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
         return new \WP_REST_Response(['success'=>true,'data'=>$res['collection'] ?? []], 200);
     }
 
-public static function rest_scheduled_events(\WP_REST_Request $r): \WP_REST_Response {
-    if (!is_user_logged_in() || !current_user_can('manage_options')) {
-        CB_Audit_Log::log('unauthorized', 'scheduled_events', '', [], 'warning');
-        return new \WP_REST_Response(['success' => false, 'message' => 'Unauthorized'], 401);
-    }
+	public static function rest_scheduled_events(\WP_REST_Request $r): \WP_REST_Response {
+		if (!is_user_logged_in() || !current_user_can('manage_options')) {
+			CB_Audit_Log::log('unauthorized', 'scheduled_events', '', [], 'warning');
+			return new \WP_REST_Response(['success' => false, 'message' => 'Unauthorized'], 401);
+		}
 
-    $count = absint($r->get_param('count') ?: 50);
-    $api   = new CB_API();
-    $events = $api->get_scheduled_events('admin', $count);
+		$count = absint($r->get_param('count') ?: 50);
+		$api   = new CB_API();
+		$events = $api->get_scheduled_events('admin', $count);
 
-    CB_Audit_Log::log('rest_fetch', 'scheduled_events', '', [
-        'context' => 'admin',
-        'count'   => count($events)
-    ], 'info');
+		CB_Audit_Log::log('rest_fetch', 'scheduled_events', '', [
+			'context' => 'admin',
+			'count'   => count($events)
+		], 'info');
 
-    set_transient('cb_last_sync', [
-        'time'   => current_time('mysql'),
-        'count'  => count($events),
-        'source' => 'scheduled-events',
-    ], MINUTE_IN_SECONDS * 30);
+		set_transient('cb_last_sync', [
+			'time'   => current_time('mysql'),
+			'count'  => count($events),
+			'source' => 'scheduled-events',
+		], MINUTE_IN_SECONDS * 30);
 
-    return new \WP_REST_Response([
-        'success'          => true,
-        'events_upserted'  => count($events),
-        'scheduled_events' => $events,
-    ], 200);
-}
+		return new \WP_REST_Response([
+			'success'          => true,
+			'events_upserted'  => count($events),
+			'scheduled_events' => $events,
+		], 200);
+	}
 
     public static function rest_event_invitees(\WP_REST_Request $r): \WP_REST_Response {
         $uri = sanitize_text_field((string)$r->get_param('scheduled_event_uri'));
@@ -352,7 +322,8 @@ public static function rest_save_settings(\WP_REST_Request $r): \WP_REST_Respons
     $api = new \Calendly_Bookings\Modules\CB_API($token ?: null, $uuid ?: null);
 
     // Test scheduled events connectivity
-    $test = $api->get_scheduled_events('admin', 1);
+    //$test = $api->get_scheduled_events('admin', 1);
+    $test = $api->manual_connection_test();
     if (empty($test)) {
         CB_Audit_Log::log('connection_failed', 'scheduled_events', '', ['reason' => 'no events'], 'error');
         return new \WP_REST_Response([
@@ -365,7 +336,8 @@ public static function rest_save_settings(\WP_REST_Request $r): \WP_REST_Respons
     if ($uuid !== '')  update_option(CB_Constants::OPT_USER_UUID, $uuid, false);
 
     // Sync upcoming events
-    $sync = $api->get_scheduled_events('admin', 100);
+    //$sync = $api->get_scheduled_events('admin', 100);
+    $sync = $api->sync_scheduled_events(100,false);
 
     CB_Audit_Log::log('settings_saved', 'scheduled_events', '', [
         'token_set' => !empty($token),
@@ -385,313 +357,7 @@ public static function rest_save_settings(\WP_REST_Request $r): \WP_REST_Respons
     ], 200);
 }
 
-	
-	public static function rest_wc_links(): \WP_REST_Response {
-        $links = CB_WC_Sync::list_links();
-        return new \WP_REST_Response(['success' => true, 'data' => $links], 200);
-    }
-
-	public static function rest_wc_link(\WP_REST_Request $req): \WP_REST_Response {
-		global $wpdb;
-		$uuid       = sanitize_text_field($req->get_param('uuid'));
-		$product_id = absint($req->get_param('product_id'));
-		$table      = $wpdb->prefix . 'cb_event_types';
-
-		// Validate event
-		$event = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE uuid=%s", $uuid));
-		if (!$event) {
-			return new \WP_REST_Response(['success' => false, 'message' => 'Event not found.'], 200);
-		}
-
-		// Validate product
-		$product = wc_get_product($product_id);
-		if (!$product || 'publish' !== get_post_status($product_id)) {
-			return new \WP_REST_Response(['success' => false, 'message' => 'Invalid or unpublished product.'], 200);
-		}
-
-		// Update product meta with event UUID + scheduling URL
-		update_post_meta($product_id, '_cb_event_uuid', $uuid);
-
-		$scheduling_url = !empty($event->scheduling_url) ? $event->scheduling_url : '';
-		if ($scheduling_url) {
-			update_post_meta($product_id, '_cb_scheduling_url', esc_url_raw($scheduling_url));
-		}
-
-		// Update event record with product ID (and backfill scheduling_url if missing)
-		$update_data = ['product_id' => $product_id];
-		if ($scheduling_url && empty($event->scheduling_url)) {
-			$update_data['scheduling_url'] = esc_url_raw($scheduling_url);
-		}
-		$wpdb->update($table, $update_data, ['uuid' => $uuid]);
-
-		// Optional: store product_id in event meta JSON
-		$meta = json_decode($event->meta ?? '{}', true);
-		$meta['linked_product_id'] = $product_id;
-		$wpdb->update($table, ['meta' => wp_json_encode($meta)], ['uuid' => $uuid]);
-
-		set_transient('cb_event_notice', [
-			'type'    => 'success',
-			'message' => sprintf(__('Linked event "%s" to product #%d.', 'calendly-bookings'), $event->name, $product_id)
-		], 30);
-
-		return new \WP_REST_Response(['success' => true, 'message' => 'Linked successfully.', 'product_id' => $product_id], 200);
-	}
-	
-public static function rest_wc_sync(\WP_REST_Request $r): \WP_REST_Response {
-    $uuid = sanitize_text_field((string)$r->get_param('uuid'));
-    $product_id = absint($r->get_param('product_id') ?: 0);
-
-    if (!$uuid) {
-        CB_Audit_Log::log('wc_sync_failed', 'event', '', ['reason' => 'missing uuid'], 'error');
-        return new \WP_REST_Response(['success'=>false,'message'=>'Missing uuid'],200);
-    }
-
-    $api = new CB_API();
-    $types = $api->get_event_types();
-    if (!empty($types['error'])) {
-        CB_Audit_Log::log('wc_sync_failed', 'event', $uuid, ['error' => $types['error']], 'error');
-        return new \WP_REST_Response(['success'=>false,'message'=>$types['error']],200);
-    }
-
-    $match = null;
-    foreach (($types['collection'] ?? []) as $t) {
-        if (($t['uuid'] ?? '') === $uuid) { $match = $t; break; }
-    }
-    if (!$match) {
-        CB_Audit_Log::log('wc_sync_failed', 'event', $uuid, ['reason' => 'event type not found'], 'error');
-        return new \WP_REST_Response(['success'=>false,'message'=>'Event type not found'],200);
-    }
-
-    $pid = CB_WC_Sync::sync_from_event_type($match, $product_id ?: null);
-
-    CB_Audit_Log::log('wc_sync', 'event', $uuid, [
-        'product_id' => $pid,
-        'success'    => $pid > 0
-    ], $pid > 0 ? 'info' : 'error');
-
-    return new \WP_REST_Response(['success'=> $pid>0, 'product_id'=> $pid], 200);
-}
-
-    public static function rest_wc_create_product( \WP_REST_Request $req ): \WP_REST_Response {
-        global $wpdb;
-        $uuid  = sanitize_text_field( $req->get_param( 'uuid' ) );
-        $table = $wpdb->prefix . 'cb_event_types';
-
-        // Get event
-        $event = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE uuid=%s", $uuid ) );
-        if ( ! $event ) {
-            return new \WP_REST_Response( [
-                'success' => false,
-                'message' => 'Event not found.'
-            ], 200 );
-        }
-
-        // Prevent duplicate product creation
-        if ( ! empty( $event->product_id ) && get_post( $event->product_id ) ) {
-            return new \WP_REST_Response( [
-                'success' => false,
-                'message' => 'Product already exists for this event.'
-            ], 200 );
-        }
-
-        // Ensure "Meeting" category exists
-        $term = term_exists( 'Meeting', 'product_cat' );
-        if ( ! $term ) {
-            $term = wp_insert_term( 'Meeting', 'product_cat', [
-                'slug' => 'meeting'
-            ] );
-        }
-        $category_id = is_array( $term ) ? $term['term_id'] : $term;
-
-        // Create product
-        $product_id = wp_insert_post( [
-            'post_title'   => $event->name,
-            'post_content' => '',
-            'post_excerpt' => $event->description ?? '',
-            'post_status'  => 'publish',
-            'post_type'    => 'product',
-            'meta_input'   => [
-                '_cb_event_uuid'     => $uuid,
-                '_cb_scheduling_url' => esc_url_raw((string)($event->scheduling_url ?? '')),
-                '_price'             => '',
-                '_stock_status'      => 'instock'
-            ]
-        ] );
-
-        if ( is_wp_error( $product_id ) ) {
-            return new \WP_REST_Response( [
-                'success' => false,
-                'message' => 'Failed to create product.'
-            ], 200 );
-        }
-
-        // Assign category
-        wp_set_object_terms( $product_id, [ (int) $category_id ], 'product_cat' );
-
-        // Update event record with product ID
-        $wpdb->update(
-            $table,
-            [ 'product_id' => $product_id ],
-            [ 'uuid' => $uuid ]
-        );
-
-        // Optional: store in event meta JSON
-        $meta = json_decode( $event->meta ?? '{}', true );
-        $meta['linked_product_id'] = $product_id;
-        $wpdb->update( $table, [ 'meta' => wp_json_encode( $meta ) ], [ 'uuid' => $uuid ] );
-
-        if ( class_exists( 'CB_Audit_Log' ) ) {
-            CB_Audit_Log::log(
-                'create_product',
-                'event',
-                $uuid,
-                [
-                    'product_id'   => $product_id,
-                    'event_name'   => $event->name,
-                    'description'  => $event->description ?? '',
-                    'category'     => 'Meeting'
-                ]
-            );
-        }
-
-        return new \WP_REST_Response( [
-            'success'    => true,
-            'product_id' => $product_id,
-            'message'    => sprintf( 'Product #%d created for event "%s".', $product_id, $event->name )
-        ], 200 );
-    }
-
-public static function rest_wc_delete_product(\WP_REST_Request $req): \WP_REST_Response {
-    global $wpdb;
-    $uuid = sanitize_text_field($req->get_param('uuid'));
-    $table = $wpdb->prefix . 'cb_event_types';
-    $event = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE uuid=%s", $uuid));
-
-    if (!$event || !$event->product_id) {
-        CB_Audit_Log::log('delete_product_failed', 'event', $uuid, ['reason' => 'no linked product'], 'warning');
-        return new \WP_REST_Response(['success' => false, 'message' => 'No linked product to delete'], 200);
-    }
-
-    wp_delete_post((int) $event->product_id, true);
-    $wpdb->update($table, ['product_id' => null], ['uuid' => $uuid]);
-
-    CB_Audit_Log::log('delete_product', 'event', $uuid, [
-        'product_id' => $event->product_id,
-        'success'    => true
-    ], 'info');
-
-    return new \WP_REST_Response(['success' => true, 'message' => 'Product successfully deleted.' ], 200);
-}
-
-    public static function rest_wc_create_all( \WP_REST_Request $req ): \WP_REST_Response {
-        global $wpdb;
-        $table = $wpdb->prefix . 'cb_event_types';
-
-        // Fetch all events without a linked product
-        $events = $wpdb->get_results("SELECT * FROM $table WHERE product_id IS NULL OR product_id = 0");
-
-        if (empty($events)) {
-            return new \WP_REST_Response([
-                'success' => false,
-                'message' => 'No events found without linked products.'
-            ], 200);
-        }
-
-        // Ensure "Meeting" category exists
-        $term = term_exists('Meeting', 'product_cat');
-        if (!$term) {
-            $term = wp_insert_term('Meeting', 'product_cat', [
-                'slug' => 'meeting'
-            ]);
-        }
-        $category_id = is_array($term) ? $term['term_id'] : $term;
-
-        $created_count = 0;
-        foreach ($events as $event) {
-            // Create WooCommerce product
-            $product_id = wp_insert_post([
-                'post_title'   => $event->name,
-                'post_content' => '',
-                'post_excerpt' => $event->description ?? '',
-                'post_status'  => 'publish',
-                'post_type'    => 'product',
-                'meta_input'   => [
-                    '_cb_event_uuid'     => $event->uuid,
-                    '_cb_scheduling_url' => esc_url_raw((string)($event->scheduling_url ?? '')),
-                    '_price'             => '',
-                    '_stock_status'      => 'instock'
-                ]
-            ]);
-
-            if (is_wp_error($product_id)) {
-                continue;
-            }
-
-            // Assign category
-            wp_set_object_terms($product_id, [(int) $category_id], 'product_cat');
-
-            // Update event record
-            $wpdb->update(
-                $table,
-                ['product_id' => $product_id],
-                ['uuid' => $event->uuid]
-            );
-
-            // Optional: store in event meta JSON
-            $meta = json_decode($event->meta ?? '{}', true);
-            $meta['linked_product_id'] = $product_id;
-            $wpdb->update($table, ['meta' => wp_json_encode($meta)], ['uuid' => $event->uuid]);
-
-            if (class_exists('CB_Audit_Log')) {
-                CB_Audit_Log::log(
-                    'create_product_bulk',
-                    'event',
-                    $event->uuid,
-                    [
-                        'product_id'  => $product_id,
-                        'event_name'  => $event->name,
-                        'description' => $event->description ?? '',
-                        'category'    => 'Meeting'
-                    ]
-                );
-            }
-
-            $created_count++;
-        }
-
-        return new \WP_REST_Response([
-            'success'       => true,
-            'created_count' => $created_count,
-            'message'       => sprintf('Created %d products for events.', $created_count)
-        ], 200);
-    }
-
-public static function rest_wc_delete_all(): \WP_REST_Response {
-    global $wpdb;
-    $table = $wpdb->prefix . 'cb_event_types';
-    $events = $wpdb->get_results("SELECT * FROM $table WHERE product_id IS NOT NULL AND product_id>0");
-
-    $deleted = 0;
-    foreach ($events as $event) {
-        if (wp_delete_post((int) $event->product_id, true)) {
-            $wpdb->update($table, ['product_id' => null], ['uuid' => $event->uuid]);
-            $deleted++;
-
-            CB_Audit_Log::log('delete_product_bulk', 'event', $event->uuid, [
-                'product_id' => $event->product_id,
-                'success'    => true
-            ], 'info');
-        } else {
-            CB_Audit_Log::log('delete_product_bulk_failed', 'event', $event->uuid, [
-                'product_id' => $event->product_id,
-                'success'    => false
-            ], 'error');
-        }
-    }
-
-    return new \WP_REST_Response(['success' => true, 'deleted_count' => $deleted], 200);
-}
-
+/*
 public static function rest_clear_api_cache(\WP_REST_Request $r): \WP_REST_Response {
     global $wpdb;
 
@@ -885,7 +551,7 @@ public static function rest_rebuild_product_links(\WP_REST_Request $r): \WP_REST
     ], 200);
 }
 
-
+*/
 
 
 public static function rest_debug_event_types(\WP_REST_Request $req): \WP_REST_Response {
@@ -907,7 +573,7 @@ public static function rest_debug_event_types(\WP_REST_Request $req): \WP_REST_R
     ], 200);
 }
 
-public static function handle_schedule(\WP_REST_Request $request): \WP_REST_Response {
+/*public static function handle_schedule(\WP_REST_Request $request): \WP_REST_Response {
     $order_id = absint($request->get_param('order_id'));
     $order    = wc_get_order($order_id);
 
@@ -968,7 +634,7 @@ public static function handle_schedule(\WP_REST_Request $request): \WP_REST_Resp
         'scheduled_event' => $res['resource'] ?? [],
     ], 200);
 }
-    
+    */
 public static function get_meeting_details(\WP_REST_Request $request): \WP_REST_Response {
     $event_uuid   = sanitize_text_field($request->get_param('event_uuid'));
     $invitee_uuid = sanitize_text_field($request->get_param('invitee_uuid'));

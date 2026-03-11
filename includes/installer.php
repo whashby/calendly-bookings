@@ -15,9 +15,11 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+use Calendly_Bookings\CB_Constants;
+
 final class CB_Installer {
 
-    private const SCHEMA_VERSION = '6.2.1';
+    private const SCHEMA_VERSION = CB_Constants::VERSION;
     private const OPTION_KEY = 'cb_schema_version';
     
     private const PAGE_SLUG = 'meeting-scheduled'; 
@@ -157,6 +159,7 @@ self::migrate_table( 'cb_scheduled_events', [
         "`payload` LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`payload`))",
         "`created_ts` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
         "`updated_ts` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+        "`notes` TEXT DEFAULT NULL",
     ],
     'keys' => [
         "PRIMARY KEY (`id`)",

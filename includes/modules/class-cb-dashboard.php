@@ -12,6 +12,13 @@ final class CB_Dashboard {
 
     public static function enqueue_assets(string $hook): void {
         if ($hook !== 'index.php') return;
+		wp_enqueue_script( 
+			'chartjs', 'https://cdn.jsdelivr.net/npm/chart.js', 
+			[], 
+			'4.4.0', 
+			true 
+		);	
+		
         wp_enqueue_script(
             'cb-dashboard',
             CB_Constants::url('includes/admin/assets/dashboard-widgets.js'),
@@ -29,7 +36,7 @@ final class CB_Dashboard {
         );
 
 		$data = [
-			'root'  => esc_url_raw( rest_url( 'cb/v1/' ) ),
+			'root'  => esc_url_raw( rest_url( 'calendly-bookings/v1/' ) ),
 			'nonce' => wp_create_nonce( 'wp_rest' ),
 		];
 		wp_add_inline_script(
@@ -37,7 +44,7 @@ final class CB_Dashboard {
 			'const CB_REST = ' . wp_json_encode( $data ) . ';',
 			'before'
 		);
-
+		
         wp_enqueue_style(
             'cb-dashboard',
             CB_Constants::url('includes/admin/assets/dashboard-widgets.css'),

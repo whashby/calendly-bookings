@@ -11,32 +11,30 @@ function cb_resolve_timezone(): ?string {
 }
 
 /**
- * Redirect to checkout immediately for meeting products.
+ * Redirect to checkout immediately for "Initial meeting" product.
  */
-/*add_action('template_redirect', function () {
+add_action('template_redirect', function () {
     // Only run on add-to-cart requests
     if (!isset($_REQUEST['add-to-cart'])) {
         return;
     }
 
     $product_id = absint($_REQUEST['add-to-cart']);
-    if (!$product_id) {
-        return;
-    }
+    $product = wc_get_product($product_id);
+    if ($product) {
+		$product_name = $product->get_name();
 
-    // Check if this is a "meeting" product by your custom meta
-    $event_uuid = get_post_meta($product_id, '_cb_event_uuid', true);
+		if($product_name == "Initial meeting") {
+			// Remove default added-to-cart redirect
+			remove_action('template_redirect', 'wc_template_redirect');
 
-    if (!empty($event_uuid)) {
-        // Remove default added-to-cart redirect
-        remove_action('template_redirect', 'wc_template_redirect');
-
-        // Redirect straight to checkout
-        wp_safe_redirect(wc_get_checkout_url());
-        exit;
+			// Redirect straight to checkout
+			wp_safe_redirect(wc_get_checkout_url());
+			exit;
+		}
     }
 });
-*/
+
 
 add_action('template_redirect', function() {
     global $wpdb;
@@ -61,7 +59,7 @@ add_action('template_redirect', function() {
 
         // Ensure scheduled events are refreshed
         $api = new CB_API();
-        $api -> get_upcoming_events();
+        $api -> sync_scheduled_events();
 
         // Normalize start time
         $event_start = date('Y-m-d H:i:s', strtotime($start_raw));
