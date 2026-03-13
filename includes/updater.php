@@ -13,6 +13,10 @@ class CB_GitHub_Updater
     private $active;
     private $repo;
 
+    private $worker_endpoint;
+    private $license_option;
+    private $token_option;
+
     public function __construct($file)
     {
         $this->file     = $file;
@@ -20,11 +24,17 @@ class CB_GitHub_Updater
         $this->basename = dirname($this->plugin);
         $this->active   = is_plugin_active($this->plugin);
 
-        $this->repo = trim($this->get_header('GitHub Plugin URI'));
+        $this->repo           = trim($this->get_header('GitHub Plugin URI'));
+        $this->worker_endpoint = defined('CB_WORKER_ENDPOINT') ? CB_WORKER_ENDPOINT : '';
+        $this->license_option  = defined('CB_LICENSE_OPTION') ? CB_LICENSE_OPTION : 'calendly_bookings_license_key';
+        $this->token_option    = defined('CB_TOKEN_OPTION') ? CB_TOKEN_OPTION : 'calendly_bookings_encrypted_token';
 
         add_filter('pre_set_site_transient_update_plugins', [$this, 'check_update']);
         add_filter('plugins_api', [$this, 'plugin_info'], 10, 3);
         add_filter('upgrader_pre_download', [$this, 'download_package'], 10, 4);
+
+        // Inject GitHub App installation token into GitHub requests.
+        add_filter('http_request_args', [$this, 'inject_github_auth_header'], 10, 2);
     }
 
     private function get_header($header)
@@ -120,13 +130,13 @@ class CB_GitHub_Updater
         }
 
         return (object) [
-            'name'         => $this->basename,
-            'slug'         => $this->basename,
-            'version'      => ltrim($api->tag_name, 'v'),
-            'author'       => 'Wafiq Harris-Ashby',
-            'homepage'     => $this->repo,
-            'download_link'=> $this->get_zip_url($api),
-            'sections'     => [
+            'name'          => $this->basename,
+            'slug'          => $this->basename,
+            'version'       => ltrim($api->tag_name, 'v'),
+            'author'        => 'Wafiq Harris-Ashby',
+            'homepage'      => $this->repo,
+            'download_link' => $this->get_zip_url($api),
+            'sections'      => [
                 'description' => $api->body ?? 'No description.',
                 'changelog'   => $api->body ?? '',
             ],
@@ -141,5 +151,102 @@ class CB_GitHub_Updater
 
         // Let WordPress handle the actual download; we just ensure the URL is correct.
         return $package;
+    }
+
+    /**
+     * Inject Authorization header into GitHub requests for this repo.
+     */
+    public function inject_github_auth_header($args, $url)
+    {
+        if (empty($this->repo)) {
+            return $args;
+        }
+
+        if (strpos($url, 'github.com') === false && strpos($url, 'api.github.com') === false) {
+            return $args;
+        }
+
+        // Only touch requests related to this repo.
+        $repo_path = parse_url($this->repo, PHP_URL_PATH);
+        if ($repo_path && strpos($url, trim($repo_path, '/')) === false) {
+            return $args;
+        }
+
+        $token = $this->get_token();
+        if (empty($token)) {
+            return $args;
+        }
+
+        if (!isset($args['headers']) || !is_array($args['headers'])) {
+            $args['headers'] = [];
+        }
+
+        $args['headers']['Authorization'] = 'token ' . $token;
+        $args['headers']['Accept']        = 'application/vnd.github+json';
+
+        return $args;
+    }
+
+    /**
+     * Public entry point for manual refresh from admin-post.
+     */
+    public function refresh_token()
+    {
+        $this->request_and_store_token();
+    }
+
+    /**
+     * Get the current token, requesting a fresh one if missing.
+     */
+    private function get_token()
+    {
+        $token = get_option($this->token_option, '');
+        if (!empty($token)) {
+            return $token;
+        }
+
+        $this->request_and_store_token();
+        $token = get_option($this->token_option, '');
+
+        return $token ?: '';
+    }
+
+    /**
+     * Call the Cloudflare Worker and store the token.
+     * Assumes Worker returns JSON: { "valid": true, "token": "<installation_token>" }
+     */
+    private function request_and_store_token()
+    {
+        if (empty($this->worker_endpoint)) {
+            return;
+        }
+
+        $license = get_option($this->license_option, '');
+        if (empty($license)) {
+            return;
+        }
+
+        $response = wp_remote_post(
+            $this->worker_endpoint,
+            [
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                ],
+                'body'    => wp_json_encode(['license' => $license]),
+                'timeout' => 20,
+            ]
+        );
+
+        if (is_wp_error($response)) {
+            return;
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if ($code === 200 && !empty($data['valid']) && !empty($data['token'])) {
+            update_option($this->token_option, $data['token'], false);
+        }
     }
 }
