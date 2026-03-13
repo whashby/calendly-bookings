@@ -42,7 +42,7 @@ final class CB_Admin {
             
             if(in_array( $user_email, ['whashby@gmail.com','michael@hierlife.com'])) :
     
-                    if(in_array( $user_email, [/*'whashby@gmail.com',*/'michael@hierlife.com'])) :
+                    if(in_array( $user_email, ['whashby@gmail.com','michael@hierlife.com'])) :
                         add_submenu_page(
                             'calendly-bookings',
                             __('Scheduled Events', 'calendly-bookings'),

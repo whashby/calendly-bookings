@@ -2,13 +2,27 @@
 // includes/bootstrap.php
 namespace Calendly_Bookings;
 
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) {
+    exit;
+}
 
 require_once __DIR__ . '/installer.php';
-register_activation_hook( __FILE__, [ 'CB_Installer', 'init' ] );
+require_once __DIR__ . '/utils/functions.php';
+
+/**
+ * Register 5-minute cron schedule.
+ */
+add_filter('cron_schedules', function ($schedules) {
+    if (!isset($schedules['every_5_minutes'])) {
+        $schedules['every_5_minutes'] = [
+            'interval' => 300,
+            'display'  => __('Every 5 Minutes', 'calendly-bookings'),
+        ];
+    }
+    return $schedules;
+});
 
 require_once __DIR__ . '/modules/class-cb-plugin.php';
-require_once __DIR__ . '/utils/functions.php';
 require_once __DIR__ . '/utils/class-cb-timezone-converter.php';
 require_once __DIR__ . '/modules/class-cb-shortcodes.php';
 require_once __DIR__ . '/modules/class-cb-dashboard.php';
@@ -30,7 +44,10 @@ require_once __DIR__ . '/modules/class-cb-admin-rest.php';
 require_once __DIR__ . '/modules/class-cb-checkout.php';
 require_once __DIR__ . '/modules/class-cb-debug.php';
 
-add_action('plugins_loaded', function() {
+add_action('plugins_loaded', function () {
+    // Run migrations if needed.
+    CB_Installer::maybe_run();
+
     Modules\CB_Plugin::init();
     Modules\CB_Shortcodes::init();
     Modules\CB_Webhooks::init();
@@ -49,4 +66,15 @@ add_action('plugins_loaded', function() {
     Modules\CB_Scheduled_Events::init();
     Modules\CB_Checkout::register();
     Modules\CB_Debug::init();
+
+    /**
+     * Cron callback: sync scheduled events every 5 minutes.
+     */
+    add_action('cb_sync_scheduled_events_cron', function () {
+        $last_sync = get_option('cb_last_sync_all', null);
+
+        Modules\CB_API::sync_scheduled_events(null, $last_sync);
+
+        update_option('cb_last_sync_all', current_time('mysql'));
+    });
 });
