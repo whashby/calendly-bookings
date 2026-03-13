@@ -233,12 +233,13 @@ jobs:
             --exclude=".gitignore" \
             ./ build/${PLUGIN_SLUG}/
 
-      - name: Create ZIP
+      - name: Create ZIP (only php, html, js, css)
         env:
           PLUGIN_SLUG: ${{ env.PLUGIN_SLUG }}
         run: |
-          cd build
-          zip -r "${PLUGIN_SLUG}.zip" "${PLUGIN_SLUG}"
+          cd build/${PLUGIN_SLUG}
+          zip -r "../${PLUGIN_SLUG}.zip" . \
+            -i '*.php' '*.html' '*.js' '*.css'
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
