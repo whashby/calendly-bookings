@@ -1,0 +1,269 @@
+name: Full Plugin Release Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+env:
+  PLUGIN_SLUG: calendly-bookings
+  PLUGIN_MAIN_FILE: calendly-bookings.php
+  CONSTANTS_FILE: includes/constants.php
+  DEPLOY_TO_WPORG: 'false' # set to 'true' when ready
+
+jobs:
+  determine_version:
+    name: Determine next semantic version
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.version.outputs.new_version }}
+      new_tag: ${{ steps.version.outputs.new_tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get last tag
+        id: last_tag
+        run: |
+          last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "last_tag=$last_tag" >> $GITHUB_OUTPUT
+
+      - name: Determine bump type from Conventional Commits
+        id: bump
+        run: |
+          last_tag="${{ steps.last_tag.outputs.last_tag }}"
+          if [ "$last_tag" = "v0.0.0" ]; then
+            range=""
+          else
+            range="${last_tag}..HEAD"
+          fi
+
+          commits=$(git log $range --pretty=%B)
+
+          bump="patch"
+
+          if echo "$commits" | grep -q "BREAKING CHANGE"; then
+            bump="major"
+          elif echo "$commits" | grep -Eiq "^feat(\(|:)" ; then
+            bump="minor"
+          elif echo "$commits" | grep -Eiq "^fix(\(|:)" ; then
+            bump="patch"
+          fi
+
+          echo "bump=$bump" >> $GITHUB_OUTPUT
+
+      - name: Calculate next version
+        id: version
+        run: |
+          last_tag="${{ steps.last_tag.outputs.last_tag }}"
+          bump="${{ steps.bump.outputs.bump }}"
+
+          base="${last_tag#v}"
+          IFS='.' read -r major minor patch <<< "$base"
+
+          [ -z "$major" ] && major=0
+          [ -z "$minor" ] && minor=0
+          [ -z "$patch" ] && patch=0
+
+          if [ "$bump" = "major" ]; then
+            major=$((major + 1)); minor=0; patch=0
+          elif [ "$bump" = "minor" ]; then
+            minor=$((minor + 1)); patch=0
+          else
+            patch=$((patch + 1))
+          fi
+
+          new_version="${major}.${minor}.${patch}"
+          new_tag="v${new_version}"
+
+          echo "new_version=$new_version" >> $GITHUB_OUTPUT
+          echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
+
+  update_sources:
+    name: Update version in source files & tag
+    needs: determine_version
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ needs.determine_version.outputs.new_version }}
+      new_tag: ${{ needs.determine_version.outputs.new_tag }}
+
+    steps:
+      - name: Checkout with write access
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update versions via PHP
+        env:
+          NEW_VERSION: ${{ needs.determine_version.outputs.new_version }}
+          PLUGIN_MAIN_FILE: ${{ env.PLUGIN_MAIN_FILE }}
+          CONSTANTS_FILE: ${{ env.CONSTANTS_FILE }}
+        run: |
+          php -r '
+          $version   = getenv("NEW_VERSION");
+          $main      = getenv("PLUGIN_MAIN_FILE");
+          $constants = getenv("CONSTANTS_FILE");
+
+          if (!$version || !$main || !$constants) {
+              fwrite(STDERR, "Missing env vars for version update\n");
+              exit(1);
+          }
+
+          // Update plugin header Version:
+          $code = file_get_contents($main);
+          if ($code === false) {
+              fwrite(STDERR, "Failed to read main plugin file\n");
+              exit(1);
+          }
+          $code_new = preg_replace(
+              "/^(\\s*\\*\\s*Version:\\s*).*/mi",
+              "$1{$version}",
+              $code,
+              1
+          );
+          if ($code_new === null) {
+              fwrite(STDERR, "Regex failed updating plugin header\n");
+              exit(1);
+          }
+          file_put_contents($main, $code_new);
+
+          // Update CB_Constants::VERSION
+          $c = file_get_contents($constants);
+          if ($c === false) {
+              fwrite(STDERR, "Failed to read constants file\n");
+              exit(1);
+          }
+          $c_new = preg_replace(
+              "/(public\\s+const\\s+VERSION\\s*=\\s*\\\')[^\\\']*(\\\';)/",
+              "$1{$version}$2",
+              $c,
+              1
+          );
+          if ($c_new === null) {
+              fwrite(STDERR, "Regex failed updating CB_Constants::VERSION\n");
+              exit(1);
+          }
+          file_put_contents($constants, $c_new);
+
+          // Update readme.txt Stable tag
+          if (file_exists("readme.txt")) {
+              $r = file_get_contents("readme.txt");
+              if ($r === false) {
+                  fwrite(STDERR, "Failed to read readme.txt\n");
+                  exit(1);
+              }
+              $r_new = preg_replace(
+                  "/^(Stable tag:\\s*).*/mi",
+                  "$1{$version}",
+                  $r,
+                  1
+              );
+              if ($r_new === null) {
+                  fwrite(STDERR, "Regex failed updating Stable tag\n");
+                  exit(1);
+              }
+              file_put_contents("readme.txt", $r_new);
+          }
+          '
+
+      - name: Commit version bump
+        env:
+          NEW_VERSION: ${{ needs.determine_version.outputs.new_version }}
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+          git add "${PLUGIN_MAIN_FILE}" "${CONSTANTS_FILE}" readme.txt || true
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore(release): v${NEW_VERSION}"
+            git push origin HEAD
+          fi
+
+      - name: Create and push tag
+        env:
+          NEW_TAG: ${{ needs.determine_version.outputs.new_tag }}
+        run: |
+          git tag "${NEW_TAG}"
+          git push origin "${NEW_TAG}"
+
+  build_and_release:
+    name: Build ZIP & create GitHub Release
+    needs: update_sources
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout with tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: zip
+
+      - name: Install Composer dependencies (if any)
+        run: |
+          if [ -f composer.json ]; then
+            composer install --no-dev --optimize-autoloader
+          fi
+
+      - name: Prepare plugin folder
+        env:
+          PLUGIN_SLUG: ${{ env.PLUGIN_SLUG }}
+        run: |
+          mkdir -p build
+          rsync -av \
+            --exclude="build" \
+            --exclude=".git" \
+            --exclude=".github" \
+            --exclude=".gitignore" \
+            ./ build/${PLUGIN_SLUG}/
+
+      - name: Create ZIP
+        env:
+          PLUGIN_SLUG: ${{ env.PLUGIN_SLUG }}
+        run: |
+          cd build
+          zip -r "${PLUGIN_SLUG}.zip" "${PLUGIN_SLUG}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.update_sources.outputs.new_tag }}
+          name: Release ${{ needs.update_sources.outputs.new_tag }}
+          generate_release_notes: true
+          files: build/${{ env.PLUGIN_SLUG }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy_wordpress_org:
+    name: Deploy to WordPress.org
+    needs: build_and_release
+    runs-on: ubuntu-latest
+    if: env.DEPLOY_TO_WPORG == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Deploy to WordPress.org
+        uses: 10up/action-wordpress-plugin-deploy@v2
+        with:
+          slug: ${{ env.PLUGIN_SLUG }}
+          plugin-main-file: ${{ env.PLUGIN_MAIN_FILE }}
+        env:
+          SVN_USERNAME: ${{ secrets.WPORG_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.WPORG_PASSWORD }}
+          ASSETS_DIR: .wordpress-org
