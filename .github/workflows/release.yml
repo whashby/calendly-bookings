@@ -242,28 +242,29 @@ jobs:
           tag_name: ${{ needs.update_sources.outputs.new_tag }}
           name: Release ${{ needs.update_sources.outputs.new_tag }}
           generate_release_notes: true
-          files: build/${{ env.PLUGIN_SLUG }}.zip
+          files: "build/${{ env.PLUGIN_SLUG }}.zip"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  deploy_wordpress_org:
-    name: Deploy to WordPress.org
-    needs: build_and_release
-    runs-on: ubuntu-latest
-    if: env.DEPLOY_TO_WPORG == 'true'
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+#  deploy_wordpress_org:
+#    name: Deploy to WordPress.org
+#    needs: build_and_release
+#    runs-on: ubuntu-latest
+#    if: env.DEPLOY_TO_WPORG && env.DEPLOY_TO_WPORG == 'true'
 
-      - name: Deploy to WordPress.org
-        uses: 10up/action-wordpress-plugin-deploy@v2
-        with:
-          slug: ${{ env.PLUGIN_SLUG }}
-          plugin-main-file: ${{ env.PLUGIN_MAIN_FILE }}
-        env:
-          SVN_USERNAME: ${{ secrets.WPORG_USERNAME }}
-          SVN_PASSWORD: ${{ secrets.WPORG_PASSWORD }}
-          ASSETS_DIR: .wordpress-org
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v4
+#        with:
+#          fetch-depth: 0
+
+#      - name: Deploy to WordPress.org
+#        uses: 10up/action-wordpress-plugin-deploy@v2
+#        with:
+#          slug: ${{ env.PLUGIN_SLUG }}
+#          plugin-main-file: ${{ env.PLUGIN_MAIN_FILE }}
+#        env:
+#          SVN_USERNAME: ${{ secrets.WPORG_USERNAME }}
+#          SVN_PASSWORD: ${{ secrets.WPORG_PASSWORD }}
+#          ASSETS_DIR: .wordpress-org
