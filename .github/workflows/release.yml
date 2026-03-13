@@ -10,7 +10,7 @@ env:
   PLUGIN_SLUG: calendly-bookings
   PLUGIN_MAIN_FILE: calendly-bookings.php
   CONSTANTS_FILE: includes/constants.php
-  DEPLOY_TO_WPORG: 'false' # set to 'true' when ready
+  DEPLOY_TO_WPORG: 'false'
 
 jobs:
   determine_version:
@@ -104,7 +104,8 @@ jobs:
           PLUGIN_MAIN_FILE: ${{ env.PLUGIN_MAIN_FILE }}
           CONSTANTS_FILE: ${{ env.CONSTANTS_FILE }}
         run: |
-          php -r '
+          cat > update.php <<'EOF'
+          <?php
           $version   = getenv("NEW_VERSION");
           $main      = getenv("PLUGIN_MAIN_FILE");
           $constants = getenv("CONSTANTS_FILE");
@@ -121,7 +122,7 @@ jobs:
               exit(1);
           }
           $code_new = preg_replace(
-              "/^(\\s*\\*\\s*Version:\\s*).*/mi",
+              '/^(\\s*\\*\\s*Version:\\s*).*/mi',
               "$1{$version}",
               $code,
               1
@@ -139,7 +140,7 @@ jobs:
               exit(1);
           }
           $c_new = preg_replace(
-              "/(public\\s+const\\s+VERSION\\s*=\\s*\\\')[^\\\']*(\\\';)/",
+              "/(public\\s+const\\s+VERSION\\s*=\\s*')[^']*(';)/",
               "$1{$version}$2",
               $c,
               1
@@ -158,7 +159,7 @@ jobs:
                   exit(1);
               }
               $r_new = preg_replace(
-                  "/^(Stable tag:\\s*).*/mi",
+                  '/^(Stable tag:\\s*).*/mi',
                   "$1{$version}",
                   $r,
                   1
@@ -169,7 +170,10 @@ jobs:
               }
               file_put_contents("readme.txt", $r_new);
           }
-          '
+          ?>
+          EOF
+
+          php update.php
 
       - name: Commit version bump
         env:
@@ -245,7 +249,6 @@ jobs:
           files: "build/${{ env.PLUGIN_SLUG }}.zip"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
 
 #  deploy_wordpress_org:
 #    name: Deploy to WordPress.org
