@@ -1,0 +1,25 @@
+<?php
+$version     = getenv("NEW_VERSION");
+$main        = getenv("PLUGIN_MAIN_FILE");
+$constants   = getenv("CONSTANTS_FILE");
+$versionFile = getenv("VERSION_FILE");
+
+// Update plugin header
+$code = file_get_contents($main);
+$code_new = preg_replace('/^(\s*\*\s*Version:\s*).*/mi', "* Version: {$version}", $code, 1);
+file_put_contents($main, $code_new);
+
+// Update constants
+$c = file_get_contents($constants);
+$c = preg_replace("/public\s+const\s+VERSION\s*=\s*'[^']*';/", "    public const VERSION = '{$version}';", $c, 1);
+file_put_contents($constants, $c);
+
+// Update readme
+if (file_exists("readme.txt")) {
+    $r = file_get_contents("readme.txt");
+    $r_new = preg_replace('/^Stable tag:\s*.*/mi', "Stable tag: {$version}", $r, 1);
+    file_put_contents("readme.txt", $r_new);
+}
+
+// Update version.txt
+file_put_contents($versionFile, $version);

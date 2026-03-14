@@ -14,7 +14,6 @@ function cb_resolve_timezone(): ?string {
  * Redirect to checkout immediately for "Initial meeting" product.
  */
 add_action('template_redirect', function () {
-    // Only run on add-to-cart requests
     if (!isset($_REQUEST['add-to-cart'])) {
         return;
     }
@@ -22,30 +21,26 @@ add_action('template_redirect', function () {
     $product_id = absint($_REQUEST['add-to-cart']);
     $product = wc_get_product($product_id);
     if ($product) {
-		$product_name = $product->get_name();
+        $product_name = $product->get_name();
 
-		if($product_name == "Initial meeting") {
-			// Remove default added-to-cart redirect
-			remove_action('template_redirect', 'wc_template_redirect');
-
-			// Redirect straight to checkout
-			wp_safe_redirect(wc_get_checkout_url());
-			exit;
-		}
+        if ($product_name === "Initial meeting") {
+            remove_action('template_redirect', 'wc_template_redirect');
+            wp_safe_redirect(wc_get_checkout_url());
+            exit;
+        }
     }
 });
 
-
+/**
+ * Handle meeting-scheduled page logic.
+ */
 add_action('template_redirect', function() {
     global $wpdb;
 
-    // Check if we're on /meeting-scheduled
     if (is_page('meeting-scheduled')) {
-        // Grab query vars
-        $start_raw     = isset($_GET['event_start_time']) ? sanitize_text_field($_GET['event_start_time']) : '';
-        $order_number  = isset($_GET['answer_1']) ? intval($_GET['answer_1']) : 0;
+        $start_raw    = isset($_GET['event_start_time']) ? sanitize_text_field($_GET['event_start_time']) : '';
+        $order_number = isset($_GET['answer_1']) ? intval($_GET['answer_1']) : 0;
 
-        // If no payload and user not admin -> 404
         if (empty($start_raw) || empty($order_number)) {
             if (!current_user_can('manage_options')) {
                 global $wp_query;
@@ -57,14 +52,11 @@ add_action('template_redirect', function() {
             }
         }
 
-        // Ensure scheduled events are refreshed
         $api = new CB_API();
-        $api -> sync_scheduled_events();
+        $api->sync_scheduled_events();
 
-        // Normalize start time
         $event_start = date('Y-m-d H:i:s', strtotime($start_raw));
 
-        // Update scheduled events table
         if ($event_start && $order_number) {
             $wpdb->update(
                 "{$wpdb->prefix}cb_scheduled_events",
@@ -77,10 +69,12 @@ add_action('template_redirect', function() {
     }
 });
 
+/**
+ * Force plugin template for meeting-scheduled page.
+ */
 add_filter('template_include', function($template) {
-    $page_id = get_option( \Calendly_Bookings\CB_Installer::get_page_option() ); 
+    $page_id = get_option(\Calendly_Bookings\CB_Installer::get_page_option()); 
     
-    // If this is the meeting-scheduled page, force plugin template 
     if ($page_id && is_page($page_id)) {
         return plugin_dir_path(__FILE__) . '../templates/meeting-scheduled.php';
     }
@@ -88,26 +82,28 @@ add_filter('template_include', function($template) {
     return $template;
 });
 
-// Hook activation to schedule cron
+/**
+ * Schedule cron for monthly revenue report.
+ */
 register_activation_hook(__FILE__, function() {
     if (!wp_next_scheduled('cb_generate_monthly_report')) {
         wp_schedule_event(time(), 'daily', 'cb_generate_monthly_report');
     }
 });
 
-// Clear cron on deactivation
 register_deactivation_hook(__FILE__, function() {
     wp_clear_scheduled_hook('cb_generate_monthly_report');
 });
 
-// Cron callback
+/**
+ * Cron callback: generate monthly revenue report.
+ */
 add_action('cb_generate_monthly_report', function() {
     $last_month = date('Y-m', strtotime('last month'));
     $last_generated = get_option('cb_last_report_month');
 
-    // Only generate if it's the 1st OR if last month's report hasn't been generated yet
     if (date('j') !== '1' && $last_generated === $last_month) {
-        return; // Already done, nothing to do
+        return;
     }
 
     $last_month_start = date('Y-m-01', strtotime('first day of last month'));
@@ -120,7 +116,7 @@ add_action('cb_generate_monthly_report', function() {
     ]);
 
     require_once __DIR__ . '/vendor/autoload.php'; // TCPDF/FPDF
-    $pdf = new TCPDF();
+    $pdf = new \TCPDF();
     $pdf->AddPage();
     $pdf->SetFont('helvetica', '', 12);
 
@@ -152,7 +148,7 @@ add_action('cb_generate_monthly_report', function() {
         }
     }
 
-    // Add total revenue row
+    // Total revenue row
     $pdf->Ln(5);
     $pdf->Cell(140, 10, "Total Revenue", 1);
     $pdf->Cell(40, 10, wc_price($total_revenue), 1);
@@ -171,14 +167,11 @@ add_action('cb_generate_monthly_report', function() {
     $file = $upload_dir['basedir'] . '/revenue-report.pdf';
     $pdf->Output($file, 'F');
 
-    // Email report
     $subject = "Monthly Revenue Report - " . date('F Y', strtotime('last month'));
     $body    = "Attached is the revenue report for " . date('F Y', strtotime('last month')) . ".";
     $headers = ['Content-Type: text/html; charset=UTF-8'];
 
     wp_mail('michael@hierlife.com', $subject, $body, $headers, [$file]);
 
-    // Mark this month as done
     update_option('cb_last_report_month', $last_month);
 });
-
