@@ -14,6 +14,7 @@ $c = file_get_contents($constants);
 $c = preg_replace("/public\s+const\s+VERSION\s*=\s*'[^']*';/", "    public const VERSION = '{$version}';", $c, 1);
 file_put_contents($constants, $c);
 
+
 // Update readme
 if (file_exists("readme.txt")) {
     $r = file_get_contents("readme.txt");
