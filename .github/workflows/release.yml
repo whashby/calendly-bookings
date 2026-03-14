@@ -10,6 +10,7 @@ env:
   PLUGIN_SLUG: calendly-bookings
   PLUGIN_MAIN_FILE: calendly-bookings.php
   CONSTANTS_FILE: includes/constants.php
+  VERSION_FILE: version.txt
   DEPLOY_TO_WPORG: 'false'
 
 jobs:
@@ -26,10 +27,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Read current version
+        id: current
+        run: |
+          current=$(cat ${{ env.VERSION_FILE }} 2>/dev/null || echo "0.0.0")
+          echo "current=$current" >> $GITHUB_OUTPUT
+
       - name: Get last tag
         id: last_tag
         run: |
-          last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v${{ steps.current.outputs.current }}")
           echo "last_tag=$last_tag" >> $GITHUB_OUTPUT
 
       - name: Determine bump type from Conventional Commits
@@ -103,33 +110,32 @@ jobs:
           NEW_VERSION: ${{ needs.determine_version.outputs.new_version }}
           PLUGIN_MAIN_FILE: ${{ env.PLUGIN_MAIN_FILE }}
           CONSTANTS_FILE: ${{ env.CONSTANTS_FILE }}
+          VERSION_FILE: ${{ env.VERSION_FILE }}
         run: |
           cat > update.php <<'EOF'
           <?php
-          $version   = getenv("NEW_VERSION");
-          $main      = getenv("PLUGIN_MAIN_FILE");
-          $constants = getenv("CONSTANTS_FILE");
+          $version     = getenv("NEW_VERSION");
+          $main        = getenv("PLUGIN_MAIN_FILE");
+          $constants   = getenv("CONSTANTS_FILE");
+          $versionFile = getenv("VERSION_FILE");
 
-          if (!$version || !$main || !$constants) {
+          if (!$version || !$main || !$constants || !$versionFile) {
               fwrite(STDERR, "Missing env vars for version update\n");
               exit(1);
           }
 
-          // Update plugin header Version
+          // Replace entire Version line in plugin header
           $code = file_get_contents($main);
-          if ($code === false) exit(1);
           $code_new = preg_replace(
-              '/^(\s*\*\s*Version:\s*)([0-9\.]+)/mi',
-              "$1{$version}",
+              '/^(\s*\*\s*Version:\s*).*/mi',
+              "* Version: {$version}",
               $code,
               1
           );
           file_put_contents($main, $code_new);
 
-          // Update CB_Constants::VERSION
+          // Replace entire VERSION constant line
           $c = file_get_contents($constants);
-          if ($c === false) exit(1);
-
           if (!preg_match("/public\s+const\s+VERSION\s*=\s*'[^']*';/", $c)) {
               $c = preg_replace(
                   '/(final\s+class\s+CB_Constants\s*\{)/',
@@ -139,25 +145,28 @@ jobs:
               );
           } else {
               $c = preg_replace(
-                  "/(public\s+const\s+VERSION\s*=\s*')([0-9\.]+)(';)/",
-                  "$1{$version}$3",
+                  "/public\s+const\s+VERSION\s*=\s*'[^']*';/",
+                  "    public const VERSION = '{$version}';",
                   $c,
                   1
               );
           }
           file_put_contents($constants, $c);
 
-          // Update readme.txt Stable tag
+          // Replace Stable tag line in readme.txt
           if (file_exists("readme.txt")) {
               $r = file_get_contents("readme.txt");
               $r_new = preg_replace(
-                  '/^(Stable tag:\s*)([0-9\.]+)/mi',
-                  "$1{$version}",
+                  '/^Stable tag:\s*.*/mi',
+                  "Stable tag: {$version}",
                   $r,
                   1
               );
               file_put_contents("readme.txt", $r_new);
           }
+
+          // Update version.txt
+          file_put_contents($versionFile, $version);
           ?>
           EOF
 
@@ -170,7 +179,7 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
 
-          git add "${PLUGIN_MAIN_FILE}" "${CONSTANTS_FILE}" readme.txt || true
+          git add "${PLUGIN_MAIN_FILE}" "${CONSTANTS_FILE}" readme.txt "${VERSION_FILE}" || true
 
           if git diff --cached --quiet; then
             echo "No changes to commit."
