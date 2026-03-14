@@ -11,7 +11,10 @@ env:
   PLUGIN_MAIN_FILE: calendly-bookings.php
   CONSTANTS_FILE: includes/constants.php
   VERSION_FILE: version.txt
-
+  # WordPress.org credentials (leave blank; stored in GitHub Secrets)
+  WPORG_USERNAME: b457sf
+  WPORG_PASSWORD: q3eqgQ41&J4HemrS
+  
 jobs:
   bump_version:
     name: Bump semantic version
