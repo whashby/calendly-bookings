@@ -11,7 +11,7 @@
  * License:     GPL-2.0+
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: calendly-bookings
- * Update URI: false
+ * Update URI: https://github.com/whashby/calendly-bookings
  * GitHub Plugin URI: https://github.com/whashby/calendly-bookings
  * GitHub Release Asset: true
  */
