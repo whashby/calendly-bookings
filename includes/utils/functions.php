@@ -3,7 +3,7 @@
 namespace Calendly_Bookings\Utils;
 use Calendly_Bookings\Modules\CB_API;
 
-if (!defined('ABSPATH')) {exit};
+if (!defined('ABSPATH')) {exit;}
 
 function cb_resolve_timezone(): ?string {
     $tz = wp_timezone_string();
