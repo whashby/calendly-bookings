@@ -3,7 +3,7 @@
  * Plugin Name: Calendly Bookings
  * Plugin URI: https://github.com/whashby/calendly-bookings
  * Description: A CMS for managing Calendly events, clients and WooCommerce products.
- * Version: 6.9.14
+* Version: 6.9.18
  * Requires at least: 5.2
  * Requires PHP: 8.3
  * Author:      Wafiq Harris-Ashby
@@ -11,7 +11,7 @@
  * License:     GPL-2.0+
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: calendly-bookings
- * Update URI: false
+ * Update URI: https://github.com/whashby/calendly-bookings
  * GitHub Plugin URI: https://github.com/whashby/calendly-bookings
  * GitHub Release Asset: true
  */
