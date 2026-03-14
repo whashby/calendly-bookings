@@ -49,12 +49,7 @@ add_action('admin_init', function () {
         function () {
             $value = get_option(CB_LICENSE_OPTION, '');
             ?>
-            <input type="text"
-                   id="<?php echo esc_attr(CB_LICENSE_OPTION); ?>"
-                   name="<?php echo esc_attr(CB_LICENSE_OPTION); ?>"
-                   value="<?php echo esc_attr($value); ?>"
-                   class="regular-text"
-            />
+            <input type="text" id="<?php echo esc_attr(CB_LICENSE_OPTION); ?>" name="<?php echo esc_attr(CB_LICENSE_OPTION); ?>" value="<?php echo esc_attr($value); ?>" class="regular-text"/>
             <p class="description">
                 <?php esc_html_e('Enter your license key to enable private GitHub updates.', 'calendly-bookings'); ?>
             </p>
