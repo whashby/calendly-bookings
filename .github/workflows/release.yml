@@ -11,15 +11,14 @@ env:
   PLUGIN_MAIN_FILE: calendly-bookings.php
   CONSTANTS_FILE: includes/constants.php
   VERSION_FILE: version.txt
-  DEPLOY_TO_WPORG: 'false'
 
 jobs:
-  determine_version:
-    name: Determine next semantic version
+  bump_version:
+    name: Bump semantic version
     runs-on: ubuntu-latest
     outputs:
-      new_version: ${{ steps.version.outputs.new_version }}
-      new_tag: ${{ steps.version.outputs.new_tag }}
+      new_version: ${{ steps.bump.outputs.new_version }}
+      new_tag: ${{ steps.bump.outputs.new_tag }}
 
     steps:
       - name: Checkout
@@ -28,30 +27,16 @@ jobs:
           fetch-depth: 0
 
       - name: Read current version
-        id: current
+        id: read
         run: |
           current=$(cat ${{ env.VERSION_FILE }} 2>/dev/null || echo "0.0.0")
           current=$(echo "$current" | tr -d '\n\r')
           echo "current=$current" >> $GITHUB_OUTPUT
 
-      - name: Get last tag
-        id: last_tag
+      - name: Determine bump type
+        id: bump_type
         run: |
-          last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v${{ steps.current.outputs.current }}")
-          echo "last_tag=$last_tag" >> $GITHUB_OUTPUT
-
-      - name: Determine bump type from Conventional Commits
-        id: bump
-        run: |
-          last_tag="${{ steps.last_tag.outputs.last_tag }}"
-          if [ "$last_tag" = "v0.0.0" ]; then
-            range=""
-          else
-            range="${last_tag}..HEAD"
-          fi
-
-          commits=$(git log $range --pretty=%B)
-
+          commits=$(git log -1 --pretty=%B)
           bump="patch"
           if echo "$commits" | grep -q "BREAKING CHANGE"; then
             bump="major"
@@ -60,21 +45,18 @@ jobs:
           elif echo "$commits" | grep -Eiq "^fix(\(|:)" ; then
             bump="patch"
           fi
-
           echo "bump=$bump" >> $GITHUB_OUTPUT
 
-      - name: Calculate next version
-        id: version
+      - name: Increment version
+        id: bump
         run: |
-          last_tag="${{ steps.last_tag.outputs.last_tag }}"
-          bump="${{ steps.bump.outputs.bump }}"
-
-          base="${last_tag#v}"
+          base="${{ steps.read.outputs.current }}"
           IFS='.' read -r major minor patch <<< "$base"
           [ -z "$major" ] && major=0
           [ -z "$minor" ] && minor=0
           [ -z "$patch" ] && patch=0
 
+          bump="${{ steps.bump_type.outputs.bump }}"
           if [ "$bump" = "major" ]; then
             major=$((major + 1)); minor=0; patch=0
           elif [ "$bump" = "minor" ]; then
@@ -90,12 +72,12 @@ jobs:
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
 
   update_sources:
-    name: Update version in source files & tag
-    needs: determine_version
+    name: Update source files
+    needs: bump_version
     runs-on: ubuntu-latest
     outputs:
-      new_version: ${{ needs.determine_version.outputs.new_version }}
-      new_tag: ${{ needs.determine_version.outputs.new_tag }}
+      new_version: ${{ needs.bump_version.outputs.new_version }}
+      new_tag: ${{ needs.bump_version.outputs.new_tag }}
 
     steps:
       - name: Checkout with write access
@@ -104,9 +86,9 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update versions via PHP
+      - name: Rewrite version lines
         env:
-          NEW_VERSION: ${{ needs.determine_version.outputs.new_version }}
+          NEW_VERSION: ${{ needs.bump_version.outputs.new_version }}
           PLUGIN_MAIN_FILE: ${{ env.PLUGIN_MAIN_FILE }}
           CONSTANTS_FILE: ${{ env.CONSTANTS_FILE }}
           VERSION_FILE: ${{ env.VERSION_FILE }}
@@ -118,12 +100,7 @@ jobs:
           $constants   = getenv("CONSTANTS_FILE");
           $versionFile = getenv("VERSION_FILE");
 
-          if (!$version || !$main || !$constants || !$versionFile) {
-              fwrite(STDERR, "Missing env vars for version update\n");
-              exit(1);
-          }
-
-          // Replace entire Version line in plugin header
+          // Plugin header
           $code = file_get_contents($main);
           $code_new = preg_replace(
               '/^(\s*\*\s*Version:\s*).*/mi',
@@ -133,7 +110,7 @@ jobs:
           );
           file_put_contents($main, $code_new);
 
-          // Replace entire VERSION constant line
+          // Constants
           $c = file_get_contents($constants);
           if (!preg_match("/public\s+const\s+VERSION\s*=\s*'[^']*';/", $c)) {
               $c = preg_replace(
@@ -152,7 +129,7 @@ jobs:
           }
           file_put_contents($constants, $c);
 
-          // Replace Stable tag line in readme.txt
+          // Readme
           if (file_exists("readme.txt")) {
               $r = file_get_contents("readme.txt");
               $r_new = preg_replace(
@@ -164,22 +141,20 @@ jobs:
               file_put_contents("readme.txt", $r_new);
           }
 
-          // Update version.txt
+          // Version.txt
           file_put_contents($versionFile, $version);
           ?>
           EOF
 
           php update.php
 
-      - name: Commit version bump
+      - name: Commit changes
         env:
-          NEW_VERSION: ${{ needs.determine_version.outputs.new_version }}
+          NEW_VERSION: ${{ needs.bump_version.outputs.new_version }}
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-
           git add "${PLUGIN_MAIN_FILE}" "${CONSTANTS_FILE}" readme.txt "${VERSION_FILE}" || true
-
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
@@ -187,15 +162,15 @@ jobs:
             git push origin HEAD
           fi
 
-      - name: Create and push tag
+      - name: Tag release
         env:
-          NEW_TAG: ${{ needs.determine_version.outputs.new_tag }}
+          NEW_TAG: ${{ needs.bump_version.outputs.new_tag }}
         run: |
           git tag "${NEW_TAG}"
           git push origin "${NEW_TAG}"
 
   build_and_release:
-    name: Build ZIP & create GitHub Release
+    name: Build ZIP & Release
     needs: update_sources
     runs-on: ubuntu-latest
 
@@ -204,18 +179,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          extensions: zip
-
-      - name: Install Composer dependencies (if any)
-        run: |
-          if [ -f composer.json ]; then
-            composer install --no-dev --optimize-autoloader
-          fi
 
       - name: Prepare plugin folder
         env:
@@ -237,7 +200,7 @@ jobs:
           zip -r "../${PLUGIN_SLUG}.zip" . \
             -i '*.php' '*.html' '*.js' '*.css'
 
-      - name: Create GitHub Release
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.update_sources.outputs.new_tag }}
