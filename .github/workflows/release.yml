@@ -11,7 +11,7 @@ env:
   PLUGIN_MAIN_FILE: calendly-bookings.php
   CONSTANTS_FILE: includes/constants.php
   VERSION_FILE: version.txt
-  DEPLOY_TO_WPORG: 'true'
+  DEPLOY_TO_WPORG: 'false'
 
 jobs:
   bump_version:
