@@ -3,7 +3,7 @@
 namespace Calendly_Bookings\Utils;
 use Calendly_Bookings\Modules\CB_API;
 
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) {exit};
 
 function cb_resolve_timezone(): ?string {
     $tz = wp_timezone_string();
@@ -88,6 +88,97 @@ add_filter('template_include', function($template) {
     return $template;
 });
 
+// Hook activation to schedule cron
+register_activation_hook(__FILE__, function() {
+    if (!wp_next_scheduled('cb_generate_monthly_report')) {
+        wp_schedule_event(time(), 'daily', 'cb_generate_monthly_report');
+    }
+});
 
+// Clear cron on deactivation
+register_deactivation_hook(__FILE__, function() {
+    wp_clear_scheduled_hook('cb_generate_monthly_report');
+});
 
+// Cron callback
+add_action('cb_generate_monthly_report', function() {
+    $last_month = date('Y-m', strtotime('last month'));
+    $last_generated = get_option('cb_last_report_month');
+
+    // Only generate if it's the 1st OR if last month's report hasn't been generated yet
+    if (date('j') !== '1' && $last_generated === $last_month) {
+        return; // Already done, nothing to do
+    }
+
+    $last_month_start = date('Y-m-01', strtotime('first day of last month'));
+    $last_month_end   = date('Y-m-t', strtotime('last month'));
+
+    $orders = wc_get_orders([
+        'limit'        => -1,
+        'status'       => 'completed',
+        'date_created' => $last_month_start . '...' . $last_month_end,
+    ]);
+
+    require_once __DIR__ . '/vendor/autoload.php'; // TCPDF/FPDF
+    $pdf = new TCPDF();
+    $pdf->AddPage();
+    $pdf->SetFont('helvetica', '', 12);
+
+    $pdf->Cell(0, 10, "Revenue Report - " . date('F Y', strtotime('last month')), 0, 1, 'C');
+    $pdf->Ln(5);
+
+    // Table headers
+    $pdf->Cell(40, 10, "Date", 1);
+    $pdf->Cell(50, 10, "Customer ID", 1);
+    $pdf->Cell(50, 10, "Purchase", 1);
+    $pdf->Cell(40, 10, "Payment", 1);
+    $pdf->Ln();
+
+    $total_revenue = 0;
+
+    foreach ($orders as $order) {
+        $date = $order->get_date_created()->date('Y-m-d');
+        $customer_id = sprintf("C-%06d", $order->get_customer_id());
+        foreach ($order->get_items() as $item) {
+            $purchase = $item->get_name();
+            $payment  = $item->get_total();
+            $total_revenue += $payment;
+
+            $pdf->Cell(40, 10, $date, 1);
+            $pdf->Cell(50, 10, $customer_id, 1);
+            $pdf->Cell(50, 10, $purchase, 1);
+            $pdf->Cell(40, 10, wc_price($payment), 1);
+            $pdf->Ln();
+        }
+    }
+
+    // Add total revenue row
+    $pdf->Ln(5);
+    $pdf->Cell(140, 10, "Total Revenue", 1);
+    $pdf->Cell(40, 10, wc_price($total_revenue), 1);
+    $pdf->Ln(15);
+
+    // Summary section
+    $pdf->SetFont('helvetica', 'B', 12);
+    $pdf->Cell(0, 10, "Summary", 0, 1);
+    $pdf->SetFont('helvetica', '', 11);
+    $pdf->MultiCell(0, 8,
+        "For " . date('F Y', strtotime('last month')) . ", the total revenue was " . wc_price($total_revenue) .
+        ". The report includes " . count($orders) . " completed orders."
+    );
+
+    $upload_dir = wp_upload_dir();
+    $file = $upload_dir['basedir'] . '/revenue-report.pdf';
+    $pdf->Output($file, 'F');
+
+    // Email report
+    $subject = "Monthly Revenue Report - " . date('F Y', strtotime('last month'));
+    $body    = "Attached is the revenue report for " . date('F Y', strtotime('last month')) . ".";
+    $headers = ['Content-Type: text/html; charset=UTF-8'];
+
+    wp_mail('michael@hierlife.com', $subject, $body, $headers, [$file]);
+
+    // Mark this month as done
+    update_option('cb_last_report_month', $last_month);
+});
 
