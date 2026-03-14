@@ -122,7 +122,7 @@ jobs:
               exit(1);
           }
           $code_new = preg_replace(
-              '/^(\\s*\\*\\s*Version:\\s*)([0-9\\.]).*/mi',
+              '/^(\s*\*\s*Version:\s*)([0-9\.]+)/mi',
               "$1{$version}",
               $code,
               1
@@ -140,11 +140,12 @@ jobs:
               exit(1);
           }
           $c_new = preg_replace(
-              "/(public\\s+const\\s+VERSION\\s*=\\s*')[^']*(';)/",
+              "/(public\\s+const\\s+VERSION\\s*=\\s*')([0-9\\.]+)(';)/",
               "$1{$version}$3",
               $c,
               1
           );
+
           if ($c_new === null) {
               fwrite(STDERR, "Regex failed updating CB_Constants::VERSION\n");
               exit(1);
