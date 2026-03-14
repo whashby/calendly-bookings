@@ -210,24 +210,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-#  deploy_wordpress_org:
-#    name: Deploy to WordPress.org
-#    needs: build_and_release
-#    runs-on: ubuntu-latest
-#    if: env.DEPLOY_TO_WPORG && env.DEPLOY_TO_WPORG == 'true'
+  deploy_wordpress_org:
+    name: Deploy to WordPress.org
+    needs: build_and_release
+    runs-on: ubuntu-latest
+    if: env.DEPLOY_TO_WPORG && env.DEPLOY_TO_WPORG == 'true'
 
-#    steps:
-#      - name: Checkout
-#        uses: actions/checkout@v4
-#        with:
-#          fetch-depth: 0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-#      - name: Deploy to WordPress.org
-#        uses: 10up/action-wordpress-plugin-deploy@v2
-#        with:
-#          slug: ${{ env.PLUGIN_SLUG }}
-#          plugin-main-file: ${{ env.PLUGIN_MAIN_FILE }}
-#        env:
-#          SVN_USERNAME: ${{ secrets.WPORG_USERNAME }}
-#          SVN_PASSWORD: ${{ secrets.WPORG_PASSWORD }}
-#          ASSETS_DIR: .wordpress-org
+      - name: Deploy to WordPress.org
+        uses: 10up/action-wordpress-plugin-deploy@v2
+        with:
+          slug: ${{ env.PLUGIN_SLUG }}
+          plugin-main-file: ${{ env.PLUGIN_MAIN_FILE }}
+        env:
+          SVN_USERNAME: ${{ secrets.WPORG_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.WPORG_PASSWORD }}
+          ASSETS_DIR: .wordpress-org
