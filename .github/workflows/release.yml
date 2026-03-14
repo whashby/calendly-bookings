@@ -31,6 +31,7 @@ jobs:
         id: current
         run: |
           current=$(cat ${{ env.VERSION_FILE }} 2>/dev/null || echo "0.0.0")
+          current=$(echo "$current" | tr -d '\n\r')
           echo "current=$current" >> $GITHUB_OUTPUT
 
       - name: Get last tag
@@ -52,7 +53,6 @@ jobs:
           commits=$(git log $range --pretty=%B)
 
           bump="patch"
-
           if echo "$commits" | grep -q "BREAKING CHANGE"; then
             bump="major"
           elif echo "$commits" | grep -Eiq "^feat(\(|:)" ; then
@@ -71,7 +71,6 @@ jobs:
 
           base="${last_tag#v}"
           IFS='.' read -r major minor patch <<< "$base"
-
           [ -z "$major" ] && major=0
           [ -z "$minor" ] && minor=0
           [ -z "$patch" ] && patch=0
