@@ -11,6 +11,7 @@ env:
   PLUGIN_MAIN_FILE: calendly-bookings.php
   CONSTANTS_FILE: includes/constants.php
   VERSION_FILE: version.txt
+  DEPLOY_TO_WPORG: 'true'
 
 jobs:
   bump_version:
@@ -92,61 +93,7 @@ jobs:
           PLUGIN_MAIN_FILE: ${{ env.PLUGIN_MAIN_FILE }}
           CONSTANTS_FILE: ${{ env.CONSTANTS_FILE }}
           VERSION_FILE: ${{ env.VERSION_FILE }}
-        run: |
-          cat > update.php <<'EOF'
-          <?php
-          $version     = getenv("NEW_VERSION");
-          $main        = getenv("PLUGIN_MAIN_FILE");
-          $constants   = getenv("CONSTANTS_FILE");
-          $versionFile = getenv("VERSION_FILE");
-
-          // Plugin header
-          $code = file_get_contents($main);
-          $code_new = preg_replace(
-              '/^(\s*\*\s*Version:\s*).*/mi',
-              "* Version: {$version}",
-              $code,
-              1
-          );
-          file_put_contents($main, $code_new);
-
-          // Constants
-          $c = file_get_contents($constants);
-          if (!preg_match("/public\s+const\s+VERSION\s*=\s*'[^']*';/", $c)) {
-              $c = preg_replace(
-                  '/(final\s+class\s+CB_Constants\s*\{)/',
-                  "$1\n    public const VERSION = '{$version}';",
-                  $c,
-                  1
-              );
-          } else {
-              $c = preg_replace(
-                  "/public\s+const\s+VERSION\s*=\s*'[^']*';/",
-                  "    public const VERSION = '{$version}';",
-                  $c,
-                  1
-              );
-          }
-          file_put_contents($constants, $c);
-
-          // Readme
-          if (file_exists("readme.txt")) {
-              $r = file_get_contents("readme.txt");
-              $r_new = preg_replace(
-                  '/^Stable tag:\s*.*/mi',
-                  "Stable tag: {$version}",
-                  $r,
-                  1
-              );
-              file_put_contents("readme.txt", $r_new);
-          }
-
-          // Version.txt
-          file_put_contents($versionFile, $version);
-          ?>
-          EOF
-
-          php update.php
+        run: php scripts/update.php
 
       - name: Commit changes
         env:
@@ -210,24 +157,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-#  deploy_wordpress_org:
-#    name: Deploy to WordPress.org
-#    needs: build_and_release
-#    runs-on: ubuntu-latest
-#    if: env.DEPLOY_TO_WPORG && env.DEPLOY_TO_WPORG == 'true'
+  deploy_wordpress_org:
+    name: Deploy to WordPress.org
+    needs: build_and_release
+    runs-on: ubuntu-latest
+    if: ${{ github.env.DEPLOY_TO_WPORG == 'true' }}
 
-#    steps:
-#      - name: Checkout
-#        uses: actions/checkout@v4
-#        with:
-#          fetch-depth: 0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-#      - name: Deploy to WordPress.org
-#        uses: 10up/action-wordpress-plugin-deploy@v2
-#        with:
-#          slug: ${{ env.PLUGIN_SLUG }}
-#          plugin-main-file: ${{ env.PLUGIN_MAIN_FILE }}
-#        env:
-#          SVN_USERNAME: ${{ secrets.WPORG_USERNAME }}
-#          SVN_PASSWORD: ${{ secrets.WPORG_PASSWORD }}
-#          ASSETS_DIR: .wordpress-org
+      - name: Deploy to WordPress.org
+        uses: 10up/action-wordpress-plugin-deploy@v2
+        with:
+          slug: ${{ env.PLUGIN_SLUG }}
+          version: ${{ needs.update_sources.outputs.new_version }}
+        env:
+          SVN_USERNAME: ${{ secrets.WPORG_SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.WPORG_SVN_PASSWORD }}
