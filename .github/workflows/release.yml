@@ -115,60 +115,47 @@ jobs:
               exit(1);
           }
 
-          // Update plugin header Version:
+          // Update plugin header Version
           $code = file_get_contents($main);
-          if ($code === false) {
-              fwrite(STDERR, "Failed to read main plugin file\n");
-              exit(1);
-          }
+          if ($code === false) exit(1);
           $code_new = preg_replace(
               '/^(\s*\*\s*Version:\s*)([0-9\.]+)/mi',
               "$1{$version}",
               $code,
               1
           );
-          if ($code_new === null) {
-              fwrite(STDERR, "Regex failed updating plugin header\n");
-              exit(1);
-          }
           file_put_contents($main, $code_new);
 
           // Update CB_Constants::VERSION
           $c = file_get_contents($constants);
-          if ($c === false) {
-              fwrite(STDERR, "Failed to read constants file\n");
-              exit(1);
-          }
-          $c_new = preg_replace(
-              "/(public\\s+const\\s+VERSION\\s*=\\s*')([0-9\\.]+)(';)/",
-              "$1{$version}$3",
-              $c,
-              1
-          );
+          if ($c === false) exit(1);
 
-          if ($c_new === null) {
-              fwrite(STDERR, "Regex failed updating CB_Constants::VERSION\n");
-              exit(1);
+          if (!preg_match("/public\s+const\s+VERSION\s*=\s*'[^']*';/", $c)) {
+              $c = preg_replace(
+                  '/(final\s+class\s+CB_Constants\s*\{)/',
+                  "$1\n    public const VERSION = '{$version}';",
+                  $c,
+                  1
+              );
+          } else {
+              $c = preg_replace(
+                  "/(public\s+const\s+VERSION\s*=\s*')([0-9\.]+)(';)/",
+                  "$1{$version}$3",
+                  $c,
+                  1
+              );
           }
-          file_put_contents($constants, $c_new);
+          file_put_contents($constants, $c);
 
           // Update readme.txt Stable tag
           if (file_exists("readme.txt")) {
               $r = file_get_contents("readme.txt");
-              if ($r === false) {
-                  fwrite(STDERR, "Failed to read readme.txt\n");
-                  exit(1);
-              }
               $r_new = preg_replace(
-                  '/^(Stable tag:\\s*).*/mi',
+                  '/^(Stable tag:\s*)([0-9\.]+)/mi',
                   "$1{$version}",
                   $r,
                   1
               );
-              if ($r_new === null) {
-                  fwrite(STDERR, "Regex failed updating Stable tag\n");
-                  exit(1);
-              }
               file_put_contents("readme.txt", $r_new);
           }
           ?>
@@ -226,7 +213,7 @@ jobs:
         env:
           PLUGIN_SLUG: ${{ env.PLUGIN_SLUG }}
         run: |
-          mkdir -p build
+          mkdir -p build/${PLUGIN_SLUG}
           rsync -av \
             --exclude="build" \
             --exclude=".git" \
