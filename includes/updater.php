@@ -246,7 +246,49 @@ class CB_GitHub_Updater
         $data = json_decode($body, true);
 
         if ($code === 200 && !empty($data['valid']) && !empty($data['token'])) {
-            update_option($this->token_option, $data['token'], false);
+            // Decrypt before storing
+            $decrypted = cb_decrypt_token($data['token'], LICENSE_SECRET);
+            if (!empty($decrypted)) {
+                update_option($this->token_option, $decrypted, false);
+            }
         }
+
     }
+    /**
+     * Decrypt AES-GCM encrypted token from Worker.
+     *
+     * @param string $encrypted Base64-encoded JSON string from Worker.
+     * @param string $secret    LICENSE_SECRET (must be 16, 24, or 32 chars).
+     * @return string|null      Decrypted GitHub installation token, or null on failure.
+     */
+    private function cb_decrypt_token($encrypted, $secret) {
+        $decoded = base64_decode($encrypted);
+        $json = json_decode($decoded, true);
+
+        if (!$json || !isset($json['iv'], $json['data'])) {
+            return null;
+        }
+
+        $iv   = pack('C*', ...$json['iv']);
+        $data = pack('C*', ...$json['data']);
+
+        // OpenSSL expects key length of 16, 24, or 32 bytes
+        if (!in_array(strlen($secret), [16, 24, 32], true)) {
+            return null;
+        }
+
+        // NOTE: Worker currently embeds the GCM tag in ciphertext.
+        // If you modify Worker to return {iv, data, tag}, pass $tag separately here.
+        $token = openssl_decrypt(
+            $data,
+            'aes-'.(strlen($secret) * 8).'-gcm',
+            $secret,
+            OPENSSL_RAW_DATA,
+            $iv,
+            $tag = null
+        );
+
+        return $token ?: null;
+    }
+
 }
