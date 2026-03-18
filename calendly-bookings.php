@@ -68,25 +68,31 @@ add_action('admin_notices', function () {
     }
 
     $license = get_option(CB_LICENSE_OPTION);
+    $token   = get_option(CB_TOKEN_OPTION);
+
     if (empty($license)) {
         return;
     }
 
-    $url = wp_nonce_url(
-        admin_url('admin-post.php?action=cb_refresh_github_token'),
-        'cb_refresh_github_token'
-    );
-    ?>
-    <div class="notice notice-info">
-        <p>
-            <?php esc_html_e('Calendly Bookings license is set.', 'calendly-bookings'); ?>
-            <a href="<?php echo esc_url($url); ?>">
-                <?php esc_html_e('Refresh GitHub token now', 'calendly-bookings'); ?>
-            </a>
-        </p>
-    </div>
-    <?php
+    // Show notice only if license is set but token missing
+    if (empty($token)) {
+        $url = wp_nonce_url(
+            admin_url('admin-post.php?action=cb_refresh_github_token'),
+            'cb_refresh_github_token'
+        );
+        ?>
+        <div class="notice notice-info">
+            <p>
+                <?php esc_html_e('Calendly Bookings license is set.', 'calendly-bookings'); ?>
+                <a href="<?php echo esc_url($url); ?>">
+                    <?php esc_html_e('Refresh GitHub token now', 'calendly-bookings'); ?>
+                </a>
+            </p>
+        </div>
+        <?php
+    }
 });
+
 
 /**
  * Handle manual token refresh.
