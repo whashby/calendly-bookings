@@ -117,8 +117,7 @@ add_action('admin_post_cb_refresh_github_token', function () {
  * GitHub updater bootstrap.
  */
 add_action('init', function () {
-    global $cb_github_updater;
-    $cb_github_updater = new CB_GitHub_Updater(__FILE__);
+    CB_GitHub_Updater::instance(__FILE__);
 });
 
 /**
