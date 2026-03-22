@@ -414,7 +414,8 @@ public function sync_event_type_available_times(): array {
 
     try {
         global $wpdb;
-        $event_types = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_event_types WHERE product_id>0 AND active=1");
+        // Sync available times for all active event types (product link not required).
+        $event_types = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_event_types WHERE active=1");
 
         foreach ($event_types as $uuid) {
             $slots = $this->query_event_type_available_times($uuid);
