@@ -205,13 +205,12 @@ final class CB_Admin_Ajax {
         $invitee_table     = $wpdb->prefix . 'cb_scheduled_event_invitees';
         $event_types_table = $wpdb->prefix . 'cb_event_types';
 
-        $uuid       = wp_generate_uuid4();
         $start_time = sanitize_text_field($data['initial_date'] . ' ' . $data['initial_time']);
 
         $duration = $wpdb->get_var(
             $wpdb->prepare(
                 "SELECT duration FROM $event_types_table WHERE uuid = %s",
-                $data['initial_session_id']
+                $data['initial_session_uuid']
             )
         );
         $duration = $duration ? intval($duration) : 0;
@@ -222,7 +221,7 @@ final class CB_Admin_Ajax {
         }
 
         $wpdb->insert($event_table, [
-            'uuid'          => $uuid,
+            'uuid'          => sanitize_text_field($data['initial_session_uuid']),
             'event_type_id' => sanitize_text_field($data['initial_session_id']),
             'location_id'   => sanitize_text_field($data['location']),
             'name'          => sanitize_text_field($data['initial_session']),
@@ -234,8 +233,9 @@ final class CB_Admin_Ajax {
         ]);
 
         $wpdb->insert($invitee_table, [
-            'scheduled_event_uuid' => $uuid,
-            'name'                 => $name,
+            'scheduled_event_uuid' => sanitize_text_field($data['initial_session_uuid']),
+            'uuid'                 => wp_generate_uuid4(),
+            'name'                 => sanitize_text_field($data['firstname'] . ' ' . $data['lastname']),
             'invitee_email'        => $email,
         ]);
 
@@ -248,7 +248,7 @@ final class CB_Admin_Ajax {
         $order->payment_complete();
 
         $order_id = $order->get_id();
-        $wpdb->update($event_table, ['order_id' => $order_id], ['uuid' => $uuid]);
+        $wpdb->update($event_table, ['order_id' => $order_id]);
 
         // 4. Send follow-up email
         $reset_link = wp_lostpassword_url();
