@@ -8,6 +8,8 @@ if (!defined('ABSPATH')) {
 
 require_once __DIR__ . '/installer.php';
 require_once __DIR__ . '/utils/functions.php';
+require_once __DIR__ . '/utils/class-cb-timezone-converter.php';
+require_once __DIR__ . '/utils/class-cb-encryption.php';
 
 /**
  * Register 5-minute cron schedule.
@@ -23,7 +25,6 @@ add_filter('cron_schedules', function ($schedules) {
 });
 
 require_once __DIR__ . '/modules/class-cb-plugin.php';
-require_once __DIR__ . '/utils/class-cb-timezone-converter.php';
 require_once __DIR__ . '/modules/class-cb-shortcodes.php';
 require_once __DIR__ . '/modules/class-cb-dashboard.php';
 require_once __DIR__ . '/modules/class-cb-account-dashboard.php';
@@ -66,6 +67,7 @@ add_action('plugins_loaded', function () {
     Modules\CB_Scheduled_Events::init();
     Modules\CB_Checkout::register();
     Modules\CB_Debug::init();
+    Utils\CB_Encryption::init();
 
     /**
      * Cron callback: sync scheduled events every 5 minutes.

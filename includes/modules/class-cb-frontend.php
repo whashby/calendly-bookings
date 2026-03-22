@@ -8,7 +8,10 @@ final class CB_Frontend {
 
     public static function init() {
         add_shortcode('calendly_booking_form', [__CLASS__, 'render_calendly_form']);
+
         add_action('woocommerce_single_product_summary', [__CLASS__, 'cb_insert_after_title' ], 4);
+        add_action('woocommerce_before_add_to_cart_button', [__CLASS__, 'output_before_cart']);
+
         add_action('woocommerce_before_add_to_cart_button', [__CLASS__, 'output_before_cart']);
         add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
         add_action('wp_ajax_cb_login', [__CLASS__, 'cb_ajax_login']);
@@ -87,9 +90,29 @@ final class CB_Frontend {
         
     }
 
+    /*
+        public static function output_before_cart() {
+            echo self::render_calendly_form();
+        }
+    */
+    
     public static function output_before_cart() {
-        echo self::render_calendly_form();
+        if(is_product()){
+            global $post;
+            $product = wc_get_product($post->ID);
+            
+            if ($product) {
+                $categories = wp_get_post_terms($product->get_id(), 'product_cat', ['fields' => 'slugs']);
+                // Only render if product is in "meeting" or "meetings"
+                if (in_array('meeting', $categories, true) || in_array('meetings', $categories, true)) {
+                    echo self::render_calendly_form();
+                }
+            }
+        }
     }
+
+
+
 
     public static function render_calendly_form($atts = []) {
         $context = [
@@ -124,10 +147,10 @@ final class CB_Frontend {
         ?>
         <div class="cb-upsell">
             <p><em>
-              <?php printf(
+            <?php printf(
                 esc_html__('%ss are not available again. We recommend booking a Spiritual Companionship session instead.', 'calendly-bookings'),
                 esc_html($ref)
-              ); ?>
+            ); ?>
             </em></p>
                     </div>
         <?php endif;
@@ -137,4 +160,35 @@ final class CB_Frontend {
         }
 
     }
+
+    
+    
+    /**
+     * Determine if the current product belongs to the "meeting" or "meetings" category.
+     *
+     * @param WC_Product|int|null $product Product object, product ID, or null (defaults to current global post).
+     * @return bool
+     */
+    public static function is_meeting_product($product = null): bool {
+        // If no product passed, try to get from global $post
+        if ($product === null) {
+            global $post;
+            if (!$post || $post->post_type !== 'product') {
+                return false;
+            }
+            $product = wc_get_product($post->ID);
+        } elseif (is_numeric($product)) {
+            $product = wc_get_product($product);
+        }
+        if (!$product instanceof WC_Product) {
+            return false;
+        }
+    
+        // Get product category slugs
+        $categories = wp_get_post_terms($product->get_id(), 'product_cat', ['fields' => 'slugs']);
+    
+        // Return true if "meeting" or "meetings" is present
+        return in_array('meeting', $categories, true) || in_array('meetings', $categories, true);
+    }
+
 }

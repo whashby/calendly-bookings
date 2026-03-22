@@ -112,8 +112,8 @@ final class CB_Admin_Rest {
     public static function cb_get_locations(WP_REST_Request $request) {
     // Example: fetch from DB or config
     $locations = [
-        [ 'id' => 'skeetes-road', 'name' => "Skeete's Road Jackmans, St. Michael" ],
-        [ 'id' => 'online', 'name' => "Online (Zoom)" ],
+        [ 'id' => '2', 'name' => "Skeete's Road Jackmans, St. Michael" ],
+        [ 'id' => '1', 'name' => "Online (Zoom)" ],
     ];
 
     return [

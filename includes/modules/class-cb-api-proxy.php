@@ -30,19 +30,19 @@ final class CB_API_Proxy {
 		]);
 		
 		register_rest_route($ns, '/meeting-details', [
-		    'methods' => 'GET',
-		    'callback' => [__CLASS__, 'get_meeting_details'],
-		    'permission_callback' => '__return_true',
-		    'args' => [
-		        'event_uuid' => [
-		            'required' => true,
-		            'sanitize_callback' => 'sanitize_text_field',
-		        ],
-		        'invitee_uuid' => [ 
-		            'required' => true, 
-		            'sanitize_callback' => 'sanitize_text_field', 
-		        ], 
-		    ],
+            'methods' => 'GET',
+            'callback' => [__CLASS__, 'get_meeting_details'],
+            'permission_callback' => '__return_true',
+            'args' => [
+                'event_uuid' => [
+                    'required' => true,
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
+                'invitee_uuid' => [
+                    'required' => true,
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
+            ],
 		]);
 		
         // Sync
@@ -215,7 +215,7 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
 
     public static function rest_event_types_list(): \WP_REST_Response {
         global $wpdb;
-        $rows = $wpdb->get_results("SELECT uuid, name, duration, uri, scheduling_url, product_id FROM {$wpdb->prefix}cb_event_types ORDER BY name ASC", ARRAY_A);
+        $rows = $wpdb->get_results("SELECT id,uuid, name, duration, uri, scheduling_url, product_id FROM {$wpdb->prefix}cb_event_types ORDER BY name ASC", ARRAY_A);
         return new \WP_REST_Response(['success' => true, 'data' => $rows], 200);
     }
 
