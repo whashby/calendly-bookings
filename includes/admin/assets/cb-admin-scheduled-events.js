@@ -86,28 +86,28 @@ jQuery(document).ready(function($) {
      * Add Admin Notes
      */
     $(document).on('click', '.cb-add-admin-notes', function(e) {
-    e.preventDefault();
+        e.preventDefault();
 
-    const $form = $(this).closest('.cb-thickbox-form');
-    const uuid  = $(this).data('uuid');
-    const notes = $form.find('.admin-notes-text').text();
+        const $form = $(this).closest('.cb-thickbox-form');
+        const uuid  = $(this).data('uuid');
+        const notes = $form.find('.admin-notes-text').text();
 
-    $(this).hide();
-    $('#admin-notes-url').after(
-    //tb_show('Add Admin Notes', '#TB_inline?width=600&height=550&inlineId=cb-admin-notes-content-modal')
-    `<div id="cb-admin-notes-content-modal" style="margin-bottom:30px;">
-    <h2>Add Admin Notes</h2>
-    <div class="cb-thickbox-form">
-    <label for="notes-admin">Thoughts for next session
-    <textarea id="notes-discussed" name="notes-admin" class="large-text" autofocus>${notes || ''}</textarea>
-    </label>
-    </div>
-    <div class="cb-thickbox-actions">
-    <button type="submit" id="cb-admin-notes-submit" data-uuid="` + uuid + `" class="button button-primary cb-save-btn">Save</button>
-    <button type="button" id="cb-admin-notes-cancel" class="button cb-cancel-btn">Cancel</button>
-    </div>
-    </div>`
-    );
+        $(this).hide();
+        $('#admin-notes-url').after(
+        //tb_show('Add Admin Notes', '#TB_inline?width=600&height=550&inlineId=cb-admin-notes-content-modal')
+        `<div id="cb-admin-notes-content-modal" style="margin-bottom:30px;">
+        <h2>Add Admin Notes</h2>
+        <div class="cb-thickbox-form">
+        <label for="notes-admin">Thoughts for next session
+        <textarea id="notes-discussed" name="notes-admin" class="large-text" autofocus>${notes || ''}</textarea>
+        </label>
+        </div>
+        <div class="cb-thickbox-actions">
+        <button type="submit" id="cb-admin-notes-submit" data-uuid="` + uuid + `" class="button button-primary cb-save-btn">Save</button>
+        <button type="button" id="cb-admin-notes-cancel" class="button cb-cancel-btn">Cancel</button>
+        </div>
+        </div>`
+        );
     });
 
 
@@ -115,66 +115,64 @@ jQuery(document).ready(function($) {
      * View Scheduled Event Record
      */
     $(document).on('click', '.cb-view-record', function(e) {
-    e.preventDefault();
+        e.preventDefault();
 
-    const uuid = $(this).data('uuid');
-    const endpoint = '/wp-json/calendly-bookings/v1/scheduled-events/view/' + encodeURIComponent(uuid);
+        const uuid = $(this).data('uuid');
+        const endpoint = '/wp-json/calendly-bookings/v1/scheduled-events/view/' + encodeURIComponent(uuid);
 
-    $('#cb-event-' + uuid + '-modal').remove();
+        $('#cb-event-' + uuid + '-modal').remove();
 
-    const $modal = $('<div id="cb-event-' + uuid + '-modal" style="display:none;"></div>');
-    $modal.append('<div class="cb-thickbox-form"><div class="cb-event-content"><p>Loading event…</p></div></div>');
-    $('body').append($modal);
+        const $modal = $('<div id="cb-event-' + uuid + '-modal" style="display:none;"></div>');
+        $modal.append('<div class="cb-thickbox-form"><div class="cb-event-content"><p>Loading event…</p></div></div>');
+        $('body').append($modal);
 
-    const $container = $modal.find('.cb-event-content');
+        const $container = $modal.find('.cb-event-content');
 
-    $.get(endpoint, function(response) {
-    let content = '';
+        $.get(endpoint, function(response) {
+            let content = '';
 
-    if (response && response.success && response.data) {
-    const row = response.data;
+            if (response && response.success && response.data) {
+                const row = response.data;
 
-    let notes = {};
-    try { notes = row.notes ? JSON.parse(row.notes) : {}; } catch(e) { notes = {}; }
+                let notes = {};
+                try { notes = row.notes ? JSON.parse(row.notes) : {}; } catch(e) { notes = {}; }
 
-    content = `
-    <h2>Event Details</h2>
-    <div class="cb-thickbox-form cb-event-details">
-    <p><strong>Invitee:</strong> ${row.invitee_name}</p>
-    <p><strong>Event:</strong> ${row.event_name}</p>
-    <p><strong>Date/Time:</strong> ${row.start_time}</p>
-    <p><strong>Location:</strong> ${row.location}</p>
-    <p><strong>Status:</strong> <span class="record-status" data-status="${row.status}">${row.status}</span></p>
+                content = `
+                <h2>Event Details</h2>
+                <div class="cb-thickbox-form cb-event-details">
+                <p><strong>Invitee:</strong> ${row.invitee_name}</p>
+                <p><strong>Event:</strong> ${row.event_name}</p>
+                <p><strong>Date/Time:</strong> ${row.start_time}</p>
+                <p><strong>Location:</strong> ${row.location}</p>
+                <p><strong>Status:</strong> <span class="record-status" data-status="${row.status}">${row.status}</span></p>
 
-    <h3>Notes</h3>
-    <p><strong>What was discussed:</strong> <span class="note-text" data-field="discussed">${notes.discussed || ''}</span></p>
-    <p><strong>Guidance provided:</strong> <span class="note-text" data-field="guidance">${notes.guidance || ''}</span></p>
-    <p><strong>Follow-up actions:</strong> <span class="note-text" data-field="follow_up">${notes.follow_up || ''}</span></p>
-    <p><strong>Admin notes:</strong> <span class="note-text" data-field="admin">${notes.admin || ''}</span></p>
+                <h3>Notes</h3>
+                <p><strong>What was discussed:</strong> <span class="note-text" data-field="discussed">${notes.discussed || ''}</span></p>
+                <p><strong>Guidance provided:</strong> <span class="note-text" data-field="guidance">${notes.guidance || ''}</span></p>
+                <p><strong>Follow-up actions:</strong> <span class="note-text" data-field="follow_up">${notes.follow_up || ''}</span></p>
+                <p><strong>Admin notes:</strong> <span class="note-text" data-field="admin">${notes.admin || ''}</span></p>
 
-    <input type="hidden" name="uuid" value="${uuid}">
-    <div class="cb-thickbox-actions">
-    <button type="button" class="button cb-edit-toggle"${canEdit(row.start_time,row.status) ? '' : ' style=display:none;'}>Edit</button>
-    <button type="submit" id="cb-event-details-submit" class="button button-primary cb-save-btn" style="display:none;">Save</button>
-    <button type="button" id="cb-edit-event-cancel" class="button cb-cancel-btn" style="display:none;">Cancel</button>
-    </div>
-    </div>
-    `;
+                <input type="hidden" name="uuid" value="${uuid}">
+                <div class="cb-thickbox-actions">
+                <button type="button" class="button cb-edit-toggle"${canEdit(row.start_time,row.status) ? '' : ' style=display:none;'}>Edit</button>
+                <button type="submit" id="cb-event-details-submit" class="button button-primary cb-save-btn" style="display:none;">Save</button>
+                <button type="button" id="cb-edit-event-cancel" class="button cb-cancel-btn" style="display:none;">Cancel</button>
+                </div>
+                </div>
+                `;
 
+            } else {
+            content = '<p>No event details found.</p>';
+            }
 
+            $container.html(content);
 
-    } else {
-    content = '<p>No event details found.</p>';
-    }
-
-    $container.html(content);
-
-    tb_show('Scheduled Event', '#TB_inline?width=600&height=550&inlineId=cb-event-' + uuid + '-modal');
-    }).fail(function() {
-    $container.html('<p>Error loading event.</p>');
-    tb_show('Scheduled Event', '#TB_inline?width=600&height=550&inlineId=cb-event-' + uuid + '-modal');
-    });
-    });
+            tb_show('Scheduled Event', '#TB_inline?width=600&height=550&inlineId=cb-event-' + uuid + '-modal');
+        }).fail(function() {
+            $container.html('<p>Error loading event.</p>');
+            tb_show('Scheduled Event', '#TB_inline?width=600&height=550&inlineId=cb-event-' + uuid + '-modal');
+        });
+});
 
     /**
      * Edit toggle inside ThickBox
@@ -218,7 +216,6 @@ jQuery(document).ready(function($) {
         e.preventDefault();
 
         const id = $(this).attr('id');
-
 
         if (id === 'cb-walkin-submit') {
             const form = $(this).closest('form');
@@ -356,7 +353,6 @@ jQuery(document).ready(function($) {
     $(document).on('click', '#cb-create-walkin', function() {
         // Clear old options
         $('#initial_session, #location').empty();
-
         // Fetch event types
         $.get('/wp-json/calendly-bookings/v1/event-types', function(response) {
             if (response.success && response.data) {
@@ -367,7 +363,6 @@ jQuery(document).ready(function($) {
                             $('#followup_session').append(`<option name="${type.name}" value="${type.name}" data-id="${type.id}" data-uuid="${type.uuid}">${type.name}</option>`);
                         }
                     }
-
                 });
             }
         });
@@ -390,7 +385,6 @@ jQuery(document).ready(function($) {
         const uuid = $(this).find('option:selected').data('uuid'); // --- IGNORE ---
 
         if (!uuid) return;
-
         const startIso = new Date().toISOString();
 
         fetch(`/wp-json/calendly-bookings/v1/event-availability?uuid=${uuid}&start_iso=${startIso}`, {
@@ -404,8 +398,6 @@ jQuery(document).ready(function($) {
             }
 
             const slots = response.data;
-
-            // --- SAME LOGIC AS frontend.js ---
             const grouped = {};
             slots.forEach(slot => {
                 const date = slot.start_time.split('T')[0]; // YYYY-MM-DD
@@ -498,8 +490,6 @@ jQuery(document).ready(function($) {
         }
     });
 
-
-
     function canEdit(start_time, status)  {
         // Parse start_time into a Date object
         const eventDate = new Date(start_time);
@@ -509,7 +499,6 @@ jQuery(document).ready(function($) {
         // Check if event is less than 2 weeks old
         return ((now - eventDate) <= twoWeeksMs && (status === 'active' || status === 'completed'))?true:false;
     }
-
 
     /**
     * Reschedule / Cancel (Calendly iframe)
