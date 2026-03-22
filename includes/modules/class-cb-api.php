@@ -114,7 +114,7 @@ final class CB_API {
 	}
 	
 	
-public function sync(): array {
+public function sync(?int $count = null): array {
     $results = [
         'event_types'                => [],
         'scheduled_events'           => [],
@@ -124,11 +124,11 @@ public function sync(): array {
     ];
 
     try {
-        // Core syncs
-        $results['scheduled_events']           = $this->sync_scheduled_events();
-        $results['scheduled_event_invitees']   = $this->sync_scheduled_event_invitees();
+        // Core syncs - ordered to respect foreign key dependencies
         $results['event_types']                = $this->sync_event_types();
         $results['event_type_available_times'] = $this->sync_event_type_available_times();
+        $results['scheduled_events']           = $this->sync_scheduled_events($count);
+        $results['scheduled_event_invitees']   = $this->sync_scheduled_event_invitees();
 
         // Collect errors from each sync
         foreach ($results as $key => $res) {
@@ -155,10 +155,13 @@ public function sync(): array {
     }
 
     return [
-        'success'   => empty($results['errors']),
-        'last_sync' => current_time('mysql'),
-        'results'   => $results,
-        'errors'    => $results['errors'],
+        'success'                    => empty($results['errors']),
+        'last_sync'                  => current_time('mysql'),
+        'event_types_upserted'       => $results['event_types']['upserted'] ?? 0,
+        'scheduled_events_upserted'  => $results['scheduled_events']['upserted'] ?? 0,
+        'available_times_upserted'   => $results['event_type_available_times']['upserted'] ?? 0,
+        'invitees_upserted'          => $results['scheduled_event_invitees']['upserted'] ?? 0,
+        'errors'                     => $results['errors'],
     ];
 }
 
@@ -493,6 +496,15 @@ public function set_scheduled_events(array $events): int {
         $event_type_id = $wpdb->get_var(
             $wpdb->prepare("SELECT id FROM {$wpdb->prefix}cb_event_types WHERE uuid=%s", $event_type_uuid)
         );
+
+        if (!$event_type_id) {
+            // Skip if event type not found - prevents FK error
+            CB_Audit_Log::log('warning', 'sync_scheduled_events', $uuid, [
+                'message' => 'Event type not found, skipping scheduled event',
+                'event_type_uuid' => $event_type_uuid
+            ]);
+            continue;
+        }
 
         // Resolve location_id
         $location_id = null;

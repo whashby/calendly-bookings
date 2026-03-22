@@ -236,7 +236,7 @@ final class CB_Admin_Ajax {
             'scheduled_event_uuid' => sanitize_text_field($data['initial_session_uuid']),
             'uuid'                 => wp_generate_uuid4(),
             'name'                 => sanitize_text_field($data['firstname'] . ' ' . $data['lastname']),
-            'invitee_email'        => $email,
+            'email'        => $email,
         ]);
 
         // 3. Create WooCommerce order
