@@ -44,6 +44,7 @@ class CB_GitHub_Updater
         // Settings page + notices
         add_action('admin_menu', [$this, 'add_settings_page']);
         add_action('admin_init', [$this, 'register_settings']);
+        add_action('admin_init', [$this, 'maybe_handle_notice_dismiss']);
         add_action('admin_notices', [$this, 'maybe_show_notice']);
     }
 
@@ -76,6 +77,8 @@ class CB_GitHub_Updater
     {
         if (empty($transient->checked) || empty($this->plugin)) return $transient;
 
+        $this->get_token(); // ensure we have auth for GitHub API when needed
+
         $api = $this->api_request('releases/latest');
         if (!$api || empty($api->tag_name)) return $transient;
 
@@ -96,6 +99,33 @@ class CB_GitHub_Updater
         ];
 
         return $transient;
+    }
+
+    public function maybe_handle_notice_dismiss()
+    {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+        if (isset($_GET['cb_dismiss_license_notice']) && check_admin_referer('cb_dismiss_license_notice')) {
+            update_option('cb_hide_license_notice', '1', false);
+            wp_safe_redirect(remove_query_arg(['cb_dismiss_license_notice', '_wpnonce'], wp_get_referer() ?: admin_url()));
+            exit;
+        }
+    }
+
+    private function get_current_plugin_version(): string
+    {
+        $data = get_plugin_data($this->file, false, false);
+        return $data['Version'] ?? '0.0.0';
+    }
+
+    private function get_latest_plugin_version(): ?string
+    {
+        $api = $this->api_request('releases/latest');
+        if (!$api || empty($api->tag_name)) {
+            return null;
+        }
+        return ltrim($api->tag_name, 'v');
     }
 
     public function plugin_info($result, $action, $args)
@@ -226,25 +256,51 @@ class CB_GitHub_Updater
     public function maybe_show_notice()
     {
         if (!current_user_can('manage_options')) return;
+        if (get_option('cb_hide_license_notice', false)) return;
 
         $license = get_option(CB_LICENSE_OPTION);
         $token   = get_option(CB_TOKEN_OPTION);
+
+        $dismiss_url = wp_nonce_url(add_query_arg('cb_dismiss_license_notice', '1', admin_url()), 'cb_dismiss_license_notice');
 
         if (!empty($license) && empty($token)) {
             $url = wp_nonce_url(
                 admin_url('admin-post.php?action=cb_refresh_github_token'),
                 'cb_refresh_github_token'
             );
-            echo '<div class="notice notice-info"><p>'
+            echo '<div class="notice notice-info notice-dismissible"><p>'
                 . esc_html__('Calendly Bookings license is set.', 'calendly-bookings')
-                . ' <a href="' . esc_url($url) . '">'
+                . ' <a href="' . esc_url($url) . '">' 
                 . esc_html__('Refresh GitHub token now', 'calendly-bookings')
-                . '</a></p></div>';
+                . '</a> '
+                . ' <a href="' . esc_url($dismiss_url) . '">' . esc_html__('Dismiss', 'calendly-bookings') . '</a>'
+                . '</p></div>';
+            return;
+        }
+
+        // Check for new release version
+        $latest_version = $this->get_latest_plugin_version();
+        $current_version = $this->get_current_plugin_version();
+
+        if (!empty($latest_version) && version_compare($latest_version, $current_version, '>')) {
+            $update_url = admin_url('update-core.php');
+            echo '<div class="notice notice-warning notice-dismissible"><p>'
+                . sprintf(
+                    esc_html__('Calendly Bookings new version available: %1$s (current %2$s).', 'calendly-bookings'),
+                    esc_html($latest_version),
+                    esc_html($current_version)
+                )
+                . ' <a href="' . esc_url($update_url) . '">' . esc_html__('Update now', 'calendly-bookings') . '</a>'
+                . ' <a href="' . esc_url($dismiss_url) . '">' . esc_html__('Dismiss', 'calendly-bookings') . '</a>'
+                . '</p></div>';
+            return;
         }
 
         $error = get_transient('cb_token_error');
         if ($error) {
-            echo '<div class="notice notice-error"><p>' . esc_html($error) . '</p></div>';
+            echo '<div class="notice notice-error notice-dismissible"><p>' . esc_html($error) . '</p>'
+                . ' <a href="' . esc_url($dismiss_url) . '">' . esc_html__('Dismiss', 'calendly-bookings') . '</a>'
+                . '</p></div>';
             delete_transient('cb_token_error');
         }
     }
