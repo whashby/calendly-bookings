@@ -166,6 +166,10 @@ class CB_GitHub_Updater
     public function refresh_token()
     {
         $this->request_and_store_token();
+        // Set success transient if token was set
+        if (!empty(get_option($this->token_option, ''))) {
+            set_transient('cb_token_success', __('GitHub token refreshed successfully.', 'calendly-bookings'), 30);
+        }
     }
 
     private function get_token()
@@ -302,6 +306,14 @@ class CB_GitHub_Updater
                 . ' <a href="' . esc_url($dismiss_url) . '">' . esc_html__('Dismiss', 'calendly-bookings') . '</a>'
                 . '</p></div>';
             delete_transient('cb_token_error');
+        }
+
+        $success = get_transient('cb_token_success');
+        if ($success) {
+            echo '<div class="notice notice-success notice-dismissible"><p>' . esc_html($success) . '</p>'
+                . ' <a href="' . esc_url($dismiss_url) . '">' . esc_html__('Dismiss', 'calendly-bookings') . '</a>'
+                . '</p></div>';
+            delete_transient('cb_token_success');
         }
     }
 }
