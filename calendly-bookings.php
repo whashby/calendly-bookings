@@ -3,7 +3,7 @@
  * Plugin Name: Calendly Bookings
  * Plugin URI: https://github.com/whashby/calendly-bookings
  * Description: A CMS for managing Calendly events, clients and WooCommerce products.
-* Version: 6.9.37
+* Version: 6.9.38
  * Requires at least: 5.2
  * Requires PHP: 8.3
  * Author:      Wafiq Harris-Ashby
@@ -28,39 +28,6 @@ require_once __DIR__ . '/includes/constants.php';
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/updater.php';
 require_once ABSPATH . 'wp-admin/includes/plugin.php';
-
-/**
- * Register license key setting on Settings → General.
- */
-add_action('admin_init', function () {
-    register_setting(
-        'general',
-        CB_LICENSE_OPTION,
-        [
-            'type'              => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-            'default'           => '',
-        ]
-    );
-
-    add_settings_field(
-        CB_LICENSE_OPTION,
-        __('Calendly Bookings License Key', 'calendly-bookings'),
-        function () {
-            $value = get_option(CB_LICENSE_OPTION, '');
-            ?>
-            <input type="text" id="<?php echo esc_attr(CB_LICENSE_OPTION); ?>" name="<?php echo esc_attr(CB_LICENSE_OPTION); ?>" value="<?php echo esc_attr($value); ?>" class="regular-text"/>
-            <p class="description">
-                <?php esc_html_e('Enter your license key to enable private GitHub updates.', 'calendly-bookings'); ?>
-            </p>
-            <?php
-        },
-        'general'
-    );
-});
-
-
-
 
 /**
  * Handle manual token refresh.

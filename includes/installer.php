@@ -21,6 +21,7 @@ final class CB_Installer
      */
     public static function activate(): void
     {
+        self::create_roles();
         self::run(true);
     }
 
@@ -394,8 +395,45 @@ final class CB_Installer
         return self::PAGE_OPTION;
     }
 
+    /**
+     * Create custom roles for the plugin.
+     */
+    private static function create_roles(): void
+    {
+        // CB Administrator - Full admin access + specific CB pages
+        if (!get_role('cb_administrator')) {
+            $admin_role = get_role('administrator');
+            add_role(
+                'cb_administrator',
+                __('CB Administrator', 'calendly-bookings'),
+                $admin_role ? $admin_role->capabilities : []
+            );
+        }
+
+        // CB Support - Full admin access + specific CB pages
+        if (!get_role('cb_support')) {
+            $admin_role = get_role('administrator');
+            add_role(
+                'cb_support',
+                __('CB Support', 'calendly-bookings'),
+                $admin_role ? $admin_role->capabilities : []
+            );
+        }
+    }
+
+    /**
+     * Remove custom roles for the plugin.
+     */
+    private static function remove_roles(): void
+    {
+        remove_role('cb_administrator');
+        remove_role('cb_support');
+    }
+
     public static function uninstall(): void
     {
+        self::remove_roles();
+
         $page_id = get_option(self::PAGE_OPTION);
 
         if ($page_id) {

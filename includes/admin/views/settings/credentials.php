@@ -29,6 +29,16 @@
       <p class="description"><?php esc_html_e('Enter your Calendly user UUID.', 'calendly-bookings'); ?></p>
     </td>
   </tr>
+  <tr>
+    <th scope="row">
+      <label for="cb_license_key"><?php esc_html_e('License Key', 'calendly-bookings'); ?></label>
+    </th>
+    <td>
+      <input type="text" id="cb_license_key" name="cb_license_key"
+             value="" autocomplete="off" class="regular-text" />
+      <p class="description"><?php esc_html_e('Enter your license key to enable private GitHub updates.', 'calendly-bookings'); ?></p>
+    </td>
+  </tr>
 </table>
 
 <p>

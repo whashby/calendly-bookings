@@ -26,10 +26,14 @@ final class CB_Admin {
     public static function register_menu(): void {
 
         $current_user = wp_get_current_user();
-        $user_email = strtolower($current_user->user_email);
         $user_roles = $current_user->roles;
-        
-        if(in_array('administrator', $user_roles)) :   
+
+        // Check if user has CB-specific roles or is administrator
+        $has_cb_admin_role = in_array('cb_administrator', $user_roles, true);
+        $has_cb_support_role = in_array('cb_support', $user_roles, true);
+        $is_admin = in_array('administrator', $user_roles, true);
+
+        if ($has_cb_admin_role || $has_cb_support_role || $is_admin) {
             add_menu_page(
                 __('Calendly Bookings', 'calendly-bookings'),
                 __('Calendly Bookings', 'calendly-bookings'),
@@ -39,51 +43,27 @@ final class CB_Admin {
                 'dashicons-calendar-alt',
                 2
             );
-            
-            if(in_array( $user_email, ['whashby@gmail.com','michael@hierlife.com'])) :
-    
-                    if(in_array( $user_email, ['whashby@gmail.com','michael@hierlife.com'])) :
-                        add_submenu_page(
-                            'calendly-bookings',
-                            __('Scheduled Events', 'calendly-bookings'),
-                            __('Scheduled Events', 'calendly-bookings'),
-                            'manage_options',
-                            'calendly-bookings-scheduled-events',
-                            [__CLASS__, 'render_scheduled_events']
-                        );
-                    endif;
-        
-                    if(in_array( $user_email, ['whashby@gmail.com',])) :
-                        add_submenu_page(
-                            'calendly-bookings',
-                            __('Maintenance', 'calendly-bookings'),
-                            __('Maintenance', 'calendly-bookings'),
-                            'manage_options',
-                            'calendly-bookings-maintenance',
-                            [__CLASS__, 'render_maintenance']
-                        );
-        
-                        add_submenu_page(
-                            'calendly-bookings',
-                            __('Audit Log', 'calendly-bookings'),
-                            __('Audit Log', 'calendly-bookings'),
-                            'manage_options',
-                            'calendly-bookings-audit-log',
-                            [__CLASS__, 'render_audit_log']
-                        );
-                    endif;
-            endif;
-    
-            add_submenu_page(
-                'calendly-bookings',
-                __('Product Management', 'calendly-bookings'),
-                __('Product Management', 'calendly-bookings'),
-                'manage_options',
-                'calendly-bookings-products',
-                [__CLASS__, 'render_products']
-            );
-            
-            if(in_array( $user_email, ['whashby@gmail.com','michael@hierlife.com'])) :
+
+            // CB Administrator gets all menus
+            if ($has_cb_admin_role) {
+                add_submenu_page(
+                    'calendly-bookings',
+                    __('Scheduled Events', 'calendly-bookings'),
+                    __('Scheduled Events', 'calendly-bookings'),
+                    'manage_options',
+                    'calendly-bookings-scheduled-events',
+                    [__CLASS__, 'render_scheduled_events']
+                );
+
+                add_submenu_page(
+                    'calendly-bookings',
+                    __('Product Management', 'calendly-bookings'),
+                    __('Product Management', 'calendly-bookings'),
+                    'manage_options',
+                    'calendly-bookings-products',
+                    [__CLASS__, 'render_products']
+                );
+
                 add_submenu_page(
                     'calendly-bookings',
                     __('Settings', 'calendly-bookings'),
@@ -92,8 +72,57 @@ final class CB_Admin {
                     'calendly-bookings-settings',
                     [__CLASS__, 'render_settings']
                 );
-            endif;
-        endif;
+            }
+            // CB Support gets maintenance, audit log, products, and settings
+            elseif ($has_cb_support_role) {
+                add_submenu_page(
+                    'calendly-bookings',
+                    __('Maintenance', 'calendly-bookings'),
+                    __('Maintenance', 'calendly-bookings'),
+                    'manage_options',
+                    'calendly-bookings-maintenance',
+                    [__CLASS__, 'render_maintenance']
+                );
+
+                add_submenu_page(
+                    'calendly-bookings',
+                    __('Audit Log', 'calendly-bookings'),
+                    __('Audit Log', 'calendly-bookings'),
+                    'manage_options',
+                    'calendly-bookings-audit-log',
+                    [__CLASS__, 'render_audit_log']
+                );
+
+                add_submenu_page(
+                    'calendly-bookings',
+                    __('Product Management', 'calendly-bookings'),
+                    __('Product Management', 'calendly-bookings'),
+                    'manage_options',
+                    'calendly-bookings-products',
+                    [__CLASS__, 'render_products']
+                );
+
+                add_submenu_page(
+                    'calendly-bookings',
+                    __('Settings', 'calendly-bookings'),
+                    __('Settings', 'calendly-bookings'),
+                    'manage_options',
+                    'calendly-bookings-settings',
+                    [__CLASS__, 'render_settings']
+                );
+            }
+            // Regular administrators get basic access
+            elseif ($is_admin) {
+                add_submenu_page(
+                    'calendly-bookings',
+                    __('Product Management', 'calendly-bookings'),
+                    __('Product Management', 'calendly-bookings'),
+                    'manage_options',
+                    'calendly-bookings-products',
+                    [__CLASS__, 'render_products']
+                );
+            }
+        }
     }
 
     /**
