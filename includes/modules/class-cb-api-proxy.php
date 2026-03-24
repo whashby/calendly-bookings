@@ -125,7 +125,7 @@ final class CB_API_Proxy {
             'args'=>['token'=>['required'=>false],'uuid'=>['required'=>false]],
         ]);
 
-        register_routes($ns, '/sync-master', [
+        register_rest_route($ns, '/sync-master', [
             'methods' => 'POST',
             'callback' => [__CLASS__, 'sync_master'],
             'permission_callback' => '__return_true',
