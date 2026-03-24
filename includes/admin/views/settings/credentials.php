@@ -12,9 +12,7 @@
       <label for="cb_api_key"><?php esc_html_e('API Key', 'calendly-bookings'); ?></label>
     </th>
     <td>
-      <input type="password" id="cb_api_key" name="cb_api_key"
-             value="" placeholder="••••••••"
-             autocomplete="new-password" class="regular-text" />
+      <input type="password" id="cb_api_key" name="cb_api_key" value="" placeholder="••••••••" autocomplete="new-password" class="regular-text" />
       <p class="description"><?php esc_html_e('Enter your Calendly API key.', 'calendly-bookings'); ?></p>
     </td>
   </tr>
