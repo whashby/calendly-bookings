@@ -56,9 +56,14 @@ class CB_GitHub_Updater
 
     private function api_request($endpoint)
     {
-        if (empty($this->repo)) return false;
+        if (empty($this->repo)) {
+            error_log('CB Updater: Repo is empty');
+            return false;
+        }
 
         $url = rtrim($this->repo, '/') . '/' . ltrim($endpoint, '/');
+        error_log('CB Updater: Making API request to: ' . $url);
+
         $response = wp_remote_get($url, [
             'headers' => [
                 'Accept'     => 'application/vnd.github+json',
@@ -67,28 +72,59 @@ class CB_GitHub_Updater
             'timeout' => 20,
         ]);
 
-        if (is_wp_error($response)) return false;
-        if (wp_remote_retrieve_response_code($response) !== 200) return false;
+        if (is_wp_error($response)) {
+            error_log('CB Updater: API request error: ' . $response->get_error_message());
+            return false;
+        }
 
-        return json_decode(wp_remote_retrieve_body($response));
+        $status_code = wp_remote_retrieve_response_code($response);
+        error_log('CB Updater: API response status: ' . $status_code);
+
+        if ($status_code !== 200) {
+            error_log('CB Updater: API request failed with status: ' . $status_code);
+            return false;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        error_log('CB Updater: API response body length: ' . strlen($body));
+
+        return json_decode($body);
     }
 
     public function check_update($transient)
     {
-        if (empty($transient->checked) || empty($this->plugin)) return $transient;
+        if (empty($transient->checked) || empty($this->plugin)) {
+            error_log('CB Updater: Skipping update check - transient or plugin empty');
+            return $transient;
+        }
+
+        error_log('CB Updater: Starting update check for plugin: ' . $this->plugin);
 
         $this->get_token(); // ensure we have auth for GitHub API when needed
 
         $api = $this->api_request('releases/latest');
-        if (!$api || empty($api->tag_name)) return $transient;
+        if (!$api || empty($api->tag_name)) {
+            error_log('CB Updater: API request failed or no tag_name found');
+            return $transient;
+        }
 
         $new_version     = ltrim($api->tag_name, 'v');
         $current_version = $transient->checked[$this->plugin] ?? null;
 
-        if (!$current_version || version_compare($new_version, $current_version, '<=')) return $transient;
+        error_log('CB Updater: Current version: ' . $current_version . ', New version: ' . $new_version);
+
+        if (!$current_version || version_compare($new_version, $current_version, '<=')) {
+            error_log('CB Updater: No update needed');
+            return $transient;
+        }
 
         $package = $api->zipball_url ?? '';
-        if (empty($package)) return $transient;
+        if (empty($package)) {
+            error_log('CB Updater: No package URL found');
+            return $transient;
+        }
+
+        error_log('CB Updater: Update available, adding to transient');
 
         $transient->response[$this->plugin] = (object) [
             'slug'        => $this->basename,
@@ -183,9 +219,17 @@ class CB_GitHub_Updater
 
     private function request_and_store_token()
     {
-        if (empty($this->worker_endpoint)) return;
+        if (empty($this->worker_endpoint)) {
+            error_log('CB Updater: Worker endpoint is empty');
+            return;
+        }
         $license = get_option($this->license_option, '');
-        if (empty($license)) return;
+        if (empty($license)) {
+            error_log('CB Updater: License key is empty');
+            return;
+        }
+
+        error_log('CB Updater: Requesting token for license: ' . substr($license, 0, 8) . '...');
 
         $response = wp_remote_post($this->worker_endpoint, [
             'headers' => ['Content-Type' => 'application/json'],
@@ -193,17 +237,31 @@ class CB_GitHub_Updater
             'timeout' => 20,
         ]);
 
-        if (is_wp_error($response)) return;
+        if (is_wp_error($response)) {
+            error_log('CB Updater: Worker request failed: ' . $response->get_error_message());
+            return;
+        }
 
-        $data = json_decode(wp_remote_retrieve_body($response), true);
+        $status_code = wp_remote_retrieve_response_code($response);
+        error_log('CB Updater: Worker response status: ' . $status_code);
+
+        $body = wp_remote_retrieve_body($response);
+        error_log('CB Updater: Worker response body: ' . substr($body, 0, 200) . '...');
+
+        $data = json_decode($body, true);
         if (!empty($data['valid']) && !empty($data['token'])) {
+            error_log('CB Updater: Token received, attempting decryption');
             $decrypted = cb_decrypt_token($data['token'], LICENSE_SECRET);
             if ($decrypted) {
                 update_option($this->token_option, $decrypted, false);
+                error_log('CB Updater: Token decrypted and stored successfully');
             } else {
                 update_option($this->token_option, '', false);
                 set_transient('cb_token_error', 'Failed to decrypt GitHub token. Check LICENSE_SECRET.', 3600);
+                error_log('CB Updater: Token decryption failed - check LICENSE_SECRET');
             }
+        } else {
+            error_log('CB Updater: Invalid response from worker - missing valid/token fields');
         }
     }
 

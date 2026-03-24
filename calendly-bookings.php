@@ -3,7 +3,7 @@
  * Plugin Name: Calendly Bookings
  * Plugin URI: https://github.com/whashby/calendly-bookings
  * Description: A CMS for managing Calendly events, clients and WooCommerce products.
-* Version: 6.9.38
+* Version: 6.9.39
  * Requires at least: 5.2
  * Requires PHP: 8.3
  * Author:      Wafiq Harris-Ashby
@@ -23,6 +23,11 @@ if (!defined('ABSPATH')) {
 define('CB_LICENSE_OPTION', 'calendly_bookings_license_key');
 define('CB_TOKEN_OPTION', 'calendly_bookings_encrypted_token');
 define('CB_WORKER_ENDPOINT', 'https://calendly-bookings.whashby.workers.dev');
+
+// CRITICAL: Define LICENSE_SECRET for token decryption
+// This must be 16, 24, or 32 bytes for AES-256-GCM
+// Generated securely: 64 hex chars = 32 bytes
+define('LICENSE_SECRET', 'c8fc61bb0e76f66dee738ba7b9e5484164070f239cafde0d3108706f1ad217fe');
 
 require_once __DIR__ . '/includes/constants.php';
 require_once __DIR__ . '/includes/bootstrap.php';
