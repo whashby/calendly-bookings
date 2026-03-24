@@ -82,10 +82,10 @@ final class CB_Dashboard {
 	public static function render_booking_trends(): void { 
 		echo '<div id="cb-widget-trends" class="cb-widget">
 			<div class="cb-trends-controls">
-			  <button id="cb-trends-1m" class="button">1M</button>
-			  <button id="cb-trends-3m" class="button">3M</button>
-			  <button id="cb-trends-6m" class="button">6M</button>
-			  <button id="cb-trends-12m" class="button">12M</button>
+				<button id="cb-trends-1m" class="button">1M</button>
+				<button id="cb-trends-3m" class="button">3M</button>
+				<button id="cb-trends-6m" class="button">6M</button>
+				<button id="cb-trends-12m" class="button">12M</button>
 			</div>
 			<canvas id="cb-widget-trends-chart"></canvas>
 		</div>';
