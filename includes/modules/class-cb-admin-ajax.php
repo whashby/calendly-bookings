@@ -26,12 +26,12 @@ final class CB_Admin_Ajax {
         );
         
         add_action(
-            'wp_ajax_cb_maintenance_action', 
+            'wp_ajax_cb_maintenance_action',
             [__CLASS__, 'maintenance_action']
         );
         
         add_action(
-            'wp_ajax_cb_create_walkin', 
+            'wp_ajax_cb_create_walkin',
             [__CLASS__, 'create_walkin']
         );
     
@@ -175,16 +175,12 @@ final class CB_Admin_Ajax {
     public static function create_walkin(): void {
         parse_str($_POST['data'], $data);
 
-<<<<<<< Updated upstream
-        $name  = sanitize_text_field($data['name']);
-=======
         foreach ($post as $item) {
             $data[$item['name']] = sanitize_text_field($item['value']);
         }
 
         $name  = sanitize_text_field($data['firstname']) . ' ' . sanitize_text_field($data['lastname']);
         $firstname = sanitize_text_field($data['firstname']);
->>>>>>> Stashed changes
         $email = sanitize_email($data['email']);
         $initial_session_id = sanitize_text_field($data['initial_session_id']);
         $initial_session_uuid = sanitize_text_field($data['initial_session_uuid']);
@@ -203,48 +199,6 @@ final class CB_Admin_Ajax {
 
         // 2. Insert completed scheduled event
         global $wpdb;
-<<<<<<< Updated upstream
-        $event_table   = $wpdb->prefix . 'cb_scheduled_events';
-        $invitee_table = $wpdb->prefix . 'cb_scheduled_event_invitees';
-
-        $uuid = wp_generate_uuid4();
-        $wpdb->insert($event_table, [
-            'uuid'       => $uuid,
-            'event_type_id' => sanitize_text_field($data['initial_session_id']),
-            'status'     => 'completed',
-            'location_id'   => sanitize_text_field($data['initial_location']),
-            'name' => sanitize_text_field($data['initial_session']),
-            'notes'      => sanitize_textarea_field($data['initial_notes']),
-            'scheduled_at' => $data['initial_date'].' '.$data['initial_time'],
-        ]);
-
-        $wpdb->insert($invitee_table, [
-            'scheduled_event_uuid' => $uuid,
-            'name'       		   => $name,
-            'invitee_email'        => $email,
-        ]);
-
-        // 3. Create WooCommerce order
-        $order = wc_create_order();
-        $order->add_product(wc_get_product_by_event_type($data['initial_session']));
-        $order->set_customer_id($user_id);
-        $order->update_status('completed');
-        $order_id = $order->get_id();
-
-        $wpdb->update($event_table, ['order_id' => $order_id], ['uuid' => $uuid]);
-
-        // 4. Send follow-up email
-        $reset_link = wp_lostpassword_url();
-        $followup_url = site_url('/events/'.$data['followup_session']);
-
-        $firstname = explode(' ', $name)[0];
-        $body = "Dear {$firstname},\n\n".
-                "It was wonderful to meet you and I'm delighted that you would like to continue.\n\n".
-                "Recommended Follow-up: {$data['followup_session']} on {$data['followup_date']} at {$data['followup_time']}\n".
-                "Password reset link: {$reset_link}\n".
-                "Follow-up booking: {$followup_url}\n\n".
-                "Looking forward to the continued journey.\n\nRegards,\nMichael";
-=======
         $event_table       = $wpdb->prefix . 'cb_scheduled_events';
         $invitee_table     = $wpdb->prefix . 'cb_scheduled_event_invitees';
         $event_types_table = $wpdb->prefix . 'cb_event_types';
@@ -343,7 +297,6 @@ final class CB_Admin_Ajax {
 
             // Append encrypted token
             $followup_url = add_query_arg(['token' => urlencode($encrypted)], $product_url);
->>>>>>> Stashed changes
 
             $body = "Dear {$firstname},\n\n" .
                     "It was wonderful to meet you and I'm delighted that you would like to continue.\n\n" .
@@ -357,9 +310,5 @@ final class CB_Admin_Ajax {
 
         wp_send_json_success(['message' => 'Walk-in created']);
     }
-<<<<<<< Updated upstream
-}
-=======
 
 }
->>>>>>> Stashed changes

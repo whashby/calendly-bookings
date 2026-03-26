@@ -73,13 +73,8 @@ jQuery(document).ready(function($) {
             }
             
             $container.html(content);
-<<<<<<< Updated upstream
-            
-            tb_show('Invitee History: ' + invitee.replace(/_/g, ' '), '#TB_inline?width=600&height=550&inlineId=cb-dynamic-history-modal');
-=======
 
             tb_show('Invitee History: ' + invitee.replace(/_/g, ' '), '#TB_inline?inlineId=cb-dynamic-history-modal');
->>>>>>> Stashed changes
         }).fail(function() {
             $container.html('<p>Error loading history.</p>');
             tb_show('View Invitee History', '#TB_inline?inlineId=cb-dynamic-history-modal');
@@ -90,7 +85,7 @@ jQuery(document).ready(function($) {
     /**
      * Add Admin Notes
      */
-     $(document).on('click', '.cb-add-admin-notes', function(e) {
+    $(document).on('click', '.cb-add-admin-notes', function(e) {
         e.preventDefault();
 
         const $form = $(this).closest('.cb-thickbox-form');
@@ -99,11 +94,7 @@ jQuery(document).ready(function($) {
 
         $(this).hide();
         $('#admin-notes-url').after(
-<<<<<<< Updated upstream
-            //tb_show('Add Admin Notes', '#TB_inline?width=600&height=550&inlineId=cb-admin-notes-content-modal')
-=======
         //tb_show('Add Admin Notes', '#TB_inline?inlineId=cb-admin-notes-content-modal')
->>>>>>> Stashed changes
         `<div id="cb-admin-notes-content-modal" style="margin-bottom:30px;">
             <h2>Add Admin Notes</h2>
             <div class="cb-thickbox-form">
@@ -117,7 +108,7 @@ jQuery(document).ready(function($) {
             </div>
         </div>`
         );
-     });
+    });
     
     
     /**
@@ -177,13 +168,8 @@ content = `
             }
     
             $container.html(content);
-<<<<<<< Updated upstream
-    
-            tb_show('Scheduled Event', '#TB_inline?width=600&height=550&inlineId=cb-event-' + uuid + '-modal');
-=======
 
             tb_show('Scheduled Event', '#TB_inline?inlineId=cb-event-' + uuid + '-modal');
->>>>>>> Stashed changes
         }).fail(function() {
             $container.html('<p>Error loading event.</p>');
             tb_show('Scheduled Event', '#TB_inline?inlineId=cb-event-' + uuid + '-modal');
@@ -229,38 +215,6 @@ content = `
      * Save edits via AJAX
      */
     $(document).on('click', '.cb-save-btn', function(e) {
-<<<<<<< Updated upstream
-      e.preventDefault();
-    
-      const id = $(this).attr('id');
-    
-      if (id === 'cb-walkin-submit') {
-        const data = $(this).serialize();
-    
-        if (!confirm("Are you sure you want to create this walk-in?")) return;
-    
-        $.post(ajaxurl, { action: 'cb_create_walkin', data: data }, function(response) {
-          if (response.success) {
-            alert('Walk-in created successfully');
-            tb_remove();
-            location.reload();
-          } else {
-            alert('Error: ' + response.data.message);
-          }
-        });
-        return;
-      }
-    
-      if (id === 'cb-bulk-update-submit') {
-        const status = $('input[name="bulk-status"]:checked').val();
-        const selected = $('.cb-bulk-select:checked').map(function() {
-          return $(this).val();
-        }).get();
-    
-        if (!status || selected.length === 0) {
-          alert('Please select events and a status.');
-          return;
-=======
         e.preventDefault();
 
         const id = $(this).attr('id');
@@ -317,32 +271,31 @@ content = `
                 }
             });
             return;
->>>>>>> Stashed changes
         }
     
         const uuids = selected.join(',');
     
         $.post(ajaxurl, {
-          action: 'calendly_bookings_bulk_update_scheduled_events',
-          uuids: uuids,
-          status: status
+            action: 'calendly_bookings_bulk_update_scheduled_events',
+            uuids: uuids,
+            status: status
         }, function(response) {
-          if (response.success) {
-            alert('Events updated successfully.');
-            location.reload();
-          } else {
-            alert(response.data.message || 'Update failed.');
-          }
+            if (response.success) {
+                alert('Events updated successfully.');
+                location.reload();
+            } else {
+                alert(response.data.message || 'Update failed.');
+            }
         }).fail(function() {
-          alert('Error updating status.');
+            alert('Error updating status.');
         });
         return;
-      }
+    }
     
         if (id === 'cb-admin-notes-submit') {
             const $form = $(this).closest('.cb-thickbox-form');
             const uuid = $(this).data('uuid');
-              
+
             if (!uuid) {
                 alert('Could not determine event UUID.');
                 return;
@@ -372,41 +325,41 @@ content = `
         }
     
         if (id === 'cb-event-details-submit') {
-        const $form = $(this).closest('.cb-thickbox-form');
-        const uuid = $form.find('input[name="uuid"]').val();
-    
-        if (!uuid) {
-            alert('Could not determine event UUID.');
+            const $form = $(this).closest('.cb-thickbox-form');
+            const uuid = $form.find('input[name="uuid"]').val();
+        
+            if (!uuid) {
+                alert('Could not determine event UUID.');
+                return;
+            }
+        
+            const status = $('input[name="event-status"]:checked').val();
+            const notes = {
+                discussed: $form.find('textarea[name="notes-discussed"]').val(),
+                guidance: $form.find('textarea[name="notes-guidance"]').val(),
+                follow_up: $form.find('textarea[name="notes-follow_up"]').val()
+            };
+        
+            if (!confirm("Are you sure you want to save these changes?")) return;
+        
+            $.post(ajaxurl, {
+                action: 'calendly_bookings_update_scheduled_event',
+                uuid: uuid,
+                status: status,
+                notes: notes
+            }, function(response) {
+                if (response.success) {
+                    alert('Changes saved.');
+                    tb_remove();
+                    location.reload();
+                } else {
+                    alert('Error: ' + (response.data?.message || 'Save failed.'));
+                }
+            }).fail(function() {
+                alert('Error saving notes.');
+            });
             return;
         }
-    
-        const status = $('input[name="event-status"]:checked').val();
-        const notes = {
-            discussed: $form.find('textarea[name="notes-discussed"]').val(),
-            guidance: $form.find('textarea[name="notes-guidance"]').val(),
-            follow_up: $form.find('textarea[name="notes-follow_up"]').val()
-        };
-    
-        if (!confirm("Are you sure you want to save these changes?")) return;
-    
-        $.post(ajaxurl, {
-          action: 'calendly_bookings_update_scheduled_event',
-          uuid: uuid,
-          status: status,
-          notes: notes
-        }, function(response) {
-          if (response.success) {
-            alert('Changes saved.');
-            tb_remove();
-            location.reload();
-          } else {
-            alert('Error: ' + (response.data?.message || 'Save failed.'));
-          }
-        }).fail(function() {
-          alert('Error saving notes.');
-        });
-        return;
-      }
     });
 
     /**
@@ -420,20 +373,10 @@ content = `
         $.get('/wp-json/calendly-bookings/v1/event-types', function(response) {
             if (response.success && response.data) {
                 response.data.forEach(type => {
-<<<<<<< Updated upstream
-                    if(type.product_id > 0){
-                        $('#initial_session').append(`<option value="${type.uuid}">${type.name}</option>`);
-=======
                         $('#initial_session').append(`<option name="${type.name}" value="${type.name}" data-id="${type.id}" data-uuid="${type.uuid}">${type.name}</option>`);
->>>>>>> Stashed changes
                         if(type.name.toLowerCase() !== "initial meeting") {
                             $('#followup_session').append(`<option value="${type.uuid}">${type.name}</option>`);
                         }
-<<<<<<< Updated upstream
-                    }
-
-=======
->>>>>>> Stashed changes
                 });
             }
         });
@@ -446,12 +389,6 @@ content = `
                 });
             }
         });
-<<<<<<< Updated upstream
-    
-        tb_show('Create Walk-in', '#TB_inline?width=600&height=550&inlineId=cb-walkin-modal');
-    });
-    
-=======
 
         tb_show('Create Walk-in', '#TB_inline?inlineId=cb-walkin-modal');
     });
@@ -540,7 +477,6 @@ content = `
             });
         });
     });
->>>>>>> Stashed changes
 
     /**
      *  Cancel button handler
@@ -564,15 +500,15 @@ content = `
             $form.find('.cb-cancel-btn').hide();
         } else {
 			if($(this).attr('id') === 'cb-admin-notes-cancel') {
-            	$('#cb-admin-notes-content-modal').remove();
-            	$('.cb-add-admin-notes').show();
-        	} else {
-            	tb_remove();
-        	}
+                $('#cb-admin-notes-content-modal').remove();
+                $('.cb-add-admin-notes').show();
+			} else {
+                tb_remove();
+			}
 		}
     });
     
-  
+
     
     function canEdit(start_time, status)  {
         // Parse start_time into a Date object
@@ -596,6 +532,4 @@ content = `
         tb_show(title, url);
     });
     
-
-
 });
