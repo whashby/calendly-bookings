@@ -1,4 +1,12 @@
 /* Basic form styling inside ThickBox */
+#TB_ajaxContent {
+	height: 92% !important;
+  padding: 20px;
+  width: auto !important;
+	max-width: 800px;
+  margin: 0 auto;
+}
+
 .cb-thickbox-form label {
   display: block;
   margin-bottom: 12px;

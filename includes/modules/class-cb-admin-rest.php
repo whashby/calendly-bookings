@@ -91,12 +91,12 @@ final class CB_Admin_Rest {
 			'callback' => [__CLASS__, 'rest_wc_create_product'],
 			'permission_callback' => [__CLASS__, 'can_manage'],
             'args'=>[
-				'uuid' => [
+				'event_uuid' => [
 					'required' => true, 
 					'type' => 'string'
 				]
 			],
-        ]);        
+        ]);
 
 
     }
@@ -188,7 +188,7 @@ final class CB_Admin_Rest {
 
     public static function rest_wc_create_product( \WP_REST_Request $req ): \WP_REST_Response {
         global $wpdb;
-        $uuid  = sanitize_text_field( $req->get_param( 'uuid' ) );
+        $uuid  = sanitize_text_field( $req->get_param( 'event_uuid' ) );
         $table = $wpdb->prefix . 'cb_event_types';
 
         // Get event

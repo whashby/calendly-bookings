@@ -13,7 +13,7 @@ jQuery(document).ready(function($) {
      */
     $(document).on('click', '.cb-bulk-update', function(e) {
         e.preventDefault();
-        tb_show('Bulk Update Status', '#TB_inline?width=600&height=400&inlineId=cb-bulk-update-content-modal');
+        tb_show('Bulk Update Status', '#TB_inline?inlineId=cb-bulk-update-content-modal');
     });
     
     /**
@@ -73,11 +73,16 @@ jQuery(document).ready(function($) {
             }
             
             $container.html(content);
+<<<<<<< Updated upstream
             
             tb_show('Invitee History: ' + invitee.replace(/_/g, ' '), '#TB_inline?width=600&height=550&inlineId=cb-dynamic-history-modal');
+=======
+
+            tb_show('Invitee History: ' + invitee.replace(/_/g, ' '), '#TB_inline?inlineId=cb-dynamic-history-modal');
+>>>>>>> Stashed changes
         }).fail(function() {
             $container.html('<p>Error loading history.</p>');
-            tb_show('View Invitee History', '#TB_inline?width=600&height=550&inlineId=cb-dynamic-history-modal');
+            tb_show('View Invitee History', '#TB_inline?inlineId=cb-dynamic-history-modal');
         });
     });
     
@@ -94,7 +99,11 @@ jQuery(document).ready(function($) {
 
         $(this).hide();
         $('#admin-notes-url').after(
+<<<<<<< Updated upstream
             //tb_show('Add Admin Notes', '#TB_inline?width=600&height=550&inlineId=cb-admin-notes-content-modal')
+=======
+        //tb_show('Add Admin Notes', '#TB_inline?inlineId=cb-admin-notes-content-modal')
+>>>>>>> Stashed changes
         `<div id="cb-admin-notes-content-modal" style="margin-bottom:30px;">
             <h2>Add Admin Notes</h2>
             <div class="cb-thickbox-form">
@@ -168,11 +177,16 @@ content = `
             }
     
             $container.html(content);
+<<<<<<< Updated upstream
     
             tb_show('Scheduled Event', '#TB_inline?width=600&height=550&inlineId=cb-event-' + uuid + '-modal');
+=======
+
+            tb_show('Scheduled Event', '#TB_inline?inlineId=cb-event-' + uuid + '-modal');
+>>>>>>> Stashed changes
         }).fail(function() {
             $container.html('<p>Error loading event.</p>');
-            tb_show('Scheduled Event', '#TB_inline?width=600&height=550&inlineId=cb-event-' + uuid + '-modal');
+            tb_show('Scheduled Event', '#TB_inline?inlineId=cb-event-' + uuid + '-modal');
         });
     });
     
@@ -215,6 +229,7 @@ content = `
      * Save edits via AJAX
      */
     $(document).on('click', '.cb-save-btn', function(e) {
+<<<<<<< Updated upstream
       e.preventDefault();
     
       const id = $(this).attr('id');
@@ -245,6 +260,64 @@ content = `
         if (!status || selected.length === 0) {
           alert('Please select events and a status.');
           return;
+=======
+        e.preventDefault();
+
+        const id = $(this).attr('id');
+
+        if (id === 'cb-walkin-submit') {
+            const form = $(this).closest('form');
+            const firstname = form.find('input[name="firstname"]').val();
+            const lastname = form.find('input[name="lastname"]').val();
+            const email = form.find('input[name="email"]').val();
+            const initialSession = form.find('#initial_session option:selected');
+            const start_time = form.find('#initial_date').val()+'T'+ form.find('#initial_time').val()+':00Z';
+            const location = form.find('#location').val();
+            const notes = {
+                discussed: $form.find('textarea[name="notes-discussed"]').val(),
+                guidance: $form.find('textarea[name="notes-guidance"]').val(),
+                follow_up: $form.find('textarea[name="notes-follow_up"]').val()
+            };
+            const followupSession = form.find('#followup_session option:selected');
+            const followup_date = form.find('#followup_date').val();
+            const followup_time = form.find('#followup_time').val();
+
+            // Get form values as an array of {name, value}
+            const data = [];
+            
+            // Add extra data attributes from the selected option
+            data.push({ name: 'firstname', value: firstname });
+            data.push({ name: 'lastname', value: lastname });
+            data.push({ name: 'email', value: email });
+            data.push({ name: 'initial_session_id', value: initialSession.data('id') });
+            data.push({ name: 'initial_session_uuid', value: initialSession.data('uuid') });
+            data.push({ name: 'start_time', value: start_time });
+            data.push({ name: 'location', value: location });
+            data.push({ name: 'notes', value: notes });
+            data.push({ name: 'followup_session_id', value: followupSession.data('id') });
+            data.push({ name: 'followup_session_uuid', value: followupSession.data('uuid') });
+            data.push({ name: 'followup_date', value: followup_date });
+            data.push({ name: 'followup_time', value: followup_time });
+
+
+            console.log(data);
+        
+            if (!confirm("Are you sure you want to create this walk-in?")) return;
+        
+            $.post(ajaxurl, { 
+                action: 'cb_create_walkin', 
+                data: JSON.stringify(data) 
+            }, function(response) {
+                if (response.success) {
+                    alert('Walk-in created successfully');
+                    tb_remove();
+                    location.reload();
+                } else {
+                    alert('Error: ' + response.data.message);
+                }
+            });
+            return;
+>>>>>>> Stashed changes
         }
     
         const uuids = selected.join(',');
@@ -347,13 +420,20 @@ content = `
         $.get('/wp-json/calendly-bookings/v1/event-types', function(response) {
             if (response.success && response.data) {
                 response.data.forEach(type => {
+<<<<<<< Updated upstream
                     if(type.product_id > 0){
                         $('#initial_session').append(`<option value="${type.uuid}">${type.name}</option>`);
+=======
+                        $('#initial_session').append(`<option name="${type.name}" value="${type.name}" data-id="${type.id}" data-uuid="${type.uuid}">${type.name}</option>`);
+>>>>>>> Stashed changes
                         if(type.name.toLowerCase() !== "initial meeting") {
                             $('#followup_session').append(`<option value="${type.uuid}">${type.name}</option>`);
                         }
+<<<<<<< Updated upstream
                     }
 
+=======
+>>>>>>> Stashed changes
                 });
             }
         });
@@ -366,10 +446,101 @@ content = `
                 });
             }
         });
+<<<<<<< Updated upstream
     
         tb_show('Create Walk-in', '#TB_inline?width=600&height=550&inlineId=cb-walkin-modal');
     });
     
+=======
+
+        tb_show('Create Walk-in', '#TB_inline?inlineId=cb-walkin-modal');
+    });
+
+    // When follow-up session changes, fetch availability
+    $(document).on('change', '#followup_session', function () {
+        const uuid = $(this).find('option:selected').data('uuid');
+
+        if (!uuid) return;
+        const startIso = new Date().toISOString();
+
+        fetch(`/wp-json/calendly-bookings/v1/event-availability?uuid=${uuid}&start_iso=${startIso}`, {
+            credentials: 'same-origin'
+        })
+        .then(res => res.json())
+        .then(response => {
+            if (!response.success || !response.data) {
+                console.warn("No availability returned");
+                return;
+            }
+
+            const slots = response.data;
+            const grouped = {};
+            slots.forEach(slot => {
+                const date = slot.start_time.split('T')[0]; // YYYY-MM-DD
+                if (!grouped[date]) grouped[date] = [];
+                grouped[date].push(slot);
+            });
+
+            const $date = $('#followup_date');
+            const $time = $('#followup_time');
+
+            $('#followup_date').empty();
+            $('#followup_date').append(`<option>Select a date</option>`);
+            $('#followup_time').empty();
+            $('#followup_time').append(`<option>Select a time</option>`);
+
+            // Populate dates
+            Object.keys(grouped).forEach(date => {
+                $date.append(`<option value="${date}">${date}</option>`);
+            });
+
+            // Auto-select earliest date
+            const firstDate = Object.keys(grouped)[0];
+            $date.val(firstDate);
+
+            // Populate times for earliest date
+            grouped[firstDate].forEach(slot => {
+                const dateObj = new Date(slot.start_time);
+                const time = dateObj.toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+                $time.append(`<option value="${slot.start_time}">${time}</option>`);
+            });
+        });
+    });
+
+    // When date changes, update times (same as frontend.js)
+    $(document).on('change', '#followup_date', function () {
+        const selectedDate = $(this).val();
+        const uuid = $('#followup_session').data('uuid');
+
+        if (!uuid || !selectedDate) return;
+
+        const startIso = new Date().toISOString();
+
+        fetch(`/wp-json/calendly-bookings/v1/event-availability?uuid=${uuid}&start_iso=${startIso}`, {
+            credentials: 'same-origin'
+        })
+        .then(res => res.json())
+        .then(response => {
+            if (!response.success || !response.data) return;
+
+            const slots = response.data.filter(slot =>
+                slot.start_time.startsWith(selectedDate)
+            );
+
+            const $time = $('#followup_time');
+            $time.empty();
+
+            slots.forEach(slot => {
+                const time = new Date(slot.start_time).toTimeString().slice(0, 5);
+                $time.append(`<option value="${slot.start_time}">${time}</option>`);
+            });
+        });
+    });
+>>>>>>> Stashed changes
 
     /**
      *  Cancel button handler
@@ -416,7 +587,7 @@ content = `
     
     /**
     * Reschedule / Cancel (Calendly iframe)
-    * TODO: redurect through API endpoint
+    * TODO: redirect through API endpoint
     */
     $(document).on('click', '.cb-reschedule, .cb-cancel', function(e) {
         e.preventDefault();

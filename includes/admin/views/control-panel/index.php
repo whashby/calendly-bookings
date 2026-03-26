@@ -4,13 +4,15 @@ namespace Calendly_Bookings\Admin\Views;
 if (!defined('ABSPATH')) exit;
 
 $current_user = wp_get_current_user();
-$user_email = $current_user->user_email;
 $user_roles = $current_user->roles;
 
-if(in_array('administrator', $user_roles)) :   
+// Check if user has CB-specific roles or is administrator
+$has_cb_admin_role = in_array('cb_administrator', $user_roles, true);
+$has_cb_support_role = in_array('cb_support', $user_roles, true);
+$is_admin = in_array('administrator', $user_roles, true);
 
+if($has_cb_admin_role || $has_cb_support_role || $is_admin) :
 ?>
-
 <div class="wrap">
   <h1><?php esc_html_e('Calendly Bookings', 'calendly-bookings'); ?></h1>
   <p><?php esc_html_e('Manage your Calendly integration, view scheduled events, audit logs, configure settings, and link event types to WooCommerce products.', 'calendly-bookings'); ?></p>
@@ -23,16 +25,16 @@ if(in_array('administrator', $user_roles)) :
 
     <div class="cb-dashboard-cards">
       <div class="cb-card">
-<?php   if(in_array( $user_email, ['whashby@gmail.com', 'michael@hierlife.com'])) : 
-           if(in_array( $user_email, [/*'whashby@gmail.com',*/ 'michael@hierlife.com'])) : ?>
+<?php   if($has_cb_admin_role || $has_cb_support_role) :
+          if($has_cb_admin_role) : ?>
         <h3><?php esc_html_e('Scheduled Events', 'calendly-bookings'); ?></h3>
         <p><?php esc_html_e('View and manage upcoming and past scheduled events synced from Calendly.', 'calendly-bookings'); ?></p>
         <a href="<?php echo esc_url(admin_url('admin.php?page=calendly-bookings-scheduled-events')); ?>" class="button button-primary">
           <?php esc_html_e('View Events', 'calendly-bookings'); ?>
         </a>
       </div>
-<?php       endif; 
-            if(in_array( $user_email, ['whashby@gmail.com',])) :?>
+<?php       endif;
+            if($has_cb_support_role) :?>
       <div class="cb-card">
         <h3><?php esc_html_e('Audit Log', 'calendly-bookings'); ?></h3>
         <p><?php esc_html_e('Review API calls and actions recorded by the system.', 'calendly-bookings'); ?></p>

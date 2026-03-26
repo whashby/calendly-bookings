@@ -99,8 +99,8 @@ jobs:
         env:
           NEW_VERSION: ${{ needs.bump_version.outputs.new_version }}
         run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
+          git config user.name "Wafiq Harris-Ashby"
+          git config user.email "whashby@gmail.com"
           git add "${PLUGIN_MAIN_FILE}" "${CONSTANTS_FILE}" readme.txt "${VERSION_FILE}" || true
           if git diff --cached --quiet; then
             echo "No changes to commit."

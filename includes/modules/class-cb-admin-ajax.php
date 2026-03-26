@@ -175,8 +175,27 @@ final class CB_Admin_Ajax {
     public static function create_walkin(): void {
         parse_str($_POST['data'], $data);
 
+<<<<<<< Updated upstream
         $name  = sanitize_text_field($data['name']);
+=======
+        foreach ($post as $item) {
+            $data[$item['name']] = sanitize_text_field($item['value']);
+        }
+
+        $name  = sanitize_text_field($data['firstname']) . ' ' . sanitize_text_field($data['lastname']);
+        $firstname = sanitize_text_field($data['firstname']);
+>>>>>>> Stashed changes
         $email = sanitize_email($data['email']);
+        $initial_session_id = sanitize_text_field($data['initial_session_id']);
+        $initial_session_uuid = sanitize_text_field($data['initial_session_uuid']);
+        $initial_session = sanitize_text_field($data['initial_session']);
+        $start_time = CB_Timezone_Converter::to_iso_time($data['start_time']);
+        $notes = wp_json_encode($data['notes'] ?? []);
+        $location = sanitize_text_field($data['location']);
+        $followup_session = sanitize_text_field($data['followup_session']);
+        $followup_date = sanitize_text_field($data['followup_date']);
+        $followup_time = sanitize_text_field($data['followup_time']);
+
 
         // 1. Create new WP user
         $user_id = wp_create_user($email, wp_generate_password(), $email);
@@ -184,6 +203,7 @@ final class CB_Admin_Ajax {
 
         // 2. Insert completed scheduled event
         global $wpdb;
+<<<<<<< Updated upstream
         $event_table   = $wpdb->prefix . 'cb_scheduled_events';
         $invitee_table = $wpdb->prefix . 'cb_scheduled_event_invitees';
 
@@ -224,9 +244,122 @@ final class CB_Admin_Ajax {
                 "Password reset link: {$reset_link}\n".
                 "Follow-up booking: {$followup_url}\n\n".
                 "Looking forward to the continued journey.\n\nRegards,\nMichael";
+=======
+        $event_table       = $wpdb->prefix . 'cb_scheduled_events';
+        $invitee_table     = $wpdb->prefix . 'cb_scheduled_event_invitees';
+        $event_types_table = $wpdb->prefix . 'cb_event_types';
 
-        wp_mail($email, 'Follow-up Session Invitation', $body);
+        $duration = $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT duration FROM $event_types_table WHERE uuid = %s",
+                $initial_session_uuid
+            )
+        );
+        $duration = $duration ? intval($duration) : 0;
+
+        $end_time = $start_time;
+        if ($duration > 0) {
+            $end_time = date('Y-m-d\TH:i:s\Z', strtotime($start_time . " +{$duration} minutes"));
+        }
+
+        $existing = $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT * FROM $event_types_table WHERE uuid = %s AND location_id = %s AND start_time = %s AND status = 'completed'",
+                $initial_session_uuid,
+                $location,
+                $start_time
+            )
+        );
+        if ($existing) {
+            $wpdb->update(
+                $event_table,
+            [
+                'uuid'          => $initial_session_uuid,
+                'event_type_id' => $initial_session_id,
+                'location_id'   => $location,
+                'name'          => $initial_session,
+                'start_time'    => $start_time,
+                'end_time'      => $end_time,
+                'status'        => 'completed',
+                'created_ts'    => current_time('mysql'),
+                'notes'         => $notes,
+            ],
+            ['id' => $existing]
+            );
+
+            $wpdb->update($invitee_table, [
+                'scheduled_event_uuid' => $initial_session_uuid,
+                'name'                 => $name,
+                'email'        => $email,
+            ], [
+                'scheduled_event_uuid' => $existing['uuid'],
+                'email' => $email
+            ]);
+        }
+        else {
+            $wpdb->insert($event_table, [
+                'uuid'          => $initial_session_uuid,
+                'event_type_id' => $initial_session_id,
+                'location_id'   => $location,
+                'name'          => $initial_session,
+                'start_time'    => $start_time,
+                'end_time'      => $end_time,
+                'status'        => 'completed',
+                'created_ts'    => current_time('mysql'),
+                'notes'         => $notes,
+            ]);
+
+            $wpdb->insert($invitee_table, [
+                'scheduled_event_uuid' => $initial_session_uuid,
+                'uuid'                 => wp_generate_uuid4(),
+                'name'                 => $name,
+                'email'                => $email,
+            ]);
+
+            // 3. Create WooCommerce order
+            $order = wc_create_order();
+            $order->add_product(wc_get_product_by_event_type($initial_session));
+            $order->set_customer_id($user_id);
+            $order->set_payment_method('walkin');
+            $order->set_payment_method_title('Walk-in Payment');
+            $order->payment_complete();
+
+            $order_id = $order->get_id();
+            $wpdb->update($event_table, ['order_id' => $order_id]);
+
+            // 4. Send follow-up email
+            $reset_link = wp_lostpassword_url();
+
+            $product     = wc_get_product_by_event_type($followup_session);
+            $product_url = $product ? get_permalink($product->get_id()) : site_url('/shop');
+
+            // Build dataset and encrypt
+            $dataset = json_encode([
+                'session' => $followup_session,
+                'date'    => $followup_date,
+                'time'    => $followup_time,
+            ]);
+            $encrypted = CB_Encryption::encrypt($dataset);
+
+            // Append encrypted token
+            $followup_url = add_query_arg(['token' => urlencode($encrypted)], $product_url);
+>>>>>>> Stashed changes
+
+            $body = "Dear {$firstname},\n\n" .
+                    "It was wonderful to meet you and I'm delighted that you would like to continue.\n\n" .
+                    "Recommended Follow-up: {$followup_session} on {$followup_date} at {$followup_time}\n" .
+                    "Password reset link: {$reset_link}\n" .
+                    "Follow-up booking: {$followup_url}\n\n" .
+                    "Looking forward to the continued journey.\n\nRegards,\nMichael A. Clarke";
+
+            wp_mail($email, 'Follow-up Session Invitation', $body);
+        }
 
         wp_send_json_success(['message' => 'Walk-in created']);
     }
+<<<<<<< Updated upstream
 }
+=======
+
+}
+>>>>>>> Stashed changes
