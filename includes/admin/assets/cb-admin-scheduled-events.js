@@ -215,6 +215,7 @@ content = `
      * Save edits via AJAX
      */
     $(document).on('click', '.cb-save-btn', function(e) {
+        
         e.preventDefault();
 
         const id = $(this).attr('id');
@@ -258,9 +259,9 @@ content = `
         
             if (!confirm("Are you sure you want to create this walk-in?")) return;
         
-            $.post(ajaxurl, { 
-                action: 'cb_create_walkin', 
-                data: JSON.stringify(data) 
+            $.post(ajaxurl, {
+                action: 'cb_create_walkin',
+                data: JSON.stringify(data)
             }, function(response) {
                 if (response.success) {
                     alert('Walk-in created successfully');
@@ -273,24 +274,34 @@ content = `
             return;
         }
     
-        const uuids = selected.join(',');
-    
-        $.post(ajaxurl, {
-            action: 'calendly_bookings_bulk_update_scheduled_events',
-            uuids: uuids,
-            status: status
-        }, function(response) {
-            if (response.success) {
-                alert('Events updated successfully.');
-                location.reload();
-            } else {
-                alert(response.data.message || 'Update failed.');
+        if (id === 'cb-bulk-update-submit') {
+            const bulk_status = $('input[name="bulk-status"]:checked').val();
+            const selected = $('.cb-bulk-select:checked').map(function() {
+                return $(this).val();
+            }).get();
+
+            if (!bulk_status || selected.length === 0) {
+                alert('Please select events and a status.');
+                return;
             }
-        }).fail(function() {
-            alert('Error updating status.');
-        });
-        return;
-    }
+
+            const uuids = selected.join(',');
+
+            $.post(ajaxurl, {
+                action: 'calendly_bookings_bulk_update_scheduled_events',
+                uuids: uuids,
+                status: bulk_status
+            }, function(response) {
+                if (response.success) {
+                    alert('Events updated successfully.');
+                    tb_remove();
+                    location.reload();
+                } else {
+                    alert(response.data.message || 'Update failed.');
+                }
+            });
+            return;
+        }
     
         if (id === 'cb-admin-notes-submit') {
             const $form = $(this).closest('.cb-thickbox-form');

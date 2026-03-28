@@ -68,8 +68,7 @@ if (!defined('ABSPATH')) exit;
   </div>
 
 
-  
-  
+
 <div id="cb-walkin-modal" style="display:none;">
     <h2><?php esc_html_e('New Invitee', 'calendly-bookings'); ?></h2>
     <form id="cb-walkin-form" class="cb-thickbox-form">
@@ -80,7 +79,7 @@ if (!defined('ABSPATH')) exit;
             </label>
             <label for="lastname"><?php esc_html_e('Last Name', 'calendly-bookings'); ?>
                 <input type="text" id="lastname" name="lastname" class="regular-text" required>
-            </label>    
+            </label>
         </div>
         
         <div class="cb-field-row">
@@ -91,7 +90,9 @@ if (!defined('ABSPATH')) exit;
         
         <div class="cb-field-row">
             <label for="initial_session"><?php esc_html_e('Initial Session', 'calendly-bookings'); ?>
-                <select id="initial_session" name="initial_session"></select>
+                <select id="initial_session" name="initial_session">
+                    <option value=""><?php esc_html_e('Select a session', 'calendly-bookings'); ?></option>
+                </select>
             </label>
         </div>
         
@@ -122,25 +123,30 @@ if (!defined('ABSPATH')) exit;
         <h3><?php esc_html_e('Follow-up Session', 'calendly-bookings'); ?></h3>
         <div class="cb-field-row">
             <label for="followup_session"><?php esc_html_e('Event Type', 'calendly-bookings'); ?>
-                <select id="followup_session" name="followup_session"></select>
+                <select id="followup_session" name="followup_session">
+                    <option value=""><?php esc_html_e('Select a session', 'calendly-bookings'); ?></option>
+                </select>
             </label>
         </div>
         
         <div id="next-available-slot" style="margin-bottom:10px; font-weight:bold; color:#0073aa;"></div>
         
         <div class="cb-field-row">
-          <label for="followup_date"><?php esc_html_e('Follow-up Date', 'calendly-bookings'); ?>
-            <input type="date" id="followup_date" name="followup_date" class="regular-text">
-          </label>
-          <label for="followup_time"><?php esc_html_e('Follow-up Time', 'calendly-bookings'); ?>
-            <input type="time" id="followup_time" name="followup_time" class="regular-text">
-          </label>
+            <label for="followup_date"><?php esc_html_e('Follow-up Date', 'calendly-bookings'); ?>
+                <select id="followup_date" name="followup_date">
+                    <option value=""><?php esc_html_e('Select a date', 'calendly-bookings'); ?></option>
+                </select>
+            </label>
+            <label for="followup_time"><?php esc_html_e('Follow-up Time', 'calendly-bookings'); ?>
+                <select id="followup_time" name="followup_time">
+                    <option value=""><?php esc_html_e('Select a time', 'calendly-bookings'); ?></option>
+                </select>
+            </label>
         </div>
         
         <div class="cb-thickbox-actions">
             <button type="submit" id="cb-walkin-submit" class="button button-primary cb-save-btn"><?php esc_html_e('Save', 'calendly-bookings'); ?></button>
             <button type="button" id="cb-walk-in-cancel" class="button cb-cancel-btn"><?php esc_html_e('Cancel', 'calendly-bookings'); ?></button>
-
         </div>
     </form>
 </div>

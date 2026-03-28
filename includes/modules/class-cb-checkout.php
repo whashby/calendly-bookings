@@ -201,19 +201,23 @@ class CB_Checkout {
 
 
     public static function create_calendly_invitee() {
-       $order_id = absint(get_query_var('order-received'));
+		$order_id = absint(get_query_var('order-received'));
 
         $api_key    = (string) get_option(CB_Constants::OPT_API_TOKEN, '');
         $user_uuid  = (string) get_option(CB_Constants::OPT_USER_UUID, '');
         
         $order = wc_get_order( $order_id );
         if ( ! $order ) {
+			echo "Order not found: $order_id";
             return;
         }
 
         $token = $order->get_meta('_cb_security_token');
 
-        if (!$token) return;
+        if (!$token) {
+			echo "Security token not found for order: $order_id";
+            return;
+        }
         
         $event_type = "https://api.calendly.com/event_types/" . self::get_event_uuid_from_order($order_id);
 
