@@ -88,9 +88,9 @@ jQuery(document).ready(function($) {
     $(document).on('click', '.cb-add-admin-notes', function(e) {
         e.preventDefault();
 
-        const $form = $(this).closest('.cb-thickbox-form');
+        const form = $(this).closest('.cb-thickbox-form');
         const uuid  = $(this).data('uuid');
-        const notes = $form.find('.admin-notes-text').text();
+        const notes = form.find('.admin-notes-text').text();
 
         $(this).hide();
         $('#admin-notes-url').after(
@@ -180,13 +180,13 @@ content = `
      * Edit toggle inside ThickBox
      */
     $(document).on('click', '.cb-edit-toggle', function() {
-        const $form = $(this).closest('.cb-thickbox-form');
+        const form = $(this).closest('.cb-thickbox-form');
         
         // Replace status span with radio button
-        $form.find('.record-status').each(function() {
+        form.find('.record-status').each(function() {
             const status = $(this).data('status');
             if(status == 'active'){
-                const value = $(this).text();
+                //const value = $(this).text();
                 $(this).replaceWith(
                 `<div class="cb-status-options">
                 <label><input type="radio" name="event-status" value="active" ${status == 'active'? 'checked' : ''}>Active</label>
@@ -198,7 +198,7 @@ content = `
         });
         
         // Replace each note-text span with a textarea
-        $form.find('.note-text').each(function() {
+        form.find('.note-text').each(function() {
             const field = $(this).data('field');
             const value = $(this).text();
             $(this).replaceWith(
@@ -206,8 +206,8 @@ content = `
             );
         });
         
-        $form.find('.cb-save-btn').show();
-        $form.find('.cb-cancel-btn').show();
+        form.find('.cb-save-btn').show();
+        form.find('.cb-cancel-btn').show();
         $(this).hide();
     });
     
@@ -229,9 +229,9 @@ content = `
             const start_time = form.find('#initial_date').val()+'T'+ form.find('#initial_time').val()+':00Z';
             const location = form.find('#location').val();
             const notes = {
-                discussed: $form.find('textarea[name="notes-discussed"]').val(),
-                guidance: $form.find('textarea[name="notes-guidance"]').val(),
-                follow_up: $form.find('textarea[name="notes-follow-up"]').val()
+                discussed: form.find('textarea[name="notes-discussed"]').val(),
+                guidance: form.find('textarea[name="notes-guidance"]').val(),
+                follow_up: form.find('textarea[name="notes-follow-up"]').val()
             };
             const followupSession = form.find('#followup_session option:selected');
             const followup_date = form.find('#followup_date').val();
@@ -304,7 +304,7 @@ content = `
         }
     
         if (id === 'cb-admin-notes-submit') {
-            const $form = $(this).closest('.cb-thickbox-form');
+            const form = $(this).closest('.cb-thickbox-form');
             const uuid = $(this).data('uuid');
 
             if (!uuid) {
@@ -313,7 +313,7 @@ content = `
             }
     
             const notes = {
-                admin: $form.find('textarea[name="notes-admin"]').val(),
+                admin: form.find('textarea[name="notes-admin"]').val(),
             }
         
             if (!confirm("Are you sure you want to save these changes?")) return;
@@ -336,8 +336,8 @@ content = `
         }
     
         if (id === 'cb-event-details-submit') {
-            const $form = $(this).closest('.cb-thickbox-form');
-            const uuid = $form.find('input[name="uuid"]').val();
+            const form = $(this).closest('.cb-thickbox-form');
+            const uuid = form.find('input[name="uuid"]').val();
         
             if (!uuid) {
                 alert('Could not determine event UUID.');
@@ -346,9 +346,9 @@ content = `
         
             const status = $('input[name="event-status"]:checked').val();
             const notes = {
-                discussed: $form.find('textarea[name="notes-discussed"]').val(),
-                guidance: $form.find('textarea[name="notes-guidance"]').val(),
-                follow_up: $form.find('textarea[name="notes-follow_up"]').val()
+                discussed: form.find('textarea[name="notes-discussed"]').val(),
+                guidance: form.find('textarea[name="notes-guidance"]').val(),
+                follow_up: form.find('textarea[name="notes-follow_up"]').val()
             };
         
             if (!confirm("Are you sure you want to save these changes?")) return;
@@ -496,10 +496,10 @@ content = `
     $(document).on('click', '.cb-cancel-btn', function() {
         
         if($(this).attr("id") === 'cb-edit-event-cancel') {
-            const $form = $(this).closest('.cb-thickbox-form');
+            const form = $(this).closest('.cb-thickbox-form');
         
             // Restore text view from textareas
-            $form.find('textarea').each(function() {
+            form.find('textarea').each(function() {
                 const field = $(this).attr('name').replace('notes-', '');
                 const value = $(this).val();
                 $(this).replaceWith(
@@ -507,9 +507,9 @@ content = `
                 );
             });
         
-            $form.find('.cb-edit-toggle').show();
-            $form.find('.cb-save-btn').hide();
-            $form.find('.cb-cancel-btn').hide();
+            form.find('.cb-edit-toggle').show();
+            form.find('.cb-save-btn').hide();
+            form.find('.cb-cancel-btn').hide();
         } else {
 			if($(this).attr('id') === 'cb-admin-notes-cancel') {
                 $('#cb-admin-notes-content-modal').remove();
