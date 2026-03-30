@@ -445,7 +445,7 @@ content = `
 
             // Auto-select earliest date
             const firstDate = Object.keys(grouped)[0];
-            $('#next-available-slot').text(firstDate);
+            $('#next-available-slot').text("First available date: " + firstDate);
 
             // Populate times for earliest date
             grouped[firstDate].forEach(slot => {
@@ -467,7 +467,7 @@ content = `
 
         if (!uuid || !selectedDate) return;
 
-        const startIso = new Date().toISOString();
+        const startIso = selectedDate.toISOString();
 
         fetch(`/wp-json/calendly-bookings/v1/event-availability?uuid=${uuid}&start_iso=${startIso}`, {
             credentials: 'same-origin'

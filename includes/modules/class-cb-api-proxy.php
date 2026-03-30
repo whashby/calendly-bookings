@@ -179,8 +179,8 @@ final class CB_API_Proxy {
                     'type'     => 'integer',
                 ],
             ],
-        ]);			
-*/			
+        ]);
+*/
 			
 		
     }
