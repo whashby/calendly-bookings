@@ -173,7 +173,8 @@ final class CB_Admin_Ajax {
     }
 
     public static function create_walkin(): void {
-        parse_str(json_decode($_POST['data']), $data);
+        //wp_send_json_success(['message' => 'Walk-in created']);
+        parse_str($_POST['data'], $data);
 
         foreach ($post as $item) {
             $data[$item['name']] = sanitize_text_field($item['value']);

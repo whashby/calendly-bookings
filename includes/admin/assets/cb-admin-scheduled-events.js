@@ -261,7 +261,8 @@ content = `
         
             $.post(ajaxurl, {
                 action: 'cb_create_walkin',
-                data: JSON.stringify(data)
+                //data: JSON.stringify(data)
+                data: data.serializeArray()
             }, function(response) {
                 if (response.success) {
                     alert('Walk-in created successfully');
