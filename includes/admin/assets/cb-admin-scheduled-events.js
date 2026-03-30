@@ -440,7 +440,7 @@ content = `
 
             // Populate dates
             Object.keys(grouped).forEach(date => {
-                $date.append(`<option value="${date}.toISOString()">${date}</option>`);
+                $date.append(`<option value="${date}">${date}</option>`);
             });
 
             // Auto-select earliest date
@@ -462,11 +462,14 @@ content = `
 
     // When date changes, update times (same as frontend.js)
     $(document).on('change', '#followup_date', function () {
-        const selectedDate = $(this).find('option:selected').val();
-        const startIso = selectedDate.toISOString();
+        const selectedDateStr = $(this).find('option:selected').val();
         const uuid = $('#followup_session').data('uuid');
 
-        if (!uuid || !selectedDate) return;
+        if (!uuid || !selectedDateStr) return;
+
+        // Parse the selected date string into a Date object
+        const selectedDateObj = new Date(selectedDateStr);
+        const startIso = selectedDateObj.toISOString().split('T')[0]; // just the YYYY-MM-DD part
 
         fetch(`/wp-json/calendly-bookings/v1/event-availability?uuid=${uuid}&start_iso=${startIso}`, {
             credentials: 'same-origin'
@@ -475,15 +478,21 @@ content = `
         .then(response => {
             if (!response.success || !response.data) return;
 
+            // Filter slots that match the selected date
             const slots = response.data.filter(slot =>
-                slot.start_time.startsWith(selectedDate)
+                slot.start_time.startsWith(startIso)
             );
 
             const $time = $('#followup_time');
             $time.empty();
 
             slots.forEach(slot => {
-                const time = new Date(slot.start_time).toTimeString().slice(0, 5);
+                const dateObj = new Date(slot.start_time);
+                const time = dateObj.toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
                 $time.append(`<option value="${slot.start_time}">${time}</option>`);
             });
         });
