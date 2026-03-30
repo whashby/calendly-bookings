@@ -468,7 +468,7 @@ content = `
         if (!uuid || !selectedDate) return;
 
         const startIso = selectedDate.toISOString();
-
+alert(startIso);
         fetch(`/wp-json/calendly-bookings/v1/event-availability?uuid=${uuid}&start_iso=${startIso}`, {
             credentials: 'same-origin'
         })
