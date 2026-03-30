@@ -255,8 +255,7 @@ content = `
             data.push({ name: 'followup_time', value: followup_time });
 
 
-            console.log(data);
-        
+
             if (!confirm("Are you sure you want to create this walk-in?")) return;
         
             $.post(ajaxurl, {
@@ -441,7 +440,7 @@ content = `
 
             // Populate dates
             Object.keys(grouped).forEach(date => {
-                $date.append(`<option value="${date}">${date}</option>`);
+                $date.append(`<option value="${date.toISOString()}">${date}</option>`);
             });
 
             // Auto-select earliest date
@@ -463,13 +462,12 @@ content = `
 
     // When date changes, update times (same as frontend.js)
     $(document).on('change', '#followup_date', function () {
-        const selectedDate = $(this).val();
+        const selectedDate = $(this).find('option:selected').val();
+        const startIso = selectedDate.toISOString();
         const uuid = $('#followup_session').data('uuid');
 
         if (!uuid || !selectedDate) return;
 
-        const startIso = selectedDate.toISOString();
-alert(startIso);
         fetch(`/wp-json/calendly-bookings/v1/event-availability?uuid=${uuid}&start_iso=${startIso}`, {
             credentials: 'same-origin'
         })
