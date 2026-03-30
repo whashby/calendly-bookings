@@ -260,8 +260,8 @@ content = `
         
             $.post(ajaxurl, {
                 action: 'cb_create_walkin',
-                //data: JSON.stringify(data)
-                data: data.serializeArray()
+                data: JSON.stringify(data)
+                //data: data.serializeArray()
             }, function(response) {
                 if (response.success) {
                     alert('Walk-in created successfully');
@@ -463,7 +463,7 @@ content = `
     // When date changes, update times (same as frontend.js)
     $(document).on('change', '#followup_date', function () {
         const selectedDateStr = $(this).find('option:selected').val();
-        const uuid = $('#followup_session').data('uuid');
+        const uuid = $('#followup_session').find('option:selected').data('uuid');
 
         if (!uuid || !selectedDateStr) return;
 
@@ -484,7 +484,9 @@ content = `
             );
 
             const $time = $('#followup_time');
+            $('#next-available-slot').text(""); 
             $time.empty();
+            $time.append(`<option>Select a time</option>`);
 
             slots.forEach(slot => {
                 const dateObj = new Date(slot.start_time);

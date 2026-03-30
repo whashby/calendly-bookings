@@ -173,26 +173,36 @@ final class CB_Admin_Ajax {
     }
 
     public static function create_walkin(): void {
-        //wp_send_json_success(['message' => 'Walk-in created']);
-        parse_str($_POST['data'], $data);
+        // Decode JSON payload into array of name/value pairs
+        $decoded = json_decode(stripslashes($_POST['data']), true);
 
-        foreach ($post as $item) {
-            $data[$item['name']] = sanitize_text_field($item['value']);
+        $data = [];
+        if (is_array($decoded)) {
+            foreach ($decoded as $item) {
+                if (isset($item['name'], $item['value'])) {
+                    // Handle nested arrays (like notes) separately
+                    if (is_array($item['value'])) {
+                        $data[$item['name']] = array_map('sanitize_text_field', $item['value']);
+                    } else {
+                        $data[$item['name']] = sanitize_text_field($item['value']);
+                    }
+                }
+            }
         }
 
-        $name  = sanitize_text_field($data['firstname']) . ' ' . sanitize_text_field($data['lastname']);
-        $firstname = sanitize_text_field($data['firstname']);
+        // Now safely access values
+        $name  = $data['firstname'] . ' ' . $data['lastname'];
+        $firstname = $data['firstname'];
         $email = sanitize_email($data['email']);
-        $initial_session_id = sanitize_text_field($data['initial_session_id']);
-        $initial_session_uuid = sanitize_text_field($data['initial_session_uuid']);
-        $initial_session = sanitize_text_field($data['initial_session']);
+        $initial_session_id = $data['initial_session_id'];
+        $initial_session_uuid = $data['initial_session_uuid'];
+        $initial_session = $data['initial_session'] ?? '';
         $start_time = CB_Timezone_Converter::to_iso_time($data['start_time']);
         $notes = wp_json_encode($data['notes'] ?? []);
-        $location = sanitize_text_field($data['location']);
-        $followup_session = sanitize_text_field($data['followup_session']);
-        $followup_date = sanitize_text_field($data['followup_date']);
-        $followup_time = sanitize_text_field($data['followup_time']);
-
+        $location = $data['location'];
+        $followup_session = $data['followup_session'] ?? '';
+        $followup_date = $data['followup_date'];
+        $followup_time = $data['followup_time'];
 
         // 1. Create new WP user
         $user_id = wp_create_user($email, wp_generate_password(), $email);
