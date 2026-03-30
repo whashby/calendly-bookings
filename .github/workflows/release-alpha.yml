@@ -53,7 +53,7 @@ jobs:
           new_version="$major.$minor.$patch"
           echo "$new_version" > ${{ env.VERSION_FILE }}
           sed -i "s/^ \* Version: .*/ * Version: $new_version/" ${{ env.MAIN_FILE }}
-          sed -i "s/^ VERSION = .*/ VERSION = $new_version/" ${{ env.CONSTANTS_FILE }}
+          sed -i "s/^\tVERSION = '.*'/\tVERSION = '$new_version'/" ${{ env.CONSTANTS_FILE }}
           echo "new_version=$new_version" >> $GITHUB_OUTPUT
 
       - name: Commit bumped version

@@ -440,7 +440,7 @@ content = `
 
             // Populate dates
             Object.keys(grouped).forEach(date => {
-                $date.append(`<option value="${date.toISOString()}">${date}</option>`);
+                $date.append(`<option value="${date}.toISOString()">${date}</option>`);
             });
 
             // Auto-select earliest date
