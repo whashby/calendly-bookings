@@ -231,7 +231,7 @@ content = `
             const notes = {
                 discussed: $form.find('textarea[name="notes-discussed"]').val(),
                 guidance: $form.find('textarea[name="notes-guidance"]').val(),
-                follow_up: $form.find('textarea[name="notes-follow_up"]').val()
+                follow_up: $form.find('textarea[name="notes-follow-up"]').val()
             };
             const followupSession = form.find('#followup_session option:selected');
             const followup_date = form.find('#followup_date').val();
@@ -380,13 +380,14 @@ content = `
         // Clear old options
         $('#initial_session, #location, #followup_session').empty();
     
+        $('#followup_session').append(`<option value="">Select a session</option>`);
         // Fetch event types
         $.get('/wp-json/calendly-bookings/v1/event-types', function(response) {
             if (response.success && response.data) {
                 response.data.forEach(type => {
                         $('#initial_session').append(`<option name="${type.name}" value="${type.name}" data-id="${type.id}" data-uuid="${type.uuid}">${type.name}</option>`);
                         if(type.name.toLowerCase() !== "initial meeting") {
-                            $('#followup_session').append(`<option value="${type.uuid}">${type.name}</option>`);
+                            $('#followup_session').append(`<option name="${type.name}" value="${type.name}" data-id="${type.id}" data-uuid="${type.uuid}">${type.name}</option>`);
                         }
                 });
             }
