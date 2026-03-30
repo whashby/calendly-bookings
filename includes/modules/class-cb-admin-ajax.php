@@ -191,22 +191,43 @@ final class CB_Admin_Ajax {
         }
 
         // Now safely access values
-        $name  = $data['firstname'] . ' ' . $data['lastname'];
-        $firstname = $data['firstname'];
-        $email = sanitize_email($data['email']);
-        $initial_session_id = $data['initial_session_id'];
-        $initial_session_uuid = $data['initial_session_uuid'];
+        $firstname = $data['firstname'] ?? '';
+        $lastname = $data['lastname'] ?? '';
+        $name = trim($firstname . ' ' . $lastname) ?? '';
+        $email = sanitize_email($data['email']) ?? '';
         $initial_session = $data['initial_session'] ?? '';
-        $start_time = CB_Timezone_Converter::to_iso_time($data['start_time']);
+        $initial_session_id = $data['initial_session_id'] ?? '';
+        $initial_session_uuid = $data['initial_session_uuid'] ?? '';
+        $start_time = $data['start_time'] ?? '';
         $notes = wp_json_encode($data['notes'] ?? []);
-        $location = $data['location'];
+        $location = $data['location'] ?? '';
         $followup_session = $data['followup_session'] ?? '';
-        $followup_date = $data['followup_date'];
-        $followup_time = $data['followup_time'];
+        $followup_date = $data['followup_date'] ?? '';
+        $followup_time = $data['followup_time'] ?? '';
 
-        // 1. Create new WP user
-        $user_id = wp_create_user($email, wp_generate_password(), $email);
-        wp_update_user(['ID' => $user_id, 'display_name' => $name]);
+        // 1. Create or update WP user
+        $user = get_user_by('email', $email);
+
+        if($user) {
+            // Update display name if user already exists
+            wp_update_user([
+                'ID' => $user->ID,
+                'display_name' => $name,
+                'first_name' => $firstname,
+                'last_name' => $lastname,
+                'role' => 'customer'
+            ]);
+        } else {
+            $user_id = wp_create_user($email, wp_generate_password(), $email);
+            wp_update_user([
+                'ID' => $user_id,
+                'display_name' => $name,
+                'first_name' => $firstname,
+                'last_name' => $lastname,
+                'role' => 'customer'
+            ]);
+        }
+
 
         // 2. Insert completed scheduled event
         global $wpdb;

@@ -244,11 +244,13 @@ content = `
             data.push({ name: 'firstname', value: firstname });
             data.push({ name: 'lastname', value: lastname });
             data.push({ name: 'email', value: email });
+            data.push({ name: 'initial_session', value: initialSession.text() });
             data.push({ name: 'initial_session_id', value: initialSession.data('id') });
             data.push({ name: 'initial_session_uuid', value: initialSession.data('uuid') });
             data.push({ name: 'start_time', value: start_time });
             data.push({ name: 'location', value: location });
             data.push({ name: 'notes', value: notes });
+            data.push({ name: 'followup_session', value: followupSession.text() });
             data.push({ name: 'followup_session_id', value: followupSession.data('id') });
             data.push({ name: 'followup_session_uuid', value: followupSession.data('uuid') });
             data.push({ name: 'followup_date', value: followup_date });
@@ -261,7 +263,6 @@ content = `
             $.post(ajaxurl, {
                 action: 'cb_create_walkin',
                 data: JSON.stringify(data)
-                //data: data.serializeArray()
             }, function(response) {
                 if (response.success) {
                     alert('Walk-in created successfully');
