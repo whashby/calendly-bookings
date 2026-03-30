@@ -445,7 +445,7 @@ content = `
 
             // Auto-select earliest date
             const firstDate = Object.keys(grouped)[0];
-            $date.val(firstDate);
+            $('#next-available-slot').text(firstDate);
 
             // Populate times for earliest date
             grouped[firstDate].forEach(slot => {
