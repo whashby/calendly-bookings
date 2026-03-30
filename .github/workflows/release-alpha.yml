@@ -8,7 +8,7 @@ on:
 env:
   PLUGIN_SLUG: calendly-bookings
   MAIN_FILE: calendly-bookings.php
-  CONSTANTS_FILE: constants.php
+  CONSTANTS_FILE: includes/constants.php
   VERSION_FILE: version.txt
 
 jobs:
