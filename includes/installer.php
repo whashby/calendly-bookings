@@ -117,17 +117,15 @@ final class CB_Installer
         self::migrate_table('cb_meeting_locations', [
             'columns' => [
                 "`id` BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT",
-                "`code` VARCHAR(50) NOT NULL",
+                "`uuid` CHAR(36) NOT NULL",
                 "`name` VARCHAR(255) NOT NULL",
                 "`type` VARCHAR(50) NOT NULL",
-                "`value` TEXT DEFAULT NULL",
-                "`additional_info` TEXT DEFAULT NULL",
                 "`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
                 "`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
             ],
             'keys' => [
                 "PRIMARY KEY (`id`)",
-                "UNIQUE KEY `code` (`code`)",
+                "UNIQUE KEY `uuid` (`uuid`)",
             ],
         ]);
 

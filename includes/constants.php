@@ -16,6 +16,7 @@ final class CB_Constants {
     public const OPT_LAST_SYNC_EVENT_TYPE_AVAILABLE_TIMES = 'cb_last_sync_event_type_available_times';
     public const OPT_LAST_SYNC_SCHEDULED_EVENTS = 'cb_last_sync_scheduled_events';
     public const OPT_LAST_SYNC_SCHEDULED_EVENT_INVITEES = 'cb_last_sync_scheduled_event_invitees';
+    public const OPT_LAST_SYNC_LOCATIONS = 'cb_last_sync_locations';
     public const OPT_WEBHOOK_SECRET = 'cb_webhook_secret';
     public const OPT_WEBHOOK_URL = 'cb_webhook_url';
 
