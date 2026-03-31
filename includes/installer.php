@@ -120,8 +120,8 @@ final class CB_Installer
                 "`uuid` CHAR(36) NOT NULL",
                 "`name` VARCHAR(255) NOT NULL",
                 "`type` VARCHAR(50) NOT NULL",
-                "`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
-                "`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+                "`created_ts` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+                "`updated_ts` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
             ],
             'keys' => [
                 "PRIMARY KEY (`id`)",

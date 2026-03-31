@@ -227,7 +227,7 @@ content = `
             const email = form.find('input[name="email"]').val();
             const initialSession = form.find('#initial_session option:selected');
             const start_time = form.find('#initial_date').val()+'T'+ form.find('#initial_time').val()+':00Z';
-            const location = form.find('#location').val();
+            const location = form.find('#location option:selected');
             const notes = {
                 discussed: form.find('textarea[name="notes-discussed"]').val(),
                 guidance: form.find('textarea[name="notes-guidance"]').val(),
@@ -248,7 +248,7 @@ content = `
             data.push({ name: 'initial_session_id', value: initialSession.data('id') });
             data.push({ name: 'initial_session_uuid', value: initialSession.data('uuid') });
             data.push({ name: 'start_time', value: start_time });
-            data.push({ name: 'location', value: location });
+            data.push({ name: 'location', value: location.data('id') });
             data.push({ name: 'notes', value: notes });
             data.push({ name: 'followup_session', value: followupSession.text() });
             data.push({ name: 'followup_session_id', value: followupSession.data('id') });
@@ -382,6 +382,8 @@ content = `
         $('#initial_session, #location, #followup_session').empty();
     
         $('#followup_session').append(`<option value="">Select a session</option>`);
+        $('#location').append(`<option value="">Select a location</option>`);
+        
         // Fetch event types
         $.get('/wp-json/calendly-bookings/v1/event-types', function(response) {
             if (response.success && response.data) {
@@ -398,7 +400,7 @@ content = `
         $.get('/wp-json/calendly-bookings/v1/scheduled-events/locations', function(response) {
             if (response.success && response.data) {
                 response.data.forEach(loc => {
-                    $('#location').append(`<option value="${loc.id}">${loc.name}</option>`);
+                    $('#location').append(`<option value="${loc.uuid}" data-id="${loc.id}">${loc.name}</option>`);
                 });
             }
         });
@@ -530,9 +532,9 @@ content = `
 			}
 		}
     });
-    
 
-    
+
+
     function canEdit(start_time, status)  {
         // Parse start_time into a Date object
         const eventDate = new Date(start_time);
@@ -542,8 +544,8 @@ content = `
         // Check if event is less than 2 weeks old
         return ((now - eventDate) <= twoWeeksMs && status === 'active')?true:false;
     }
-    
-    
+
+
     /**
     * Reschedule / Cancel (Calendly iframe)
     * TODO: redirect through API endpoint

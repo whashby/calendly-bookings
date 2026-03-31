@@ -6,6 +6,9 @@ if (!defined('ABSPATH')) exit;
 
 final class CB_Admin_Ajax {
 
+    /**
+     * Initialize AJAX handlers for admin actions.
+     */
     public static function init(): void {
 
         // Inline edit: single row update
@@ -110,7 +113,9 @@ final class CB_Admin_Ajax {
         wp_send_json_success(['results' => $results]);
     }
     
-    
+    /**
+     * Handle adding/updating admin notes for a scheduled event
+     */
     public static function add_admin_notes(): void {
         $uuid  = sanitize_text_field($_POST['uuid'] ?? '');
         $notes= (array) $_POST['notes'] ?? [];
@@ -143,6 +148,9 @@ final class CB_Admin_Ajax {
         wp_send_json_success(['results' => $results]);
     }
 
+    /**
+     * Handle various maintenance actions triggered from the admin interface
+     */
     public static function maintenance_action(): void {
         $action = sanitize_text_field($_POST['subaction'] ?? '');
 
@@ -172,6 +180,9 @@ final class CB_Admin_Ajax {
         wp_send_json_success(['message' => 'Action completed', 'result' => $result]);
     }
 
+    /**
+     * Handle walk-in creation from admin interface
+     */
     public static function create_walkin(): void {
         // Decode JSON payload into array of name/value pairs
         $decoded = json_decode(stripslashes($_POST['data']), true);
@@ -248,97 +259,80 @@ final class CB_Admin_Ajax {
             $end_time = date('Y-m-d\TH:i:s\Z', strtotime($start_time . " +{$duration} minutes"));
         }
 
-        $existing = $wpdb->get_var(
-            $wpdb->prepare(
-                "SELECT * FROM $event_types_table WHERE uuid = %s AND location_id = %s AND start_time = %s AND status = 'completed'",
-                $initial_session_uuid,
-                $location,
-                $start_time
-            )
-        );
-        if ($existing) {
-            $wpdb->update(
-                $event_table,
-            [
-                'uuid'          => $initial_session_uuid,
-                'event_type_id' => $initial_session_id,
-                'location_id'   => $location,
-                'name'          => $initial_session,
-                'start_time'    => $start_time,
-                'end_time'      => $end_time,
-                'status'        => 'completed',
-                'created_ts'    => current_time('mysql'),
-                'notes'         => $notes,
-            ],
-            ['id' => $existing]
-            );
+        // Upsert into scheduled events
+        $wpdb->query($wpdb->prepare(
+            "INSERT INTO $event_table (uuid, event_type_id, location_id, name, start_time, end_time, status, created_ts, notes)
+            VALUES (%s, %d, %s, %s, %s, %s, %s, NOW(), %s)
+            ON DUPLICATE KEY UPDATE
+            event_type_id = VALUES(event_type_id),
+            location_id   = VALUES(location_id),
+            name          = VALUES(name),
+            start_time    = VALUES(start_time),
+            end_time      = VALUES(end_time),
+            status        = VALUES(status),
+            notes         = VALUES(notes),
+            updated_ts    = NOW()",
+            $initial_session_uuid,
+            $initial_session_id,
+            $location,
+            $initial_session,
+            $start_time,
+            $end_time,
+            'completed',
+            $notes
+        ));
 
-            $wpdb->update($invitee_table, [
-                'scheduled_event_uuid' => $initial_session_uuid,
-                'name'                 => $name,
-                'email'        => $email,
-            ], [
-                'scheduled_event_uuid' => $existing['uuid'],
-                'email' => $email
-            ]);
-        }
-        else {
-            $wpdb->insert($event_table, [
-                'uuid'          => $initial_session_uuid,
-                'event_type_id' => $initial_session_id,
-                'location_id'   => $location,
-                'name'          => $initial_session,
-                'start_time'    => $start_time,
-                'end_time'      => $end_time,
-                'status'        => 'completed',
-                'created_ts'    => current_time('mysql'),
-                'notes'         => $notes,
-            ]);
+        // Upsert into invitees
+        $wpdb->query($wpdb->prepare(
+            "INSERT INTO $invitee_table (scheduled_event_uuid, uuid, name, email, created_ts, updated_ts)
+            VALUES (%s, %s, %s, %s, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE
+            name  = VALUES(name),
+            email = VALUES(email),
+            updated_ts = NOW()",
+            $initial_session_uuid,
+            wp_generate_uuid4(),
+            $name,
+            $email
+        ));
 
-            $wpdb->insert($invitee_table, [
-                'scheduled_event_uuid' => $initial_session_uuid,
-                'uuid'                 => wp_generate_uuid4(),
-                'name'                 => $name,
-                'email'                => $email,
-            ]);
+        // 3. Create WooCommerce order
+        $order = wc_create_order();
+        $order->add_product(wc_get_product_by_event_type($initial_session));
+        $order->set_customer_id($user_id);
+        $order->set_payment_method('walkin');
+        $order->set_payment_method_title('Walk-in Payment');
+        $order->payment_complete();
 
-            // 3. Create WooCommerce order
-            $order = wc_create_order();
-            $order->add_product(wc_get_product_by_event_type($initial_session));
-            $order->set_customer_id($user_id);
-            $order->set_payment_method('walkin');
-            $order->set_payment_method_title('Walk-in Payment');
-            $order->payment_complete();
+        $order_id = $order->get_id();
+        $wpdb->update($event_table, ['order_id' => $order_id]);
 
-            $order_id = $order->get_id();
-            $wpdb->update($event_table, ['order_id' => $order_id]);
+        // 4. Send follow-up email
+        $reset_link = wp_lostpassword_url();
 
-            // 4. Send follow-up email
-            $reset_link = wp_lostpassword_url();
+        $product     = wc_get_product_by_event_type($followup_session);
+        $product_url = $product ? get_permalink($product->get_id()) : site_url('/shop');
 
-            $product     = wc_get_product_by_event_type($followup_session);
-            $product_url = $product ? get_permalink($product->get_id()) : site_url('/shop');
+        // Build dataset and encrypt
+        $dataset = json_encode([
+            'session' => $followup_session,
+            'date'    => $followup_date,
+            'time'    => $followup_time,
+        ]);
+        $encrypted = CB_Encryption::encrypt($dataset);
 
-            // Build dataset and encrypt
-            $dataset = json_encode([
-                'session' => $followup_session,
-                'date'    => $followup_date,
-                'time'    => $followup_time,
-            ]);
-            $encrypted = CB_Encryption::encrypt($dataset);
+        // Append encrypted token
+        $followup_url = add_query_arg(['token' => urlencode($encrypted)], $product_url);
 
-            // Append encrypted token
-            $followup_url = add_query_arg(['token' => urlencode($encrypted)], $product_url);
+        $body = "Dear {$firstname},\n\n" .
+                "It was wonderful to meet you and I'm delighted that you would like to continue.\n\n" .
+                "Recommended Follow-up: {$followup_session} on {$followup_date} at {$followup_time}\n" .
+                "Password reset link: {$reset_link}\n" .
+                "Follow-up booking: {$followup_url}\n\n" .
+                "Looking forward to the continued journey.\n\nRegards,\nMichael A. Clarke";
 
-            $body = "Dear {$firstname},\n\n" .
-                    "It was wonderful to meet you and I'm delighted that you would like to continue.\n\n" .
-                    "Recommended Follow-up: {$followup_session} on {$followup_date} at {$followup_time}\n" .
-                    "Password reset link: {$reset_link}\n" .
-                    "Follow-up booking: {$followup_url}\n\n" .
-                    "Looking forward to the continued journey.\n\nRegards,\nMichael A. Clarke";
-
-            wp_mail($email, 'Follow-up Session Invitation', $body);
-        }
+        wp_mail($email, 'Follow-up Session Invitation', $body);
+    
 
         wp_send_json_success(['message' => 'Walk-in created']);
     }
