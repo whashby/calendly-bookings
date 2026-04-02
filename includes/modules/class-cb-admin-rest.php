@@ -7,10 +7,16 @@ if (!defined('ABSPATH')) exit;
 
 final class CB_Admin_Rest {
 
+    /**
+     * Initialize REST API routes for admin functionalities.
+     */
     public static function init(): void {
         add_action('rest_api_init', [__CLASS__, 'register_routes']);
     }
 
+    /**
+    * Register REST API routes for managing scheduled events and related data.
+    */
     public static function register_routes(): void {
         $ns = 'calendly-bookings/v1';
 
@@ -91,36 +97,32 @@ final class CB_Admin_Rest {
 			'callback' => [__CLASS__, 'rest_wc_create_product'],
 			'permission_callback' => [__CLASS__, 'can_manage'],
             'args'=>[
-				'uuid' => [
+				'event_uuid' => [
 					'required' => true, 
 					'type' => 'string'
 				]
 			],
-        ]);        
+        ]);
 
 
     }
 
+    /**
+     * Simple permission check for managing options. Adjust as needed for finer-grained control.
+     */
     public static function can_manage(): bool {
         return current_user_can('manage_options');
     }
 
-
     /**
      * Callback for /locations endpoint
+     * Returns a list of all available locations for scheduling events.
      */
     public static function cb_get_locations(WP_REST_Request $request) {
-    // Example: fetch from DB or config
-    $locations = [
-        [ 'id' => '2', 'name' => "Skeete's Road Jackmans, St. Michael" ],
-        [ 'id' => '1', 'name' => "Online (Zoom)" ],
-    ];
-
-    return [
-        'success' => true,
-        'data'    => $locations,
-    ];
-}
+        // Example: fetch from DB or config
+        $locations = CB_Scheduled_Events::instance()->get_locations();
+        return $locations ?: ['success' => false, self::error('No locations found', 404)];
+    }
 
     /**
      * Fetch a single scheduled event by UUID.
@@ -186,9 +188,13 @@ final class CB_Admin_Rest {
         return ['success' => true];
     }
 
+    /**
+     * REST callback to create a WooCommerce product linked to a Calendly event.
+     * Expects 'event_uuid' in the POST body.
+     */
     public static function rest_wc_create_product( \WP_REST_Request $req ): \WP_REST_Response {
         global $wpdb;
-        $uuid  = sanitize_text_field( $req->get_param( 'uuid' ) );
+        $uuid  = sanitize_text_field( $req->get_param( 'event_uuid' ) );
         $table = $wpdb->prefix . 'cb_event_types';
 
         // Get event
@@ -275,6 +281,10 @@ final class CB_Admin_Rest {
         ], 200 );
     }
 
+    /**
+     * REST callback to link an existing WooCommerce product to a Calendly event.
+     * Expects 'uuid' and 'product_id' in the POST body.
+     */
 	public static function rest_wc_link(\WP_REST_Request $req): \WP_REST_Response {
 		global $wpdb;
 		$uuid       = sanitize_text_field($req->get_param('uuid'));
@@ -321,6 +331,7 @@ final class CB_Admin_Rest {
 		return new \WP_REST_Response(['success' => true, 'message' => 'Linked successfully.', 'product_id' => $product_id], 200);
 	}
 
+    /* Helper method to standardize error responses */
 	private static function error(string $message, int $status = 400) {
         return new \WP_Error('cb_rest_error', $message, ['status' => $status]);
     }

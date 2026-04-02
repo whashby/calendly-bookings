@@ -4,6 +4,7 @@
 namespace Calendly_Bookings\Modules;
 
 class CB_Audit_Log {
+
   public static function rest_fetch(\WP_REST_Request $request) {
     global $wpdb;
     $table = $wpdb->prefix . 'cb_audit_log';
@@ -78,7 +79,7 @@ class CB_Audit_Log {
       'data'    => ['html' => $html]
     ]);
   }
-	
+
 
     /**
      * Write an audit log entry.

@@ -1,47 +1,52 @@
 <?php
-//includes/utils/class-cb-encryption.php
 namespace Calendly_Bookings\Utils;
 
 if (!defined('ABSPATH')) exit;
 
 final class CB_Encryption {
-    private static $method = 'AES-256-CBC';
     private static $key;
     private static $iv;
+    private const OPTION_KEY = 'cb_encryption_key';
+    private const OPTION_IV  = 'cb_encryption_iv';
+    private const CIPHER     = 'AES-256-CBC';
 
     /**
-     * Initialize encryption keys.
-     * Generates and stores them in the options table if not already set.
+     * Initialize keys from options or generate new ones.
      */
-    public static function init(): void {
-        // Try to load existing key/iv from options
-        $key = get_option('cb_encryption_key');
-        $iv  = get_option('cb_encryption_iv');
+    public static function init() {
+        self::$key = get_option(self::OPTION_KEY);
+        self::$iv  = get_option(self::OPTION_IV);
 
-        // If not found, generate new ones
-        if (!$key || !$iv) {
-            $key = base64_encode(openssl_random_pseudo_bytes(32)); // 256-bit key
-            $iv  = base64_encode(openssl_random_pseudo_bytes(16)); // 128-bit IV
+        if (empty(self::$key) || empty(self::$iv)) {
+            // Generate secure random key and IV
+            self::$key = base64_encode(openssl_random_pseudo_bytes(32)); // 256-bit key
+            self::$iv  = base64_encode(openssl_random_pseudo_bytes(openssl_cipher_iv_length(self::CIPHER)));
 
-            // Persist them in the options table
-            update_option('cb_encryption_key', $key, false);
-            update_option('cb_encryption_iv', $iv, false);
+            // Persist in WordPress options
+            update_option(self::OPTION_KEY, self::$key, false);
+            update_option(self::OPTION_IV, self::$iv, false);
         }
 
-        // Assign to static properties
-        self::$key = base64_decode($key);
-        self::$iv  = base64_decode($iv);
+        // Decode for use
+        self::$key = base64_decode(self::$key);
+        self::$iv  = base64_decode(self::$iv);
     }
 
-    public static function encrypt(string $plaintext): string {
-        self::init(); // ensure keys are loaded
-        $ciphertext = openssl_encrypt($plaintext, self::$method, self::$key, 0, self::$iv);
-        return base64_encode($ciphertext);
+    /**
+     * Encrypt a string.
+     */
+    public static function encrypt(string $data): string {
+        self::init();
+        $encrypted = openssl_encrypt($data, self::CIPHER, self::$key, OPENSSL_RAW_DATA, self::$iv);
+        return base64_encode($encrypted);
     }
 
-    public static function decrypt(string $ciphertext): string {
-        self::init(); // ensure keys are loaded
-        $decoded = base64_decode($ciphertext);
-        return openssl_decrypt($decoded, self::$method, self::$key, 0, self::$iv);
+    /**
+     * Decrypt a string.
+     */
+    public static function decrypt(string $encrypted): string {
+        self::init();
+        $decoded = base64_decode($encrypted);
+        return openssl_decrypt($decoded, self::CIPHER, self::$key, OPENSSL_RAW_DATA, self::$iv);
     }
 }

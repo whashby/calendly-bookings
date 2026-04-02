@@ -1,6 +1,8 @@
 <?php
 // includes/installer.php
 namespace Calendly_Bookings;
+use Calendly_Bookings\Utils\CB_Encryption;
+use Calendly_Bookings\Modules\CB_Audit_Log;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -23,6 +25,10 @@ final class CB_Installer
     {
         self::create_roles();
         self::run(true);
+        CB_Audit_Log::log('Plugin activated and installer run', 'installer', 'activate');
+        require_once plugin_dir_path(__FILE__) . '/utils/class-cb-encryption.php';
+        CB_Encryption::init();
+        CB_Audit_Log::log('Encryption keys initialized', 'installer', 'activate');
     }
 
     /**
@@ -118,17 +124,15 @@ final class CB_Installer
         self::migrate_table('cb_meeting_locations', [
             'columns' => [
                 "`id` BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT",
-                "`code` VARCHAR(50) NOT NULL",
+                "`uuid` CHAR(36) NOT NULL",
                 "`name` VARCHAR(255) NOT NULL",
                 "`type` VARCHAR(50) NOT NULL",
-                "`value` TEXT DEFAULT NULL",
-                "`additional_info` TEXT DEFAULT NULL",
-                "`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
-                "`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+                "`created_ts` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+                "`updated_ts` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
             ],
             'keys' => [
                 "PRIMARY KEY (`id`)",
-                "UNIQUE KEY `code` (`code`)",
+                "UNIQUE KEY `uuid` (`uuid`)",
             ],
         ]);
 

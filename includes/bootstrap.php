@@ -2,6 +2,9 @@
 // includes/bootstrap.php
 namespace Calendly_Bookings;
 
+use Calendly_Bookings\Modules\CB_Audit_Log;
+use Calendly_Bookings\Modules\CB_API;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -25,18 +28,19 @@ add_filter('cron_schedules', function ($schedules) {
 });
 
 require_once __DIR__ . '/modules/class-cb-plugin.php';
+require_once __DIR__ . '/utils/class-cb-timezone-converter.php';
+require_once __DIR__ . '/utils/class-cb-encryption.php';
 require_once __DIR__ . '/modules/class-cb-shortcodes.php';
 require_once __DIR__ . '/modules/class-cb-dashboard.php';
 require_once __DIR__ . '/modules/class-cb-account-dashboard.php';
 require_once __DIR__ . '/modules/class-cb-dashboard-rest.php';
 require_once __DIR__ . '/modules/class-cb-maintenance.php';
 require_once __DIR__ . '/modules/class-cb-scheduled-events.php';
-require_once __DIR__ . '/modules/class-cb-logger.php';
 require_once __DIR__ . '/modules/class-cb-audit-log.php';
 require_once __DIR__ . '/modules/class-cb-api.php';
+require_once __DIR__ . '/modules/class-cb-api-proxy.php';
 require_once __DIR__ . '/modules/class-cb-wc-sync.php';
 require_once __DIR__ . '/modules/class-cb-webhooks.php';
-require_once __DIR__ . '/modules/class-cb-api-proxy.php';
 require_once __DIR__ . '/modules/class-cb-frontend.php';
 require_once __DIR__ . '/modules/class-cb-frontend-rest.php';
 require_once __DIR__ . '/modules/class-cb-admin.php';
@@ -54,8 +58,8 @@ add_action('plugins_loaded', function () {
     Modules\CB_Webhooks::init();
     Modules\CB_Dashboard::init();
     Modules\CB_Dashboard_REST::init();
-    Modules\CB_Logger::init();
     Modules\CB_WC_Sync::init();
+    Modules\CB_API::init();
     Modules\CB_API_Proxy::init();
     Modules\CB_Frontend::init();
     Modules\CB_Frontend_Rest::init();
@@ -73,10 +77,8 @@ add_action('plugins_loaded', function () {
      * Cron callback: sync scheduled events every 5 minutes.
      */
     add_action('cb_sync_scheduled_events_cron', function () {
-        $last_sync = get_option('cb_last_sync_all', null);
-
-        Modules\CB_API::sync_scheduled_events(null, $last_sync);
-
+        CB_API::instance()->sync();
+        update_option('cb_last_sync', current_time('mysql'));
         update_option('cb_last_sync_all', current_time('mysql'));
     });
 });

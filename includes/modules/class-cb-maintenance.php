@@ -42,7 +42,7 @@ class CB_Maintenance {
                     str_replace('_transient_', '_site_transient_', $like)
                 ));
                 foreach ($rows as $opt) {
-                    if (delete_site_option($opt)) $deleted['transients']++;
+                    if (delete_site_option($opt)) {$deleted['transients']++;}
                 }
             }
         }

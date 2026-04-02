@@ -27,7 +27,6 @@ final class CB_Webhooks {
 
 		$sig = $headers['calendly-webhook-signature'][0] ?? ($headers['x-calendly-signature'][0] ?? '');
 		if (!$secret || !self::verify_signature($body, $sig, $secret)) {
-			CB_Logger::log('webhook_reject', ['topic' => 'unknown', 'error' => 'invalid_signature']);
 			CB_Audit_Log::log('reject', 'webhook', '', ['error' => 'invalid_signature'], 'warning');
 			return new \WP_REST_Response(['ok' => false], 401);
 		}
@@ -36,13 +35,11 @@ final class CB_Webhooks {
 		$event = (string) ($json['event'] ?? '');
 		$payload = $json['payload'] ?? [];
 
-		CB_Logger::log('webhook_received', ['topic' => $event]);
 		CB_Audit_Log::log('received', 'webhook', $event, $payload, 'info');
 
 		switch ($event) {
 			case 'invitee.created':
 				$email = $payload['invitee']['email'] ?? ''; 
-				CB_Logger::log('invitee_created', ['email' => $email]); 
 				CB_Audit_Log::log('invitee_created', 'webhook', $email, $payload, 'info'); 
 				
 				// --- Custom: trace order number from answer_1 --- 
@@ -63,37 +60,31 @@ final class CB_Webhooks {
 						['%s'] 
 					); 
 					
-					CB_Logger::log('order_linked', ['start_time' => $start_time, 'order_id' => $order_number]); 
 					CB_Audit_Log::log('order_linked', 'webhook', $start_time, ['order_id' => $order_number], 'info'); 
 				}
 				break;
 
 			case 'invitee.canceled':
 				$email = $payload['invitee']['email'] ?? '';
-				CB_Logger::log('invitee_canceled', ['email' => $email]);
 				CB_Audit_Log::log('invitee_canceled', 'webhook', $email, $payload, 'info');
 				break;
 
 			case 'event_type.created':
 				$uuid = $payload['event_type']['uuid'] ?? '';
-				CB_Logger::log('event_type_created', ['uuid' => $uuid]);
 				CB_Audit_Log::log('event_type_created', 'webhook', $uuid, $payload, 'info');
 				break;
 
 			case 'event_type.updated':
 				$uuid = $payload['event_type']['uuid'] ?? '';
-				CB_Logger::log('event_type_updated', ['uuid' => $uuid]);
 				CB_Audit_Log::log('event_type_updated', 'webhook', $uuid, $payload, 'info');
 				break;
 
 			case 'event_type.deleted':
 				$uuid = $payload['event_type']['uuid'] ?? '';
-				CB_Logger::log('event_type_deleted', ['uuid' => $uuid]);
 				CB_Audit_Log::log('event_type_deleted', 'webhook', $uuid, $payload, 'info');
 				break;
 
 			default:
-				CB_Logger::log('webhook_unhandled', ['topic' => $event]);
 				CB_Audit_Log::log('unhandled', 'webhook', $event, $payload, 'warning');
 				break;
 		}

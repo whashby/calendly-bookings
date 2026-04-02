@@ -19,11 +19,18 @@ final class CB_Scheduled_Events {
     private $table_event_types;
     private $table_invitees;
     private $table_locations;
- 
+
+    /**
+     * Initialize the singleton instance.
+     */
     public static function init(): void {
         self::instance();
     }
 
+    /**
+     * Singleton instance accessor.
+     * @return self
+     */
     public static function instance(): self {
         if (self::$instance === null) {
             self::$instance = new self();
@@ -31,14 +38,17 @@ final class CB_Scheduled_Events {
         return self::$instance;
     }
 
+    /**
+     * Private constructor to enforce singleton pattern.
+     */
     private function __construct() {
         global $wpdb;
         $this->db    = $wpdb;
         $this->table_scheduled_events = $wpdb->prefix . 'cb_scheduled_events';
-    	$this->table_event_types = $wpdb->prefix . 'cb_event_types';
+        $this->table_event_types = $wpdb->prefix . 'cb_event_types';
         $this->table_invitees = $wpdb->prefix . 'cb_scheduled_event_invitees';
         $this->table_locations= $wpdb->prefix . 'cb_meeting_locations';
- 
+
     }
 
     /**
@@ -131,8 +141,13 @@ final class CB_Scheduled_Events {
         return $this->db->get_results($this->db->prepare($sql, $params), ARRAY_A) ?: [];
     }
     
-    
-        public function get_invitee_history($invitee) {
+    /**
+     * Get invitee history by name.
+     *
+     * @param string $invitee Invitee name or identifier
+     * @return array|null
+     */
+    public function get_invitee_history($invitee) {
         global $wpdb;
         
         $inv = implode(' ', explode('_', $invitee));
@@ -221,6 +236,8 @@ final class CB_Scheduled_Events {
 	
     /**
      * Count events for pagination.
+     * @param array $filters
+     * @return int
      */
     public function count_events(array $filters = []): int {
 
@@ -257,78 +274,79 @@ final class CB_Scheduled_Events {
 	 * @param array $data
 	 * @return bool
 	 */
-public function update_event(string $uuid, array $data): bool {
-    if (!$uuid || empty($data)) {
-        return false;
-    }
+    public function update_event(string $uuid, array $data): bool {
+        if (!$uuid || empty($data)) {
+            return false;
+        }
 
-    $allowed_event = ['notes','completed','status','location','order_id'];
-    $allowed_invitee = ['invitee_name','invitee_payload'];
+        $allowed_event = ['notes','completed','status','location','order_id'];
+        $allowed_invitee = ['invitee_name','invitee_payload'];
 
-    $update_event = [];
-    $update_invitee = [];
+        $update_event = [];
+        $update_invitee = [];
 
-    foreach ($allowed_event as $field) {
-        if (array_key_exists($field, $data)) {
-            $value = $data[$field];
-            // If notes is JSON, keep as-is; otherwise sanitize text
-            if ($field === 'notes' && is_string($value)) {
-                $update_event[$field] = $value;
-            } else {
-                $update_event[$field] = is_string($value)
+        foreach ($allowed_event as $field) {
+            if (array_key_exists($field, $data)) {
+                $value = $data[$field];
+                // If notes is JSON, keep as-is; otherwise sanitize text
+                if ($field === 'notes' && is_string($value)) {
+                    $update_event[$field] = $value;
+                } else {
+                    $update_event[$field] = is_string($value)
+                        ? sanitize_text_field($value)
+                        : $value;
+                }
+            }
+        }
+
+        foreach ($allowed_invitee as $field) {
+            if (array_key_exists($field, $data)) {
+                $value = $data[$field];
+                $update_invitee[$field] = is_string($value)
                     ? sanitize_text_field($value)
                     : $value;
             }
         }
-    }
 
-    foreach ($allowed_invitee as $field) {
-        if (array_key_exists($field, $data)) {
-            $value = $data[$field];
-            $update_invitee[$field] = is_string($value)
-                ? sanitize_text_field($value)
-                : $value;
+        if (isset($update_event['completed'])) {
+            $update_event['completed'] = $update_event['completed'] ? 1 : 0;
         }
-    }
 
-    if (isset($update_event['completed'])) {
-        $update_event['completed'] = $update_event['completed'] ? 1 : 0;
-    }
+        $success = true;
 
-    $success = true;
-
-    if (!empty($update_event)) {
-        $updated = $this->db->update(
-            $this->table_scheduled_events,
-            $update_event,
-            ['uuid' => sanitize_text_field($uuid)],
-            null,
-            ['%s']
-        );
-        if ($updated === false) {
-            $success = false;
+        if (!empty($update_event)) {
+            $updated = $this->db->update(
+                $this->table_scheduled_events,
+                $update_event,
+                ['uuid' => sanitize_text_field($uuid)],
+                null,
+                ['%s']
+            );
+            if ($updated === false) {
+                $success = false;
+            }
         }
-    }
 
-    if (!empty($update_invitee)) {
-        $updated_inv = $this->db->update(
-            $this->table_invitees,
-            $update_invitee,
-            ['scheduled_event_uuid' => sanitize_text_field($uuid)],
-            null,
-            ['%s']
-        );
-        if ($updated_inv === false) {
-            $success = false;
+        if (!empty($update_invitee)) {
+            $updated_inv = $this->db->update(
+                $this->table_invitees,
+                $update_invitee,
+                ['scheduled_event_uuid' => sanitize_text_field($uuid)],
+                null,
+                ['%s']
+            );
+            if ($updated_inv === false) {
+                $success = false;
+            }
         }
+
+        return $success;
     }
-
-    return $success;
-}
-
 
     /**
      * Fetch a single event by UUID.
+     * @param string $uuid
+     * @return array|null
      */
 	public function get_event(string $uuid): ?array {
 		$sql = "
@@ -358,4 +376,15 @@ public function update_event(string $uuid, array $data): bool {
 		$row = $this->db->get_row($this->db->prepare($sql, $uuid), ARRAY_A);
 		return $row ? ['success' => true, 'data' => $row] : null;
 	}
+
+    /**
+     * Get all available locations.
+     *
+     * @return array|null
+     */
+    public function get_locations(): array {
+        $sql = "SELECT id, uuid, type, name FROM {$this->table_locations} ORDER BY name ASC";
+        $data = $this->db->get_results($sql, ARRAY_A);
+        return $data ? ['success' => true, 'data' => $data] : null;
+    }
 }

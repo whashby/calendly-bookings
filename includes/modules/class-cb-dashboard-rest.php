@@ -334,11 +334,11 @@ final class CB_Dashboard_REST {
 				'last_sync' => get_option(CB_Constants::OPT_LAST_SYNC),
 				'details'	=> $result,
 			];
-		} catch (\Exception $e) { 
-			return [ 
-				'status' => 'error', 
-				'message' => 'Sync failed: ' . $e->getMessage(), 
-			]; 
+		} catch (\Exception $e) {
+			return [
+				'status' => 'error',
+				'message' => 'Sync failed: ' . $e->getMessage(),
+			];
 		}
 	}
 
