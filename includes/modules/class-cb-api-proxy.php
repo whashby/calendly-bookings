@@ -30,19 +30,19 @@ final class CB_API_Proxy {
 		]);
 		
 		register_rest_route($ns, '/meeting-details', [
-		    'methods' => 'GET',
-		    'callback' => [__CLASS__, 'get_meeting_details'],
-		    'permission_callback' => '__return_true',
-		    'args' => [
-		        'event_uuid' => [
-		            'required' => true,
-		            'sanitize_callback' => 'sanitize_text_field',
-		        ],
-		        'invitee_uuid' => [ 
-		            'required' => true, 
-		            'sanitize_callback' => 'sanitize_text_field', 
-		        ], 
-		    ],
+            'methods' => 'GET',
+            'callback' => [__CLASS__, 'get_meeting_details'],
+            'permission_callback' => '__return_true',
+            'args' => [
+                'event_uuid' => [
+                    'required' => true,
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
+                'invitee_uuid' => [
+                    'required' => true,
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
+            ],
 		]);
 		
         // Sync
@@ -125,46 +125,10 @@ final class CB_API_Proxy {
             'args'=>['token'=>['required'=>false],'uuid'=>['required'=>false]],
         ]);
 
- /*       // Clear API cache
-        register_rest_route($ns, '/maintenance/clear-cache', [
-            'methods'             => 'POST',
-            'permission_callback' => [__CLASS__, 'can_manage'],
-            'callback'            => [__CLASS__, 'rest_clear_api_cache'],
-            'args'                => [
-                'scope' => [
-                    'type'    => 'string',
-                    'enum'    => ['all', 'event_types', 'availability', 'events'],
-                    'default' => 'all',
-                ],
-            ],
-        ]);
-
-        // Rebuild product links
-        register_rest_route($ns, '/maintenance/rebuild-links', [
-            'methods'             => \WP_REST_Server::CREATABLE,
-            'permission_callback' => [__CLASS__, 'can_manage'],
-            'callback'            => [__CLASS__, 'rest_rebuild_product_links'],
-            'args'                => [
-                'uuids' => [
-                    'type'    => 'array',
-                    'items'   => ['type' => 'string'],
-                    'required'=> false,
-                ],
-                'limit' => [
-                    'type'    => 'integer',
-                    'minimum' => 1,
-                    'maximum' => 500,
-                    'default' => 200,
-                ],
-                'dry_run' => [
-                    'type'    => 'boolean',
-                    'default' => false,
-                ],
-                'force' => [
-                    'type'    => 'boolean',
-                    'default' => false,
-                ],
-            ],
+        register_rest_route($ns, '/sync-master', [
+            'methods' => 'POST',
+            'callback' => [__CLASS__, 'sync_master'],
+            'permission_callback' => '__return_true',
         ]);
 	
         register_rest_route($ns, '/schedule', [
@@ -356,202 +320,80 @@ public static function rest_save_settings(\WP_REST_Request $r): \WP_REST_Respons
     ], 200);
 }
 
-/*
-public static function rest_clear_api_cache(\WP_REST_Request $r): \WP_REST_Response {
-    global $wpdb;
-
-    $scope = $r->get_param('scope') ?: 'all';
-    $deleted = [
-        'transients' => 0,
-        'options'    => 0,
-    ];
-    $errors = [];
-
-    $option_keys = [
-        CB_Constants::OPT_LAST_SYNC,
-    ];
-
-    $prefixes = [];
-    if ($scope === 'all' || $scope === 'event_types')   $prefixes[] = '_transient_cb_api_event_types';
-    if ($scope === 'all' || $scope === 'availability')  $prefixes[] = '_transient_cb_api_availability';
-    if ($scope === 'all' || $scope === 'events')        $prefixes[] = '_transient_cb_api_events';
-
-    foreach ($prefixes as $prefix) {
-        $like = esc_sql($prefix . '%');
-        $rows = $wpdb->get_col("SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE '{$like}'");
-        foreach ($rows as $opt) {
-            if (delete_option($opt)) $deleted['transients']++;
-        }
-        if (is_multisite()) {
-            $rows = $wpdb->get_col($wpdb->prepare(
-                "SELECT meta_key FROM {$wpdb->sitemeta} WHERE meta_key LIKE %s",
-                str_replace('_transient_', '_site_transient_', $like)
-            ));
-            foreach ($rows as $opt) {
-                if (delete_site_option($opt)) $deleted['transients']++;
-            }
-        }
-    }
-
-    foreach ($option_keys as $key) {
-        if (get_option($key, null) !== null) {
-            if (delete_option($key)) $deleted['options']++;
-        }
-    }
-
-    CB_Audit_Log::log('clear_cache', 'maintenance', '', [
-        'scope'   => $scope,
-        'deleted' => $deleted,
-        'errors'  => $errors
-    ], empty($errors) ? 'info' : 'error');
-
-    return new \WP_REST_Response([
-        'success'  => empty($errors),
-        'scope'    => $scope,
-        'deleted'  => $deleted,
-        'errors'   => $errors,
-    ], 200);
-}
-
-public static function rest_rebuild_product_links(\WP_REST_Request $r): \WP_REST_Response {
-    global $wpdb;
-
-    $uuids   = (array) ($r->get_param('uuids') ?: []);
-    $limit   = (int) ($r->get_param('limit') ?: 200);
-    $dry_run = (bool) $r->get_param('dry_run');
-    $force   = (bool) $r->get_param('force');
-
-    $table = $wpdb->prefix . 'cb_event_types';
-
-    if (!empty($uuids)) {
-        $placeholders = implode(',', array_fill(0, count($uuids), '%s'));
-        $sql = $wpdb->prepare("SELECT uuid, name, duration, uri, scheduling_url, product_id, meta FROM {$table} WHERE uuid IN ($placeholders) ORDER BY name ASC", ...$uuids);
-    } else {
-        $sql = $wpdb->prepare("SELECT uuid, name, duration, uri, scheduling_url, product_id, meta FROM {$table} ORDER BY name ASC LIMIT %d", $limit);
-    }
-
-    $rows = $wpdb->get_results($sql, ARRAY_A);
-
-    $stats = [
-        'processed' => 0,
-        'linked'    => 0,
-        'relinked'  => 0,
-        'skipped'   => 0,
-        'errors'    => [],
-        'details'   => [],
-    ];
-
-    if (!$rows) {
-        CB_Audit_Log::log('rebuild_links', 'maintenance', '', ['reason' => 'no event types found'], 'warning');
-        return new \WP_REST_Response([
-            'success'  => true,
-            'message'  => 'No event types found to process.',
-            'stats'    => $stats,
-        ], 200);
-    }
-
-    if (!class_exists('\Calendly_Bookings\Modules\CB_WC_Sync')) {
-        CB_Audit_Log::log('rebuild_links_failed', 'maintenance', '', ['reason' => 'CB_WC_Sync not available'], 'error');
-        return new \WP_REST_Response([
-            'success' => false,
-            'message' => 'CB_WC_Sync not available.',
-        ], 200);
-    }
-
-    $api = new CB_API();
-
-    foreach ($rows as $row) {
-        $stats['processed']++;
-        $uuid       = $row['uuid'];
-        $product_id = (int) ($row['product_id'] ?: 0);
-
-        $needs_link = $force || !$product_id || ($product_id && get_post_type($product_id) !== 'product');
-        if (!$needs_link && get_post_status($product_id) !== 'publish') {
-            $needs_link = true;
-        }
-
-        if (!$needs_link) {
-            $stats['skipped']++;
-            $stats['details'][] = ['uuid' => $uuid, 'action' => 'skip', 'reason' => 'already_linked'];
-            CB_Audit_Log::log('rebuild_links_skip', 'event', $uuid, ['reason' => 'already_linked'], 'info');
-            continue;
-        }
-
-        $event_type = [];
-        if (!empty($row['meta'])) {
-            $decoded = json_decode($row['meta'], true);
-            if (is_array($decoded)) $event_type = $decoded;
-        }
-
-        if (empty($event_type)) {
-            $et = $api->get_event_types($uuid, true);
-            if (!empty($et['error']) || empty($et['collection'][0])) {
-                $stats['errors'][] = ['uuid' => $uuid, 'error' => $et['error'] ?? 'event_type_not_found'];
-                $stats['details'][] = ['uuid' => $uuid, 'action' => 'error', 'reason' => ($et['error'] ?? 'event_type_not_found')];
-                CB_Audit_Log::log('rebuild_links_error', 'event', $uuid, ['error' => $et['error'] ?? 'event_type_not_found'], 'error');
-                continue;
-            }
-            $event_type = $et['collection'][0];
-        }
-
-        if ($dry_run) {
-            $stats['details'][] = ['uuid' => $uuid, 'action' => 'dry_run', 'would_link' => true, 'existing_product_id' => $product_id ?: null];
-            CB_Audit_Log::log('rebuild_links_dry_run', 'event', $uuid, ['existing_product_id' => $product_id ?: null], 'info');
-            continue;
-        }
-
-        try {
-            $new_pid = CB_WC_Sync::sync_from_event_type($event_type, $product_id ?: null);
-
-            if (is_wp_error($new_pid)) {
-                $stats['errors'][] = ['uuid' => $uuid, 'error' => $new_pid->get_error_message()];
-                $stats['details'][] = ['uuid' => $uuid, 'action' => 'error', 'reason' => $new_pid->get_error_message()];
-                CB_Audit_Log::log('rebuild_links_error', 'event', $uuid, ['error' => $new_pid->get_error_message()], 'error');
-                continue;
-            }
-
-            if ($new_pid && $new_pid !== $product_id) {
-                $wpdb->update($table, ['product_id' => (int) $new_pid], ['uuid' => $uuid], ['%d'], ['%s']);
-            }
-
-            if ($product_id && $new_pid === $product_id) {
-                $stats['relinked']++;
-                $stats['details'][] = ['uuid' => $uuid, 'action' => 'relinked', 'product_id' => $new_pid];
-                CB_Audit_Log::log('rebuild_links_relinked', 'event', $uuid, ['product_id' => $new_pid], 'info');
+        if ($uuid !== '' && !preg_match('/^[0-9a-fA-F-]{36}$/', $uuid)) {
+            if (preg_match('/([0-9a-fA-F-]{36})$/', $uuid, $m)) {
+                $uuid = $m[1];
             } else {
-                $stats['linked']++;
-                $stats['details'][] = ['uuid' => $uuid, 'action' => 'linked', 'product_id' => $new_pid];
-                CB_Audit_Log::log('rebuild_links_linked', 'event', $uuid, ['product_id' => $new_pid], 'info');
+                CB_Audit_Log::log('invalid_uuid', 'settings', '', ['uuid' => $uuid], 'error');
+                return new \WP_REST_Response([
+                    'success' => false,
+                    'message' => __('Invalid UUID format.', 'calendly-bookings')
+                ], 200);
             }
-        } catch (\Throwable $e) {
-            $stats['errors'][] = ['uuid' => $uuid, 'error' => $e->getMessage()];
-            $stats['details'][] = ['uuid' => $uuid, 'action' => 'error', 'reason' => $e->getMessage()];
-            CB_Audit_Log::log('rebuild_links_exception', 'event', $uuid, ['error' => $e->getMessage()], 'error');
         }
+
+        $api = new \Calendly_Bookings\Modules\CB_API($token ?: null, $uuid ?: null);
+
+        // Test scheduled events connectivity
+        $test = $api->manual_connection_test();
+        if (empty($test)) {
+            CB_Audit_Log::log('connection_failed', 'scheduled_events', '', ['reason' => 'no events'], 'error');
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => __('Connection test failed: no events returned.', 'calendly-bookings')
+            ], 200);
+        }
+
+        if ($token !== '') update_option(CB_Constants::OPT_API_TOKEN, $token, false);
+        if ($uuid !== '')  update_option(CB_Constants::OPT_USER_UUID, $uuid, false);
+
+        // Sync upcoming events
+        $sync = $api->sync_scheduled_events(100,false);
+
+        CB_Audit_Log::log('settings_saved', 'scheduled_events', '', [
+            'token_set' => !empty($token),
+            'uuid_set'  => !empty($uuid),
+            'synced'    => count($sync)
+        ], 'info');
+
+        $message = sprintf(
+            __('Settings saved and connection successful. Synced %d upcoming events.', 'calendly-bookings'),
+            count($sync)
+        );
+
+        return new \WP_REST_Response([
+            'success' => true,
+            'message' => $message,
+            'sync'    => $sync
+        ], 200);
     }
 
-    $message = sprintf(
-        'Processed %d event type(s): linked %d, relinked %d, skipped %d, errors %d.',
-        $stats['processed'], $stats['linked'], $stats['relinked'], $stats['skipped'], count($stats['errors'])
-    );
 
-    CB_Audit_Log::log('rebuild_links_summary', 'maintenance', '', [
-        'processed' => $stats['processed'],
-        'linked'    => $stats['linked'],
-        'relinked'  => $stats['relinked'],
-        'skipped'   => $stats['skipped'],
-        'errors'    => count($stats['errors'])
-    ], empty($stats['errors']) ? 'info' : 'error');
+    public static function rest_debug_event_types(\WP_REST_Request $req): \WP_REST_Response {
+        $uuid = $req->get_param('uuid');
+        $api  = new CB_API();
 
-    return new \WP_REST_Response([
-        'success' => empty($stats['errors']),
-        'message' => $message,
-        'stats'   => $stats,
-    ], 200);
-}
+        // Fetch without persisting, so you see raw API data
+        $result = $api->get_event_types($uuid ?: null, false);
 
-*/
+        CB_Audit_Log::log('debug_event_types', 'event', $uuid ?: 'ALL', [
+            'success' => empty($result['error']),
+            'error'   => $result['error'] ?? null
+        ], empty($result['error']) ? 'info' : 'warning');
 
+        return new \WP_REST_Response([
+            'success' => empty($result['error']),
+            'uuid'    => $uuid ?: 'ALL',
+            'data'    => $result
+        ], 200);
+    }
+
+    public static function get_meeting_details(\WP_REST_Request $request): \WP_REST_Response {
+        $event_uuid   = sanitize_text_field($request->get_param('event_uuid'));
+        $invitee_uuid = sanitize_text_field($request->get_param('invitee_uuid'));
+
+        $api     = new CB_API();
+        $results = $api->get_event_details($event_uuid, $invitee_uuid);
 
 public static function rest_debug_event_types(\WP_REST_Request $req): \WP_REST_Response {
     $uuid = $req->get_param('uuid');
@@ -592,27 +434,6 @@ public static function rest_debug_event_types(\WP_REST_Request $req): \WP_REST_R
             $scheduling_url = $url;
             break;
         }
-    }
-
-    if (!$scheduling_url || !$iso_time) {
-        CB_Audit_Log::log('schedule_meeting_failed', 'order', (string) $order_id, ['reason' => 'missing scheduling URL or meeting time'], 'error');
-        return new \WP_REST_Response(['error' => 'Missing scheduling URL or meeting time'], 400);
-    }
-
-    $api = new CB_API();
-    $prefill = [
-        'name'  => $order->get_formatted_billing_full_name(),
-        'email' => $order->get_billing_email(),
-        'a1'    => $order->get_order_number(),
-        'a2'    => $notes,
-    ];
-
-    $res = $api->schedule_meeting($scheduling_url, $iso_time, $prefill);
-
-    if (!empty($res['error'])) {
-        CB_Audit_Log::log('schedule_meeting_failed', 'order', (string) $order_id, ['error' => $res['error']], 'error');
-        return new \WP_REST_Response($res, 400);
-    }
 
     // Persist scheduled event UUID in order meta
     if (!empty($res['resource']['uuid'])) {
@@ -642,23 +463,32 @@ public static function get_meeting_details(\WP_REST_Request $request): \WP_REST_
     if (isset($results['error']) && $results['error'] === true) {
         CB_Audit_Log::log('get_meeting_details_failed', 'event', $event_uuid, [
             'invitee_uuid' => $invitee_uuid,
-            'error'        => $results['message'] ?? 'Unknown error'
-        ], 'error');
+            'success'      => true
+        ], 'info');
 
-        return new \WP_REST_Response([
-            'error'   => true,
-            'message' => $results['message'] ?? 'Unknown error',
-            'status'  => $results['status'] ?? 500,
-        ], $results['status'] ?? 500);
+        return new \WP_REST_Response($results, 200);
     }
 
-    CB_Audit_Log::log('get_meeting_details', 'event', $event_uuid, [
-        'invitee_uuid' => $invitee_uuid,
-        'success'      => true
-    ], 'info');
 
-    return new \WP_REST_Response($results, 200);
-}
+	public static function sync_master(): array {
+		try {
+			$api = new CB_API();
+			$result = $api->sync();
 
+			update_option(CB_Constants::OPT_LAST_SYNC, gmdate('Y-m-d H:i:s'));
+
+			return [
+				'status' 	=> 'success',
+				'message'   => 'Sync completed',
+				'last_sync' => get_option(CB_Constants::OPT_LAST_SYNC),
+				'details'	=> $result,
+			];
+		} catch (\Exception $e) {
+			return [
+				'status' => 'error',
+				'message' => 'Sync failed: ' . $e->getMessage(),
+			];
+		}
+	}
 
 }

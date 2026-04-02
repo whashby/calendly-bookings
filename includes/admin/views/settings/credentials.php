@@ -12,9 +12,7 @@
       <label for="cb_api_key"><?php esc_html_e('API Key', 'calendly-bookings'); ?></label>
     </th>
     <td>
-      <input type="password" id="cb_api_key" name="cb_api_key"
-             value="" placeholder="••••••••"
-             autocomplete="new-password" class="regular-text" />
+      <input type="password" id="cb_api_key" name="cb_api_key" value="" placeholder="••••••••" autocomplete="new-password" class="regular-text" />
       <p class="description"><?php esc_html_e('Enter your Calendly API key.', 'calendly-bookings'); ?></p>
     </td>
   </tr>
@@ -27,6 +25,16 @@
              value="" placeholder="••••••••"
              autocomplete="off" class="regular-text" />
       <p class="description"><?php esc_html_e('Enter your Calendly user UUID.', 'calendly-bookings'); ?></p>
+    </td>
+  </tr>
+  <tr>
+    <th scope="row">
+      <label for="cb_license_key"><?php esc_html_e('License Key', 'calendly-bookings'); ?></label>
+    </th>
+    <td>
+      <input type="text" id="cb_license_key" name="cb_license_key"
+             value="" autocomplete="off" class="regular-text" />
+      <p class="description"><?php esc_html_e('Enter your license key to enable private GitHub updates.', 'calendly-bookings'); ?></p>
     </td>
   </tr>
 </table>

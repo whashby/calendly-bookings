@@ -198,7 +198,7 @@ function renderHealthWidget() {
     const container = document.getElementById('cb-widget-health');
     container.innerHTML = '';
     container.innerHTML += `<div>Calendly API: ${data.calendly_api}</div>`;
-    container.innerHTML += `<div>Last Sync: ${data.last_sync}</div>`;
+    container.innerHTML += `<div>Last Sync: ${formatLocalTime(data.last_sync)}</div>`;
     container.innerHTML += `<div>Errors (24h): ${data.errors24h}</div>`;
     container.innerHTML += `<button id="cb-sync-btn" class="button">Sync Now</button>`; 
 
@@ -207,18 +207,18 @@ function renderHealthWidget() {
         .then(syncData => { 
           // show success popup instead of alert
           wp.data.dispatch('core/notices').createNotice(
-			  syncData.message, 
-			  'Sync completed successfully',
-			  { type: 'snackbar' }
-		  );
+          syncData.message, 
+          'Sync completed successfully',
+          { type: 'snackbar' }
+        );
           // Refresh widget after sync
           renderHealthWidget(); 
         }).catch(error => { 
-		  wp.data.dispatch('core/notices').createNotice(
-			  'error', 'Failed to load data: ' + error.message, 
-			  { type: 'snackbar' } 
-		  );
-	  }); 
+          wp.data.dispatch('core/notices').createNotice(
+            'error', 'Failed to load data: ' + error.message, 
+            { type: 'snackbar' } 
+          );
+        }); 
 	});
   });
 }

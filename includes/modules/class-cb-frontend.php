@@ -106,6 +106,12 @@ final class CB_Frontend {
         }
     }
 
+    /*
+        public static function output_before_cart() {
+            echo self::render_calendly_form();
+        }
+    */
+    
     public static function output_before_cart() {
         CB_Audit_Log::log('method_entry', 'frontend', __METHOD__, [], 'info');
         try {
@@ -115,6 +121,9 @@ final class CB_Frontend {
             CB_Audit_Log::log('error', 'frontend', __METHOD__, ['error' => $e->getMessage()], 'error');
         }
     }
+
+
+
 
     public static function render_calendly_form($atts = []) {
         CB_Audit_Log::log('method_entry', 'frontend', __METHOD__, ['atts' => $atts], 'info');
@@ -175,4 +184,35 @@ final class CB_Frontend {
             CB_Audit_Log::log('error', 'frontend', __METHOD__, ['error' => $e->getMessage()], 'error');
         }
     }
+
+    
+    
+    /**
+     * Determine if the current product belongs to the "meeting" or "meetings" category.
+     *
+     * @param WC_Product|int|null $product Product object, product ID, or null (defaults to current global post).
+     * @return bool
+     */
+    public static function is_meeting_product($product = null): bool {
+        // If no product passed, try to get from global $post
+        if ($product === null) {
+            global $post;
+            if (!$post || $post->post_type !== 'product') {
+                return false;
+            }
+            $product = wc_get_product($post->ID);
+        } elseif (is_numeric($product)) {
+            $product = wc_get_product($product);
+        }
+        if (!$product instanceof WC_Product) {
+            return false;
+        }
+    
+        // Get product category slugs
+        $categories = wp_get_post_terms($product->get_id(), 'product_cat', ['fields' => 'slugs']);
+    
+        // Return true if "meeting" or "meetings" is present
+        return in_array('meeting', $categories, true) || in_array('meetings', $categories, true);
+    }
+
 }

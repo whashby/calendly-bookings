@@ -150,7 +150,7 @@ final class CB_Admin_Ajax {
         $results[$uuid] = [
             'success' => (bool) $updated,
             'error'   => $updated ? null : 'Update failed'
-        ];        
+        ];
     
         wp_send_json_success(['results' => $results]);
     }

@@ -11,7 +11,7 @@
  * License:     GPL-2.0+
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: calendly-bookings
- * Update URI: https://github.com/whashby/calendly-bookings
+ * Update URI: https://github.com/whashby/calendly-bookings/releases
  * GitHub Plugin URI: https://github.com/whashby/calendly-bookings
  * GitHub Release Asset: true
  */
@@ -24,69 +24,15 @@ define('CB_LICENSE_OPTION', 'calendly_bookings_license_key');
 define('CB_TOKEN_OPTION', 'calendly_bookings_encrypted_token');
 define('CB_WORKER_ENDPOINT', 'https://calendly-bookings.whashby.workers.dev');
 
+// CRITICAL: Define LICENSE_SECRET for token decryption
+// This must be 16, 24, or 32 bytes for AES-256-GCM
+// Generated securely: 64 hex chars = 32 bytes
+define('LICENSE_SECRET', 'c8fc61bb0e76f66dee738ba7b9e5484164070f239cafde0d3108706f1ad217fe');
+
 require_once __DIR__ . '/includes/constants.php';
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/updater.php';
 require_once ABSPATH . 'wp-admin/includes/plugin.php';
-
-/**
- * Register license key setting on Settings → General.
- */
-add_action('admin_init', function () {
-    register_setting(
-        'general',
-        CB_LICENSE_OPTION,
-        [
-            'type'              => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-            'default'           => '',
-        ]
-    );
-
-    add_settings_field(
-        CB_LICENSE_OPTION,
-        __('Calendly Bookings License Key', 'calendly-bookings'),
-        function () {
-            $value = get_option(CB_LICENSE_OPTION, '');
-            ?>
-            <input type="text" id="<?php echo esc_attr(CB_LICENSE_OPTION); ?>" name="<?php echo esc_attr(CB_LICENSE_OPTION); ?>" value="<?php echo esc_attr($value); ?>" class="regular-text"/>
-            <p class="description">
-                <?php esc_html_e('Enter your license key to enable private GitHub updates.', 'calendly-bookings'); ?>
-            </p>
-            <?php
-        },
-        'general'
-    );
-});
-
-/**
- * Show a small notice with a "Refresh token" link when a license is present.
- */
-add_action('admin_notices', function () {
-    if (!current_user_can('manage_options')) {
-        return;
-    }
-
-    $license = get_option(CB_LICENSE_OPTION);
-    if (empty($license)) {
-        return;
-    }
-
-    $url = wp_nonce_url(
-        admin_url('admin-post.php?action=cb_refresh_github_token'),
-        'cb_refresh_github_token'
-    );
-    ?>
-    <div class="notice notice-info">
-        <p>
-            <?php esc_html_e('Calendly Bookings license is set.', 'calendly-bookings'); ?>
-            <a href="<?php echo esc_url($url); ?>">
-                <?php esc_html_e('Refresh GitHub token now', 'calendly-bookings'); ?>
-            </a>
-        </p>
-    </div>
-    <?php
-});
 
 /**
  * Handle manual token refresh.
@@ -111,8 +57,7 @@ add_action('admin_post_cb_refresh_github_token', function () {
  * GitHub updater bootstrap.
  */
 add_action('init', function () {
-    global $cb_github_updater;
-    $cb_github_updater = new CB_GitHub_Updater(__FILE__);
+    CB_GitHub_Updater::instance(__FILE__);
 });
 
 /**

@@ -11,7 +11,7 @@ env:
   PLUGIN_MAIN_FILE: calendly-bookings.php
   CONSTANTS_FILE: includes/constants.php
   VERSION_FILE: version.txt
-  DEPLOY_TO_WPORG: 'true'
+  DEPLOY_TO_WPORG: 'false'
 
 jobs:
   bump_version:
@@ -157,23 +157,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  deploy_wordpress_org:
-    name: Deploy to WordPress.org
-    needs: build_and_release
-    runs-on: ubuntu-latest
-    if: ${{ github.env.DEPLOY_TO_WPORG == 'true' }}
+#  deploy_wordpress_org:
+#    name: Deploy to WordPress.org
+#    needs: build_and_release
+#    runs-on: ubuntu-latest
+#    if: ${{ github.env.DEPLOY_TO_WPORG == 'true' }}
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v4
+#        with:
+#          fetch-depth: 0
 
-      - name: Deploy to WordPress.org
-        uses: 10up/action-wordpress-plugin-deploy@v2
-        with:
-          slug: ${{ env.PLUGIN_SLUG }}
-          version: ${{ needs.update_sources.outputs.new_version }}
-        env:
-          SVN_USERNAME: ${{ secrets.WPORG_SVN_USERNAME }}
-          SVN_PASSWORD: ${{ secrets.WPORG_SVN_PASSWORD }}
+#      - name: Deploy to WordPress.org
+#        uses: 10up/action-wordpress-plugin-deploy@v2
+#        with:
+#          slug: ${{ env.PLUGIN_SLUG }}
+#          version: ${{ needs.update_sources.outputs.new_version }}
+#        env:
+#         SVN_USERNAME: ${{ secrets.WPORG_SVN_USERNAME }}
+#         SVN_PASSWORD: ${{ secrets.WPORG_SVN_PASSWORD }}
