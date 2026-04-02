@@ -1,7 +1,10 @@
 <?php
 // includes/utils/functions.php
 namespace Calendly_Bookings\Utils;
+
 use Calendly_Bookings\Modules\CB_API;
+use Calendly_Bookings\Modules\CB_Audit_Log;
+use Calendly_Bookings\CB_Constants;
 
 if (!defined('ABSPATH')) {exit;}
 
@@ -78,9 +81,9 @@ add_action('template_redirect', function() {
 });
 
 add_filter('template_include', function($template) {
-    $page_id = get_option( \Calendly_Bookings\CB_Installer::get_page_option() ); 
+    $page_id = get_option( \Calendly_Bookings\CB_Installer::get_page_option() );
     
-    // If this is the meeting-scheduled page, force plugin template 
+    // If this is the meeting-scheduled page, force plugin template
     if ($page_id && is_page($page_id)) {
         return plugin_dir_path(__FILE__) . '../templates/meeting-scheduled.php';
     }
@@ -103,7 +106,7 @@ register_deactivation_hook(__FILE__, function() {
 // Cron callback
 add_action('cb_generate_monthly_report', function() {
     $last_month = date('Y-m', strtotime('last month'));
-    $last_generated = get_option('cb_last_report_month');
+    $last_generated = get_option(CB_Constants::OPT_LAST_REPORT_MONTH);
 
     // Only generate if it's the 1st OR if last month's report hasn't been generated yet
     if (date('j') !== '1' && $last_generated === $last_month) {
@@ -181,4 +184,3 @@ add_action('cb_generate_monthly_report', function() {
     // Mark this month as done
     update_option('cb_last_report_month', $last_month);
 });
-

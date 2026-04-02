@@ -1,8 +1,15 @@
 <?php
-
+/* includes/modules/class-cb-admin-ajax.php
+ * Handles AJAX requests for admin actions like updating scheduled events, adding notes, maintenance tasks, and creating walk-ins.
+ */
 namespace Calendly_Bookings\Modules;
 
-if (!defined('ABSPATH')) exit;
+use Calendly_Bookings\Utils\CB_Audit_Log;
+use Calendly_Bookings\Utils\CB_Encryption;
+use Calendly_Bookings\Utils\CB_Mail;
+use Calendly_Bookings\CB_Scheduled_Events;
+
+if (!defined('ABSPATH')) {exit;}
 
 final class CB_Admin_Ajax {
 
@@ -209,12 +216,14 @@ final class CB_Admin_Ajax {
         $initial_session = $data['initial_session'] ?? '';
         $initial_session_id = $data['initial_session_id'] ?? '';
         $initial_session_uuid = $data['initial_session_uuid'] ?? '';
+        $initial_product_id = $data['initial_session_product_id'] ?? '';
         $start_time = $data['start_time'] ?? '';
         $notes = wp_json_encode($data['notes'] ?? []);
-        $location = $data['location'] ?? '';
+        $location_id = $data['location'] ?? '';
         $followup_session = $data['followup_session'] ?? '';
         $followup_date = $data['followup_date'] ?? '';
         $followup_time = $data['followup_time'] ?? '';
+        $followup_product_id = $data['followup_session_product_id'] ?? '';
 
         // 1. Create or update WP user
         $user = get_user_by('email', $email);
@@ -238,7 +247,6 @@ final class CB_Admin_Ajax {
                 'role' => 'customer'
             ]);
         }
-
 
         // 2. Insert completed scheduled event
         global $wpdb;
@@ -274,13 +282,31 @@ final class CB_Admin_Ajax {
             updated_ts    = NOW()",
             $initial_session_uuid,
             $initial_session_id,
-            $location,
+            $location_id,
             $initial_session,
             $start_time,
             $end_time,
             'completed',
             $notes
         ));
+
+        // Retrieve the record id using the same uuid
+        $event_id = $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT id 
+                FROM {$event_table} 
+                WHERE uuid = %s 
+                AND event_type_id = %d 
+                AND location_id = %s 
+                AND start_time = %s 
+                AND status = %s",
+                $initial_session_uuid,
+                $initial_session_id,
+                $location_id,
+                $start_time,
+                'completed'
+            )
+        );
 
         // Upsert into invitees
         $wpdb->query($wpdb->prepare(
@@ -296,45 +322,103 @@ final class CB_Admin_Ajax {
             $email
         ));
 
-        // 3. Create WooCommerce order
+        // 3. Create Completed WooCommerce order
         $order = wc_create_order();
-        $order->add_product(wc_get_product_by_event_type($initial_session));
-        $order->set_customer_id($user_id);
-        $order->set_payment_method('walkin');
+
+        // Associate order with the user
+        $order->set_customer_id($user->ID);
+
+        // Add product line item
+        $initial_product = wc_get_product($initial_product_id);
+        if ($initial_product) {
+            $order->add_product($initial_product);
+        }
+
+        // Use $user object directly for billing/shipping info
+        $billing_address = [
+            'first_name' => $user->first_name ?? '',
+            'last_name'  => $user->last_name ?? '',
+            'email'      => $user->user_email ?? '',
+        ];
+        $order->set_address($billing_address, 'billing');
+        $order->set_address($billing_address, 'shipping');
+
+        // Finalize order details
+        $order->calculate_totals();
+        $order->set_payment_method('walk-in');
         $order->set_payment_method_title('Walk-in Payment');
-        $order->payment_complete();
+        $order->update_status('completed', 'Order created for walk-in booking', true);
 
+        // Persist order_id back to event record
         $order_id = $order->get_id();
-        $wpdb->update($event_table, ['order_id' => $order_id]);
+        if ($event_id) {
+            $wpdb->update(
+                $event_table,
+                ['order_id' => $order_id],
+                ['id' => $event_id] // precise targeting by primary key
+            );
+        }
 
-        // 4. Send follow-up email
+        // 4. Send follow-up email with booking link
         $reset_link = wp_lostpassword_url();
 
-        $product     = wc_get_product_by_event_type($followup_session);
-        $product_url = $product ? get_permalink($product->get_id()) : site_url('/shop');
+        // Resolve product and URL
+        $followup_product = wc_get_product($followup_product_id);
+        $product_url = $followup_product ? get_permalink($followup_product->get_id()) : wc_get_page_permalink('shop');
+
+        $followup_location_id = '';
+        if(!$followup_session === 'spiritual companionship') {
+            $followup_location_id = 2;
+        }
+
 
         // Build dataset and encrypt
-        $dataset = json_encode([
-            'session' => $followup_session,
-            'date'    => $followup_date,
-            'time'    => $followup_time,
-        ]);
-        $encrypted = CB_Encryption::encrypt($dataset);
+        $dataset = [
+            'firstname' => $firstname,
+            'lastname'  => $lastname,
+            'email'     => $email,
+            'session'   => $followup_session,
+            'location'  => $followup_location_id,
+            'date'      => $followup_date,
+            'time'      => $followup_time,
+        ];
 
-        // Append encrypted token
-        $followup_url = add_query_arg(['token' => urlencode($encrypted)], $product_url);
+        $encryption = new CB_Encryption();
+        $encrypted  = $encryption->encrypt(wp_json_encode($dataset));
 
-        $body = "Dear {$firstname},\n\n" .
-                "It was wonderful to meet you and I'm delighted that you would like to continue.\n\n" .
-                "Recommended Follow-up: {$followup_session} on {$followup_date} at {$followup_time}\n" .
-                "Password reset link: {$reset_link}\n" .
-                "Follow-up booking: {$followup_url}\n\n" .
-                "Looking forward to the continued journey.\n\nRegards,\nMichael A. Clarke";
+        // Append encrypted token to product URL
+        $followup_url = add_query_arg(['token' => rawurlencode($encrypted)], $product_url);
 
-        wp_mail($email, 'Follow-up Session Invitation', $body);
-    
+        // Compose email body
+        $body = sprintf(
+            "Dear %s,\n\n".
+            "It was wonderful to meet you and I am delighted that you would like to continue.\n\n".
+            "Recommended Follow-up: %s on %s at %s\n".
+            "Password reset link: <a href=\"%s\">Reset Password</a>\n".
+            "Follow-up booking: <a href=\"%s\">%s</a>\n\n".
+            "Looking forward to the continued journey.\n\nRegards,\nMichael A. Clarke",
+            $firstname,
+            $followup_session,
+            $followup_date,
+            $followup_time,
+            $reset_link,
+            $followup_url,
+            $product_url
+        );
 
-        wp_send_json_success(['message' => 'Walk-in created']);
+        // Send email
+        //add_filter('wp_mail_from_name', fn() => 'Michael A. Clarke');
+        //add_filter('wp_mail_from', fn() => 'michael@hierlife.com');
+        
+        CB_Mail::send_email($email, 'Follow-up Session Invitation', $body);
+        
+        // Remove filters afterwards to avoid affecting other plugins
+        //remove_filter('wp_mail_from_name', '__return_false');
+        //remove_filter('wp_mail_from', '__return_false');
+
+        // Return JSON success response
+        wp_send_json_success([ 'success' => true, 'message' => 'Walk-in created' ]);
+
     }
 
 }

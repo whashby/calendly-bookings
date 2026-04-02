@@ -5,17 +5,50 @@ namespace Calendly_Bookings\Modules;
 
 use Calendly_Bookings\CB_Constants;
 use Calendly_Bookings\Utils\CB_Timezone_Converter;
+use Calendly_Bookings\Utils\CB_Audit_Log;
 
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) {
+    exit;
+}
 
 final class CB_API {
+
+    /** @var self|null */
+    private static $instance = null;
+
+    /** API base URL */
     private const API_BASE = 'https://api.calendly.com';
+
+    /** Instance properties */
     private string $token;
     private string $user_uuid;
 
+    /* Initialize the module (called on plugins_loaded) */
+    public static function init(): void {
+        CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
+        try {
+            // Nothing to initialize for now.
+            CB_Audit_Log::log('method_exit', 'api', __METHOD__, [], 'info');
+        } catch (\Throwable $e) {
+            CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage()], 'error');
+        }
+    }
+
+    /* Constructor is private to enforce singleton pattern */
     public function __construct(?string $token = null, ?string $user_uuid = null) {
         $this->token     = $token     ?: (string) get_option(CB_Constants::OPT_API_TOKEN, '');
         $this->user_uuid = $user_uuid ?: (string) get_option(CB_Constants::OPT_USER_UUID, '');
+    }
+
+    /**
+     * Singleton instance accessor.
+     * @return self
+     */
+    public static function instance(): self {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
     }
 
     /* HTTP helpers */
@@ -383,7 +416,7 @@ final class CB_API {
         }
     }
 
-    public static function get_event_type_available_times($event_identifier, $start_iso): array {
+    public function get_event_type_available_times($event_identifier, $start_iso): array {
         CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['event_identifier' => $event_identifier, 'start_iso' => $start_iso], 'info');
         try {
             global $wpdb;
@@ -546,7 +579,10 @@ final class CB_API {
         try {
             global $wpdb;
             $table_events   = $wpdb->prefix . 'cb_scheduled_events';
+            $table_types    = $wpdb->prefix . 'cb_event_types';
             $table_invitees = $wpdb->prefix . 'cb_scheduled_event_invitees';
+            $table_locations= $wpdb->prefix . 'cb_meeting_locations';
+
             $count = 0;
 
             foreach ($events as $se) {
@@ -558,21 +594,21 @@ final class CB_API {
                 // Resolve event_type_id
                 $event_type_uuid = basename($se['event_type'] ?? '');
                 $event_type_id = $wpdb->get_var(
-                    $wpdb->prepare("SELECT id FROM {$wpdb->prefix}cb_event_types WHERE uuid=%s", $event_type_uuid)
+                    $wpdb->prepare("SELECT id FROM {$table_types} WHERE uuid=%s", $event_type_uuid)
                 );
 
                 // Resolve location_id
                 $location_id = null;
-                if (!empty($se['location'])) {
-                    $loc = $se['location'];
-                    if ($loc['type'] === 'zoom') {
-                        $location_id = 1;
-                    } elseif ($loc['type'] === 'physical' && stripos($loc['location'] ?? '', 'Skeete') !== false) {
-                        $location_id = 2;
+                $location_ids = $wpdb->get_results("SELECT id, type FROM {$table_locations}", ARRAY_A);
+
+                foreach ($location_ids as $key => $location) {
+                    $loc = $se['location'] ?? [];
+                    if ($loc && $loc['type'] === $location['type']) {
+                        $location_id = $location['id'];
                     }
                 }
 
-                        // Normalize status
+                // Normalize status
                 $status = $se['status'] ?? 'active';
                 $raw_payload_status = null;
 
@@ -655,7 +691,7 @@ final class CB_API {
                     $order_id, // now sourced from invitee payload
                     $event_type_id ?: 0,
                     $location_id,
-                    sanitize_text_field($se['name'] ?? ''),
+                    sanitize_text_field(!$se['name'] == "Initial meeting"? $se['name'] : "Initial Consultation"),
                     gmdate('Y-m-d H:i:s', strtotime($se['start_time'] ?? 'now')),
                     gmdate('Y-m-d H:i:s', strtotime($se['end_time'] ?? 'now')),
                     $status,
@@ -799,12 +835,6 @@ final class CB_API {
                 ];
             }
 
-            /*
-                foreach ($rows as &$row) {
-                    $row['start_time'] = implode('T', explode(' ', $row['start_time'])) . 'Z';
-                }
-            */
-
             // Audit log
             CB_Audit_Log::log('get_scheduled_events', 'scheduled_events', $context, [
                 'filters' => $filters,
@@ -825,56 +855,20 @@ final class CB_API {
         $results = ['upserted' => 0, 'errors' => []];
 
         try {
-            $events = $this->query_scheduled_events($count, $min_start_date);
+            $events = self::query_scheduled_events($count, $min_start_date);
 
             if (empty($events)) {
                 $results['errors'][] = 'No scheduled events returned from Calendly';
             } else {
-                // Normalize status if canceled in payload
-                foreach ($events as &$event) {
-                    if (!empty($event['payload'])) {
-                        $payload = is_array($event['payload']) ? $event['payload'] : json_decode($event['payload'], true);
-                        if (!empty($payload['status']) && ( strtolower($payload['status']) === 'canceled' || str_contains($payload['status'], 'cancel' )) ) {
-                            $event['status'] = 'canceled';
-                        }
-                    }
-                    
-                    if(!empty($event['end_time'])) {
-                        $current_iso = date('c');
-                        if ($current_iso > $event['end_time'] && $event['status'] != 'canceled') {
-                            $event['status'] = 'completed';
-                        }
-                        
-                    }
-                }
-
-                // Upsert into DB
+                $this->normalize_event_statuses($events);
                 $results['upserted'] = $this->set_scheduled_events($events);
             }
 
-            // Update sync state table
-            global $wpdb;
-            $wpdb->replace("{$wpdb->prefix}cb_sync_state", [
-                'domain'       => 'scheduled_events',
-                'cursor'       => null,
-                'last_success' => current_time('mysql'),
-                'last_error'   => null,
-                'error_msg'    => null,
-            ]);
-
+            $this->update_sync_state_success();
             update_option(CB_Constants::OPT_LAST_SYNC_SCHEDULED_EVENTS, current_time('timestamp'));
         } catch (\Throwable $e) {
             $results['errors'][] = $e->getMessage();
-
-            // Record error in sync state table
-            global $wpdb;
-            $wpdb->replace("{$wpdb->prefix}cb_sync_state", [
-                'domain'       => 'scheduled_events',
-                'cursor'       => null,
-                'last_success' => null,
-                'last_error'   => current_time('mysql'),
-                'error_msg'    => $e->getMessage(),
-            ]);
+            $this->update_sync_state_error($e->getMessage());
         }
 
         if (!empty($results['errors'])) {
@@ -997,7 +991,6 @@ final class CB_API {
         ];
     }
 
-
     public function query_locations(): array {
         CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
         try {
@@ -1118,6 +1111,51 @@ final class CB_API {
 
 
 
+
+    private function normalize_event_statuses(array &$events): void {
+        foreach ($events as &$event) {
+            $this->normalize_single_event_status($event);
+        }
+    }
+
+    private function normalize_single_event_status(array &$event): void {
+        if (!empty($event['payload'])) {
+            $payload = is_array($event['payload']) ? $event['payload'] : json_decode($event['payload'], true);
+            if (!empty($payload['status']) && (strtolower($payload['status']) === 'canceled' || str_contains($payload['status'], 'cancel'))) {
+                $event['status'] = 'canceled';
+                return;
+            }
+        }
+
+        if (!empty($event['end_time'])) {
+            $current_iso = date('c');
+            if ($current_iso > $event['end_time'] && $event['status'] !== 'canceled') {
+                $event['status'] = 'completed';
+            }
+        }
+    }
+
+    private function update_sync_state_success(): void {
+        global $wpdb;
+        $wpdb->replace("{$wpdb->prefix}cb_sync_state", [
+            'domain'       => 'scheduled_events',
+            'cursor'       => null,
+            'last_success' => current_time('mysql'),
+            'last_error'   => null,
+            'error_msg'    => null,
+        ]);
+    }
+
+    private function update_sync_state_error(string $error_msg): void {
+        global $wpdb;
+        $wpdb->replace("{$wpdb->prefix}cb_sync_state", [
+            'domain'       => 'scheduled_events',
+            'cursor'       => null,
+            'last_success' => null,
+            'last_error'   => current_time('mysql'),
+            'error_msg'    => $error_msg,
+        ]);
+    }
 
     /** Update cb_scheduled_events.created_ts from payload.created_at */
     public static function update_all_events_created_ts_from_payload(): void {
@@ -1372,9 +1410,13 @@ final class CB_API {
 	}
 
     public function manual_connection_test(): array {
-        if ($this->token === '') return ['success' => false, 'message' => __('No API token found.', 'calendly-bookings')];
+        if ($this->token === '') {
+            return ['success' => false, 'message' => __('No API token found.', 'calendly-bookings')];
+        }
         $res = $this->get('/users/me', [], true, 0);
-        if (!empty($res['error'])) return ['success' => false, 'message' => $res['error']];
+        if (!empty($res['error'])) {
+            return ['success' => false, 'message' => $res['error']];
+        }
         return !empty($res['resource'])
             ? ['success' => true, 'message' => __('Calendly API connection successful.', 'calendly-bookings')]
             : ['success' => false, 'message' => __('Unexpected API response.', 'calendly-bookings')];
@@ -1435,716 +1477,4 @@ final class CB_API {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
-
-    private function sanitize_event_type(array $t): array {
-        return [
-            'uuid'           => basename((string)($t['uri'] ?? '')) ?: (string)($t['uuid'] ?? ''),
-            'name'           => sanitize_text_field($t['name'] ?? ''),
-            'duration'       => isset($t['duration']) ? absint($t['duration']) : 0,
-            'uri'            => esc_url_raw((string)($t['uri'] ?? '')),
-            'scheduling_url' => esc_url_raw((string)($t['scheduling_url'] ?? '')),
-            'meta'           => wp_json_encode($t),
-        ];
-    }
-
-    // Persist a single event type row
-private function upsert_event_type(array $t): int {
-    global $wpdb;
-    $table = $wpdb->prefix . 'cb_event_types';
-    $uuid  = (string) ($t['uuid'] ?? '');
-    if (!$uuid) return 0;
-
-    $wpdb->query($wpdb->prepare(
-        "INSERT INTO $table (uuid, name, duration, slug, uri, scheduling_url, meta, active, created_at, updated_at)
-         VALUES (%s,%s,%d,%s,%s,%s,%s,1,NOW(),NOW())
-         ON DUPLICATE KEY UPDATE
-           name=VALUES(name), duration=VALUES(duration), slug=VALUES(slug),
-           uri=VALUES(uri), scheduling_url=VALUES(scheduling_url), meta=VALUES(meta),
-           active=VALUES(active), updated_at=NOW()",
-        $uuid,
-        sanitize_text_field($t['name'] ?? ''),
-        absint($t['duration'] ?? 0),
-        sanitize_title($t['slug'] ?? ($t['name'] ?? $uuid)),
-        esc_url_raw($t['uri'] ?? ''),
-        esc_url_raw($t['scheduling_url'] ?? ''),
-        wp_json_encode($t)
-    ));
-    return (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM $table WHERE uuid=%s", $uuid));
-}
-
-private function upsert_scheduled_event(array $se, int $event_type_id): int {
-    global $wpdb;
-    $table = $wpdb->prefix . 'cb_scheduled_events';
-    $uuid  = (string) ($se['uuid'] ?? '');
-    if (!$uuid) return 0;
-
-    $wpdb->query($wpdb->prepare(
-        "INSERT INTO $table (uuid, event_type_id, name, start_time, end_time, timezone, status, uri, payload, created_ts, updated_ts)
-         VALUES (%s,%d,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW())
-         ON DUPLICATE KEY UPDATE
-           event_type_id=VALUES(event_type_id), name=VALUES(name),
-           start_time=VALUES(start_time), end_time=VALUES(end_time),
-           timezone=VALUES(timezone), status=VALUES(status),
-           uri=VALUES(uri), payload=VALUES(payload), updated_ts=NOW()",
-        $uuid,
-        $event_type_id,
-        sanitize_text_field($se['name'] ?? ''),
-        gmdate('Y-m-d H:i:s', strtotime($se['start_time'] ?? 'now')),
-        gmdate('Y-m-d H:i:s', strtotime($se['end_time'] ?? 'now')),
-        sanitize_text_field($se['timezone'] ?? ''),
-        sanitize_text_field($se['status'] ?? 'active'),
-        esc_url_raw($se['uri'] ?? ''),
-        wp_json_encode($se)
-    ));
-    return (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM $table WHERE uuid=%s", $uuid));
-}
-
-private function upsert_location(int $event_type_id, array $loc, ?int $scheduled_event_id = null): int {
-    global $wpdb;
-    $table = $wpdb->prefix . 'cb_meeting_locations';
-    $wpdb->insert($table, [
-        'event_type_id'     => $event_type_id,
-        'scheduled_event_id'=> $scheduled_event_id,
-        'type'              => sanitize_text_field($loc['type'] ?? 'custom'),
-        'name'              => sanitize_text_field($loc['name'] ?? ($loc['type'] ?? 'custom')),
-        'value'             => sanitize_textarea_field($loc['value'] ?? ($loc['join_url'] ?? '')),
-        'created_at'        => current_time('mysql'),
-        'updated_at'        => current_time('mysql'),
-    ], ['%d','%d','%s','%s','%s','%s','%s']);
-    return (int) $wpdb->insert_id;
-}
-
-private function upsert_invitee(int $scheduled_event_id, array $inv): int {
-    global $wpdb;
-    $table = $wpdb->prefix . 'cb_invitees';
-    $uuid  = (string) ($inv['uuid'] ?? '');
-    $uri   = (string) ($inv['uri'] ?? '');
-    $email = (string) ($inv['email'] ?? '');
-
-    $wpdb->query($wpdb->prepare(
-        "INSERT INTO $table (scheduled_event_id, uuid, uri, email, name, status, created_at, updated_at)
-         VALUES (%d,%s,%s,%s,%s,%s,NOW(),NOW())
-         ON DUPLICATE KEY UPDATE
-           uri=VALUES(uri), email=VALUES(email), name=VALUES(name),
-           status=VALUES(status), updated_at=NOW()",
-        $scheduled_event_id,
-        $uuid ?: null,
-        $uri ?: null,
-        $email ?: null,
-        sanitize_text_field($inv['name'] ?? ''),
-        sanitize_text_field($inv['status'] ?? 'active')
-    ));
-    return (int) $wpdb->insert_id;
-}
-
-    public function get_event_details(string $event_uuid, string $invitee_uuid): array {
-        // Build the endpoint path
-        $path = sprintf('/scheduled_events/%s/invitees/%s', $event_uuid, $invitee_uuid);
-    
-        // Call the generic get() method
-        return $this->get($path, [], false, 60);
-    }
-
-    /**
-     * Event types:
-     * - When $uuid is null: fetch all pages, persist to DB, return report.
-     * - When $uuid is set: fetch exactly that event type, persist, return the row.
-     * /
-public function get_event_types(string $uuid = null, bool $persist = true): array {
-    global $wpdb;
-
-    // Single event type fetch
-    if ($uuid !== null) {
-        $res = $this->get('/event_types/' . urlencode($uuid), [], false, 60);
-        if (!empty($res['error'])) {
-            return ['error' => $res['error']];
-        }
-
-        $resource = $res['resource'] ?? null;
-        if (!$resource) {
-            return ['error' => 'Not found'];
-        }
-
-        // Fallback: if scheduling_url is missing, pull from DB
-        if (empty($resource['scheduling_url'])) {
-            $db_url = $wpdb->get_var(
-                $wpdb->prepare(
-                    "SELECT scheduling_url FROM {$wpdb->prefix}cb_event_types WHERE uuid=%s",
-                    $uuid
-                )
-            );
-            if ($db_url) {
-                $resource['scheduling_url'] = $db_url;
-            }
-        }
-
-        if ($persist) {
-            $this->upsert_event_type($resource);
-        }
-
-        return ['collection' => [$resource], 'count' => 1];
-    }
-
-    // Multiple event types fetch
-    $all = [];
-    $next_token = null;
-
-    do {
-        $query = ['count' => 100];
-        if ($next_token) {
-            $query['page_token'] = $next_token;
-        }
-
-        $res = $this->get('/event_types', $query, false, 120);
-        if (!empty($res['error'])) {
-            return ['error' => $res['error']];
-        }
-
-        $page = $res['collection'] ?? [];
-        foreach ($page as $t) {
-            // Always use Calendly's UUID directly
-            $uuid = (string)($t['uuid'] ?? '');
-            if (!$uuid) {
-                continue; // skip invalid rows
-            }
-
-            // Fallback: if scheduling_url is missing, pull from DB
-            if (empty($t['scheduling_url'])) {
-                $db_url = $wpdb->get_var(
-                    $wpdb->prepare(
-                        "SELECT scheduling_url FROM {$wpdb->prefix}cb_event_types WHERE uuid=%s",
-                        $uuid
-                    )
-                );
-                if ($db_url) {
-                    $t['scheduling_url'] = $db_url;
-                }
-            }
-
-            $all[] = $t;
-
-            if ($persist) {
-                $this->upsert_event_type($t);
-            }
-        }
-
-        $pagination = $res['pagination'] ?? $res['page'] ?? [];
-        $next_token = $pagination['next_page_token'] ?? ($pagination['next_page'] ?? null);
-    } while (!empty($next_token));
-
-    return ['collection' => $all, 'count' => count($all)];
-}
-*/	
-	
-/*
-public function get_scheduled_events(string $context = 'admin', int $limit = 10): array {
-    global $wpdb;
-
-    $now   = current_time('mysql');
-    $table = $wpdb->prefix . 'cb_scheduled_events';
-
-    $sql    = "SELECT * FROM $table WHERE start_time >= %s";
-    $params = [$now];
-
-    switch ($context) {
-        case 'admin':
-            $sql .= " ORDER BY start_time ASC";
-            CB_Audit_Log::log('fetch', 'scheduled_events', '', ['context' => 'admin']);
-            break;
-
-        case 'dashboard':
-            $sql .= " ORDER BY start_time ASC LIMIT %d";
-            $params[] = $limit;
-            CB_Audit_Log::log('fetch', 'scheduled_events', '', ['context' => 'dashboard', 'limit' => $limit]);
-            break;
-
-        case 'my_account':
-            $user_email = wp_get_current_user()->user_email ?? '';
-            if ($user_email) {
-                $sql = "SELECT e.* 
-                        FROM $table e
-                        INNER JOIN {$wpdb->prefix}cb_invitees i ON i.scheduled_event_id = e.id
-                        WHERE e.start_time >= %s AND i.email = %s
-                        ORDER BY e.start_time ASC";
-                $params[] = $user_email;
-                CB_Audit_Log::log('fetch', 'scheduled_events', '', ['context' => 'my_account', 'user_email' => $user_email]);
-            }
-            break;
-
-        case 'today':
-            $today = date('Y-m-d', current_time('timestamp'));
-            $sql .= " AND DATE(start_time) = %s ORDER BY start_time ASC";
-            $params[] = $today;
-            CB_Audit_Log::log('fetch', 'scheduled_events', '', ['context' => 'today', 'date' => $today]);
-            break;
-    }
-
-    $results = $wpdb->get_results($wpdb->prepare($sql, ...$params), ARRAY_A);
-
-    if ($wpdb->last_error) {
-        CB_Audit_Log::log('db_error', 'scheduled_events', '', ['error' => $wpdb->last_error], 'error');
-    }
-
-    // If no results, trigger sync immediately
-    if (empty($results)) {
-        CB_Audit_Log::log('sync_trigger', 'scheduled_events', '', ['reason' => 'empty query', 'context' => $context], 'warning');
-        $this->sync();
-        $results = $wpdb->get_results($wpdb->prepare($sql, ...$params), ARRAY_A);
-    }
-
-    CB_Audit_Log::log('fetch_complete', 'scheduled_events', '', [
-        'context' => $context,
-        'count'   => count($results),
-    ]);
-
-    return $results ?: [];
-}
-
-	public function get_upcoming_events(int $count = 50, $order = null): array {
-		global $wpdb;
-
-		$events = $this->get('/scheduled_events', [
-			'count'          => $count,
-			'min_start_time' => gmdate('Y-m-d\TH:i:s\Z'),
-			'sort'           => 'start_time:asc',
-		], false, 30);
-
-		if (!is_array($events) || empty($events['collection'])) {
-			return $events;
-		}
-
-		$seenUuids = [];
-
-		foreach ($events['collection'] as $event) {
-			$uuid = $event['uuid'] ?? basename($event['uri'] ?? '');
-			if (!$uuid) {
-				CB_Audit_Log::log('skip', 'scheduled_events', '', ['reason' => 'missing uuid','event'=>$event], 'warning');
-				continue;
-			}
-			$seenUuids[] = $uuid;
-			
-        	$events_meta = $this->get("/scheduled_events/$uuid/invitees", [], false, 30);
-
-			if (!is_array($events_meta) || empty($events_meta['collection'])) {
-				return $events_meta;
-			}
-
-			// --- Event type upsert ---
-			$event_type_uuid = basename($event['event_type'] ?? '');
-			$event_type_id = $wpdb->get_var(
-				$wpdb->prepare("SELECT id FROM {$wpdb->prefix}cb_event_types WHERE uuid = %s", $event_type_uuid)
-			);
-			
-			if (!$event_type_id && $event_type_uuid) {
-				$wpdb->insert("{$wpdb->prefix}cb_event_types", [
-					'uuid' => $event_type_uuid,
-					'name' => sanitize_text_field($event['name'] ?? ''),
-					'duration' => intval($event['duration'] ?? 0),
-					'uri' => $event['event_type'],
-				]);
-				$event_type_id = $wpdb->insert_id;	
-			}
-
-			// --- Location upsert ---
-			$location_id = null;
-			$loc_name = null;
-			if (!empty($event['location']['location'])) {
-				$loc_name = sanitize_text_field($event['location']['location']);
-			}
-			
-			if (empty($event['location']['location']) && !empty($event['location']['type'])) {
-				$loc_name = sanitize_text_field($event['location']['type']);
-			}
-
-			if ($loc_name) {
-				// Wrap the placeholder in % for LIKE
-				$location_id = $wpdb->get_var(
-					$wpdb->prepare(
-						"SELECT id FROM {$wpdb->prefix}cb_meeting_locations WHERE name LIKE %s",
-						'%' . $wpdb->esc_like($loc_name) . '%'
-					)
-				);
-
-				if (!$location_id) {
-					$wpdb->insert("{$wpdb->prefix}cb_meeting_locations", ['name' => $loc_name]);
-					$location_id = $wpdb->insert_id;
-				}
-			}
-			
-			// --- Scheduled event upsert ---
-			$created_at  = !empty($event['created_at']) ? gmdate('Y-m-d H:i:s', strtotime($event['created_at'])) : null;
-			$name        = sanitize_text_field($event['name'] ?? '');
-			$status      = sanitize_text_field($event['status'] ?? '');
-			$start_time  = !empty($event['start_time']) ? gmdate('Y-m-d H:i:s', strtotime($event['start_time'])) : null;
-			$end_time    = !empty($event['end_time']) ? gmdate('Y-m-d H:i:s', strtotime($event['end_time'])) : null;
-			$uri         = sanitize_text_field($event['uri'] ?? '');
-
-			foreach ($events_meta['collection'] as $event_meta) {
-				$cancel_url  = esc_url_raw($event_meta['cancel_url'] ?? '');
-				$resched_url = esc_url_raw($event_meta['reschedule_url'] ?? '');
-				$order_id = $event_meta['questions_and_answers'][0]['answer'];
-				
-				if ($order_id === $order) {
-					$event_uuid = $wpdb->get_var(
-						$wpdb->prepare("SELECT uuid FROM {$wpdb->prefix}cb_scheduled_events WHERE order_id = %s", $order_id)
-					);
-					if (!$event_uuid === $uuid) {
-						$wpdb->query(
-							$wpdb->prepare(
-								"UPDATE {$wpdb->prefix}cb_scheduled_events 
-								SET status=%s 
-								WHERE uuid=%s",
-								'cancelled', $event_uuid
-							)
-						);
-					}
-				}
-			}
-			
-			$payload     = wp_json_encode($event);
-
-			$wpdb->query(
-				$wpdb->prepare(
-					"INSERT INTO {$wpdb->prefix}cb_scheduled_events
-						(uuid, created_at, event_type_id, location_id, name, start_time, end_time, status, uri, order_id, cancel_url, reschedule_url, payload)
-					 VALUES (%s,%s,%d,%d,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-					 ON DUPLICATE KEY UPDATE
-						created_at=VALUES(created_at),
-						event_type_id=VALUES(event_type_id),
-						location_id=VALUES(location_id),
-						name=VALUES(name),
-						status=VALUES(status),
-						start_time=VALUES(start_time),
-						end_time=VALUES(end_time),
-						uri=VALUES(uri),
-						order_id=VALUES(order_id),
-						cancel_url=VALUES(cancel_url),
-						reschedule_url=VALUES(reschedule_url),
-						payload=VALUES(payload)",
-					$uuid,$created_at,$event_type_id,$location_id,$name,$start_time,$end_time,
-					$status,$uri,$order_id,$cancel_url,$resched_url,$payload
-				)
-			);
-
-			if ($wpdb->last_error) {
-				CB_Audit_Log::log('db_error','scheduled_events',$uuid,['error'=>$wpdb->last_error],'error');
-				continue;
-			}
-
-			// Get event_uuid for FK
-			$event_id = $wpdb->get_var(
-				$wpdb->prepare("SELECT id FROM {$wpdb->prefix}cb_scheduled_events WHERE uuid = %s", $uuid)
-			);
-
-			// --- Invitees sync ---
-			$invitees = $this->get("/scheduled_events/$uuid/invitees", [], false, 30);
-			if (is_array($invitees) && !empty($invitees['collection'])) {
-				$inv = $invitees['collection'][0];
-				$inv_name  = sanitize_text_field($inv['name'] ?? '');
-				$inv_email = sanitize_email($inv['email'] ?? '');
-
-				$contact_id = $wpdb->get_var(
-					$wpdb->prepare("SELECT id FROM {$wpdb->prefix}cb_contacts WHERE email = %s", $inv_email)
-				);
-				if (!$contact_id) {
-					$wpdb->insert("{$wpdb->prefix}cb_contacts", ['name'=>$inv_name,'email'=>$inv_email]);
-					$contact_id = $wpdb->insert_id;
-				}
-
-				$wpdb->query(
-					$wpdb->prepare(
-						"INSERT INTO {$wpdb->prefix}cb_invitees (scheduled_event_id, contact_id)
-						 VALUES (%s,%d)
-						 ON DUPLICATE KEY UPDATE contact_id=VALUES(contact_id)",
-						$event_id,$contact_id
-					)
-				);
-
-				if ($wpdb->last_error) {
-					CB_Audit_Log::log('db_error','invitees',$uuid,['error'=>$wpdb->last_error],'error');
-				}
-			}
-		}
-
-		// Cleanup stale events/invitees
-		if (!empty($seenUuids)) {
-			$placeholders = implode(',', array_fill(0, count($seenUuids), '%s'));
-			$wpdb->query(
-				$wpdb->prepare(
-					"DELETE FROM {$wpdb->prefix}cb_scheduled_events
-					 WHERE start_time >= NOW()
-					   AND uuid NOT IN ($placeholders)",
-					...$seenUuids
-				)
-			);
-			$wpdb->query(
-				$wpdb->prepare(
-					"DELETE i FROM {$wpdb->prefix}cb_invitees i
-					 LEFT JOIN {$wpdb->prefix}cb_scheduled_events s ON i.scheduled_event_id = s.id
-					 WHERE s.uuid NOT IN ($placeholders)",
-					...$seenUuids
-				)
-			);
-		}
-
-		return $events;
-	}
-
-
-	public function get_event_invitees(string $scheduled_event_uri): array {
-        return $this->get(str_replace(self::API_BASE, '', $scheduled_event_uri) . '/invitees', [], true, 30);
-    }
-
-    public function normalize_availability(array $collection): array {
-        $tz = wp_timezone(); $byDate = [];
-        foreach ($collection as $slot) {
-            $start = $slot['start_time'] ?? ($slot['start_time_utc'] ?? null);
-            if (!$start) continue;
-            $dtUtc = new \DateTimeImmutable($start, new \DateTimeZone('UTC'));
-            $dtLocal = $dtUtc->setTimezone($tz);
-            $dateKey = $dtLocal->format('Y-m-d');
-            $byDate[$dateKey][] = [
-                'start_iso'       => $dtUtc->format('Y-m-d\TH:i:s\Z'),
-                'start_local_iso' => $dtLocal->format('c'),
-                'label'           => $dtLocal->format('H:i'),
-            ];
-        }
-        ksort($byDate);
-        $out = [];
-        foreach ($byDate as $date => $slots) {
-            usort($slots, fn($a,$b)=>strcmp($a['start_iso'],$b['start_iso']));
-            $out[] = ['date'=>$date,'slots'=>$slots];
-        }
-        return $out;
-    }
-
-
-
-/*
-    public function sync(int $upcoming_count = 100): array {
-        $results = [
-            'event_types_upserted' => 0,
-            'events_upserted'      => 0,
-            'events_deleted'       => 0,
-            'errors'               => [],
-        ];
-
-        // 1. Sync Event Types
-        $types = $this->get_event_types(null, true);
-        if (!empty($types['error'])) {
-            $results['errors'][] = ['stage' => 'event_types', 'error' => $types['error']];
-        } else {
-            $results['event_types_upserted'] = (int) ($types['count'] ?? count($types['collection'] ?? []));
-        }
-
-        // 2. Sync Scheduled Events
-        $before = $this->count_future_events();
-        $events = $this->get_upcoming_events($upcoming_count);
-
-        if (!empty($events['error'])) {
-            $results['errors'][] = ['stage' => 'scheduled_events', 'error' => $events['error']];
-        } else {
-            $after = $this->count_future_events();
-            $results['events_upserted'] = max(0, $after - $before);
-            $results['events_deleted'] = $events['deleted'] ?? 0;
-        }
-
-        // 3. Update sync timestamp (use consistent key)
-        update_option(CB_Constants::OPT_LAST_SYNC, current_time('timestamp'));
-
-        return [
-            'success'               => empty($results['errors']),
-            'last_sync'            => current_time('mysql'),
-            'event_types_upserted' => $results['event_types_upserted'],
-            'events_upserted'      => $results['events_upserted'],
-            'events_deleted'       => $results['events_deleted'],
-            'errors'               => $results['errors'],
-        ];
-    }
-
-public function sync(int $upcoming_count = 100): array {
-    global $wpdb;
-
-    $results = [
-        'event_types_upserted' => 0,
-        'availabilities_upserted' => 0,
-        'events_upserted'      => 0,
-        'invitees_upserted'    => 0,
-        'locations_upserted'   => 0,
-        'errors'               => [],
-    ];
-
-    try {
-        // 1. Event Types
-        $types = $this->get("/event_types", [], false, 120);
-        foreach ($types['collection'] as $t) {
-            $event_type_id = $this->upsert_event_type($t);
-            $results['event_types_upserted']++;
-
-            // 2. Availability
-            $avail = $this->get("/event_type_available_times", ['event_type_uuid' => $t['uuid']], false, 60);
-            if (!empty($avail['resource'])) {
-                $this->upsert_event_type_availability($event_type_id, $avail['resource']);
-                $results['availabilities_upserted']++;
-            }
-
-            // 6. Locations
-            $locs = $this->get("/locations", [], false, 60);
-            foreach ($locs['collection'] ?? [] as $loc) {
-                $this->upsert_location($event_type_id, $loc);
-                $results['locations_upserted']++;
-            }
-        }
-
-        // 3. Scheduled Events
-        $events = $this->get("/scheduled_events", ['count' => $upcoming_count], false, 120);
-        foreach ($events['collection'] ?? [] as $se) {
-            $scheduled_event_id = $this->upsert_scheduled_event($se);
-            $results['events_upserted']++;
-
-            // 4. Scheduled Event Details
-            $detail = $this->get("/scheduled_events/" . $se['uuid'], [], false, 60);
-            if (!empty($detail['resource'])) {
-                $this->update_scheduled_event_details($scheduled_event_id, $detail['resource']);
-            }
-
-            // 5. Invitees
-            $invitees = $this->get("/scheduled_events/" . $se['uuid'] . "/invitees", [], false, 60);
-            foreach ($invitees['collection'] ?? [] as $inv) {
-                $this->upsert_invitee($scheduled_event_id, $inv);
-                $results['invitees_upserted']++;
-            }
-        }
-
-        // Update sync timestamp
-        update_option(CB_Constants::OPT_LAST_SYNC, current_time('timestamp'));
-
-    } catch (\Throwable $e) {
-        $results['errors'][] = $e->getMessage();
-    }
-
-    return [
-        'success'               => empty($results['errors']),
-        'last_sync'             => current_time('mysql'),
-        'event_types_upserted'  => $results['event_types_upserted'],
-        'availabilities_upserted' => $results['availabilities_upserted'],
-        'events_upserted'       => $results['events_upserted'],
-        'invitees_upserted'     => $results['invitees_upserted'],
-        'locations_upserted'    => $results['locations_upserted'],
-        'errors'                => $results['errors'],
-    ];
-}
-
-    private function count_future_events(): int {
-        global $wpdb;
-        return (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}cb_scheduled_events WHERE start_time >= NOW()");
-    }
-    
-    public function debug_event_types(?string $uuid = null): void {
-        // Call the existing method
-        $result = $this->get_event_types($uuid, false); // don't persist, just fetch
-    
-        echo "=== DEBUG: get_event_types(" . ($uuid ?: 'ALL') . ") ===\n\n";
-    
-        if (!empty($result['error'])) {
-            echo "Error: " . esc_html($result['error']) . "\n";
-        } else {
-            echo "Count: " . (int)($result['count'] ?? 0) . "\n\n";
-            print_r($result['collection']);
-        }
-    
-    }
-
-    /**
-     * Generic POST wrapper for Calendly API
-     * /
-    public function remote_post(string $endpoint, array $body = [], array $headers = []): array {
-        $url = trailingslashit($this->base_url) . ltrim($endpoint, '/');
-
-        $default_headers = [
-            'Authorization' => 'Bearer ' . $this->token,
-            'Content-Type'  => 'application/json',
-        ];
-
-        $response = wp_remote_post($url, [
-            'headers' => array_merge($default_headers, $headers),
-            'body'    => wp_json_encode($body),
-            'timeout' => 30,
-        ]);
-
-        if (is_wp_error($response)) {
-            return ['error' => $response->get_error_message()];
-        }
-
-        $code = wp_remote_retrieve_response_code($response);
-        $data = json_decode(wp_remote_retrieve_body($response), true);
-
-        if ($code < 200 || $code >= 300) {
-            return ['error' => $data['message'] ?? 'Calendly API error', 'status' => $code];
-        }
-
-        return $data;
-    }
-
-    /**
-     * Convenience method: schedule a meeting
-     * /
-    public function schedule_meeting(string $scheduling_url, string $iso_time, array $prefill = []): array {
-        $endpoint = 'scheduled_events'; // adjust if Calendly requires a different path
-        $body = [
-            'scheduling_url' => trailingslashit($scheduling_url) . rawurlencode($iso_time) . '/',
-            'prefill'        => $prefill,
-        ];
-        return $this->remote_post($endpoint, $body);
-    }	
-	
-	
-	private function invalidate_cache(string $path, array $query = [], bool $remove_user = false): void {
-		$url = $this->build_url($path, $query, $remove_user);
-		delete_transient($this->cache_key($url));
-	}
-
-*/	
-    
 }

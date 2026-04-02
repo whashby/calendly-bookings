@@ -1,3 +1,13 @@
+function canEdit(start_time, status)  {
+    // Parse start_time into a Date object
+    const eventDate = new Date(start_time);
+    const now = new Date();
+    // Two weeks in milliseconds
+    const twoWeeksMs = 14 * 24 * 60 * 60 * 1000;
+    // Check if event is less than 2 weeks old
+    return !!(((now - eventDate) <= twoWeeksMs && status === 'active'));
+}
+
 jQuery(document).ready(function($) {
 
     /**
@@ -212,165 +222,185 @@ content = `
     });
     
     /**
+     * Handle walk-in submission
+     */
+    function handleWalkinSubmit($button) {
+        const form = $button.closest('form');
+        const firstname = form.find('input[name="firstname"]').val();
+        const lastname = form.find('input[name="lastname"]').val();
+        const email = form.find('input[name="email"]').val();
+        const initialSession = form.find('#initial_session option:selected');
+        const start_time = form.find('#initial_date').val()+'T'+ form.find('#initial_time').val()+':00Z';
+        const location = form.find('#location option:selected');
+        const notes = {
+            discussed: form.find('textarea[name="notes-discussed"]').val(),
+            guidance: form.find('textarea[name="notes-guidance"]').val(),
+            follow_up: form.find('textarea[name="notes-follow-up"]').val()
+        };
+        const followupSession = form.find('#followup_session option:selected');
+        const followup_date = form.find('#followup_date').val();
+        const followup_time = form.find('#followup_time').val();
+
+        const data = [];
+        data.push({ name: 'firstname', value: firstname });
+        data.push({ name: 'lastname', value: lastname });
+        data.push({ name: 'email', value: email });
+        data.push({ name: 'initial_session', value: initialSession.text() });
+        data.push({ name: 'initial_session_id', value: initialSession.data('id') });
+        data.push({ name: 'initial_session_product_id', value: initialSession.data('pid') });
+        data.push({ name: 'initial_session_uuid', value: initialSession.data('uuid') });
+        data.push({ name: 'start_time', value: start_time });
+        data.push({ name: 'location', value: location.data('id') });
+        data.push({ name: 'notes', value: notes });
+        data.push({ name: 'followup_session', value: followupSession.text() });
+        data.push({ name: 'followup_session_id', value: followupSession.data('id') });
+        data.push({ name: 'followup_session_product_id', value: followupSession.data('pid') });
+        data.push({ name: 'followup_session_uuid', value: followupSession.data('uuid') });
+        data.push({ name: 'followup_date', value: followup_date });
+        data.push({ name: 'followup_time', value: followup_time });
+
+        if (!confirm("Are you sure you want to create this walk-in?")) return;
+    
+        $.post(ajaxurl, {
+            action: 'cb_create_walkin',
+            data: JSON.stringify(data)
+        }, function(response) {
+            if (response.success) {
+                alert('Walk-in created successfully');
+                tb_remove();
+                location.reload();
+            } else {
+                alert('Error: ' + response.data.message);
+            }
+        });
+    }
+
+    /**
+     * Handle bulk update submission
+     */
+    function handleBulkUpdateSubmit() {
+        const bulk_status = $('input[name="bulk-status"]:checked').val();
+        const selected = $('.cb-bulk-select:checked').map(function() {
+            return $(this).val();
+        }).get();
+
+        if (!bulk_status || selected.length === 0) {
+            alert('Please select events and a status.');
+            return;
+        }
+
+        const uuids = selected.join(',');
+
+        $.post(ajaxurl, {
+            action: 'calendly_bookings_bulk_update_scheduled_events',
+            uuids: uuids,
+            status: bulk_status
+        }, function(response) {
+            if (response.success) {
+                alert('Events updated successfully.');
+                tb_remove();
+                location.reload();
+            } else {
+                alert(response.data.message || 'Update failed.');
+            }
+        });
+    }
+
+    /**
+     * Handle admin notes submission
+     */
+    function handleAdminNotesSubmit($button) {
+        const form = $button.closest('.cb-thickbox-form');
+        const uuid = $button.data('uuid');
+
+        if (!uuid) {
+            alert('Could not determine event UUID.');
+            return;
+        }
+
+        const notes = {
+            admin: form.find('textarea[name="notes-admin"]').val(),
+        }
+    
+        if (!confirm("Are you sure you want to save these changes?")) return;
+        
+        $.post(ajaxurl, {
+            action: 'calendly_bookings_add_admin_notes',
+            uuid: uuid,
+            notes: notes
+        }, function(response) {
+            if (response.success) {
+                alert('Changes saved.');
+                location.reload();
+            } else {
+                alert('Error: ' + (response.data?.message || 'Save failed.'));
+            }
+        }).fail(function() {
+            alert('Error saving notes.');
+        });
+    }
+
+    /**
+     * Handle event details submission
+     */
+    function handleEventDetailsSubmit($button) {
+        const form = $button.closest('.cb-thickbox-form');
+        const uuid = form.find('input[name="uuid"]').val();
+    
+        if (!uuid) {
+            alert('Could not determine event UUID.');
+            return;
+        }
+    
+        const status = $('input[name="event-status"]:checked').val();
+        const notes = {
+            discussed: form.find('textarea[name="notes-discussed"]').val(),
+            guidance: form.find('textarea[name="notes-guidance"]').val(),
+            follow_up: form.find('textarea[name="notes-follow_up"]').val()
+        };
+    
+        if (!confirm("Are you sure you want to save these changes?")) return;
+    
+        $.post(ajaxurl, {
+            action: 'calendly_bookings_update_scheduled_event',
+            uuid: uuid,
+            status: status,
+            notes: notes
+        }, function(response) {
+            if (response.success) {
+                alert('Changes saved.');
+                tb_remove();
+                location.reload();
+            } else {
+                alert('Error: ' + (response.data?.message || 'Save failed.'));
+            }
+        }).fail(function() {
+            alert('Error saving notes.');
+        });
+    }
+
+    /**
      * Save edits via AJAX
      */
     $(document).on('click', '.cb-save-btn', function(e) {
-        
         e.preventDefault();
 
         const id = $(this).attr('id');
+        const $button = $(this);
 
-        if (id === 'cb-walkin-submit') {
-            const form = $(this).closest('form');
-            const firstname = form.find('input[name="firstname"]').val();
-            const lastname = form.find('input[name="lastname"]').val();
-            const email = form.find('input[name="email"]').val();
-            const initialSession = form.find('#initial_session option:selected');
-            const start_time = form.find('#initial_date').val()+'T'+ form.find('#initial_time').val()+':00Z';
-            const location = form.find('#location option:selected');
-            const notes = {
-                discussed: form.find('textarea[name="notes-discussed"]').val(),
-                guidance: form.find('textarea[name="notes-guidance"]').val(),
-                follow_up: form.find('textarea[name="notes-follow-up"]').val()
-            };
-            const followupSession = form.find('#followup_session option:selected');
-            const followup_date = form.find('#followup_date').val();
-            const followup_time = form.find('#followup_time').val();
-
-            // Get form values as an array of {name, value}
-            const data = [];
-            
-            // Add extra data attributes from the selected option
-            data.push({ name: 'firstname', value: firstname });
-            data.push({ name: 'lastname', value: lastname });
-            data.push({ name: 'email', value: email });
-            data.push({ name: 'initial_session', value: initialSession.text() });
-            data.push({ name: 'initial_session_id', value: initialSession.data('id') });
-            data.push({ name: 'initial_session_uuid', value: initialSession.data('uuid') });
-            data.push({ name: 'start_time', value: start_time });
-            data.push({ name: 'location', value: location.data('id') });
-            data.push({ name: 'notes', value: notes });
-            data.push({ name: 'followup_session', value: followupSession.text() });
-            data.push({ name: 'followup_session_id', value: followupSession.data('id') });
-            data.push({ name: 'followup_session_uuid', value: followupSession.data('uuid') });
-            data.push({ name: 'followup_date', value: followup_date });
-            data.push({ name: 'followup_time', value: followup_time });
-
-
-
-            if (!confirm("Are you sure you want to create this walk-in?")) return;
-        
-            $.post(ajaxurl, {
-                action: 'cb_create_walkin',
-                data: JSON.stringify(data)
-            }, function(response) {
-                if (response.success) {
-                    alert('Walk-in created successfully');
-                    tb_remove();
-                    location.reload();
-                } else {
-                    alert('Error: ' + response.data.message);
-                }
-            });
-            return;
-        }
-    
-        if (id === 'cb-bulk-update-submit') {
-            const bulk_status = $('input[name="bulk-status"]:checked').val();
-            const selected = $('.cb-bulk-select:checked').map(function() {
-                return $(this).val();
-            }).get();
-
-            if (!bulk_status || selected.length === 0) {
-                alert('Please select events and a status.');
-                return;
-            }
-
-            const uuids = selected.join(',');
-
-            $.post(ajaxurl, {
-                action: 'calendly_bookings_bulk_update_scheduled_events',
-                uuids: uuids,
-                status: bulk_status
-            }, function(response) {
-                if (response.success) {
-                    alert('Events updated successfully.');
-                    tb_remove();
-                    location.reload();
-                } else {
-                    alert(response.data.message || 'Update failed.');
-                }
-            });
-            return;
-        }
-    
-        if (id === 'cb-admin-notes-submit') {
-            const form = $(this).closest('.cb-thickbox-form');
-            const uuid = $(this).data('uuid');
-
-            if (!uuid) {
-                alert('Could not determine event UUID.');
-                return;
-            }
-    
-            const notes = {
-                admin: form.find('textarea[name="notes-admin"]').val(),
-            }
-        
-            if (!confirm("Are you sure you want to save these changes?")) return;
-            
-            $.post(ajaxurl, {
-                action: 'calendly_bookings_add_admin_notes',
-                uuid: uuid,
-                notes: notes
-            }, function(response) {
-                if (response.success) {
-                    alert('Changes saved.');
-                    location.reload();
-                } else {
-                    alert('Error: ' + (response.data?.message || 'Save failed.'));
-                }
-            }).fail(function() {
-                alert('Error saving notes.');
-            });
-            return;
-        }
-    
-        if (id === 'cb-event-details-submit') {
-            const form = $(this).closest('.cb-thickbox-form');
-            const uuid = form.find('input[name="uuid"]').val();
-        
-            if (!uuid) {
-                alert('Could not determine event UUID.');
-                return;
-            }
-        
-            const status = $('input[name="event-status"]:checked').val();
-            const notes = {
-                discussed: form.find('textarea[name="notes-discussed"]').val(),
-                guidance: form.find('textarea[name="notes-guidance"]').val(),
-                follow_up: form.find('textarea[name="notes-follow_up"]').val()
-            };
-        
-            if (!confirm("Are you sure you want to save these changes?")) return;
-        
-            $.post(ajaxurl, {
-                action: 'calendly_bookings_update_scheduled_event',
-                uuid: uuid,
-                status: status,
-                notes: notes
-            }, function(response) {
-                if (response.success) {
-                    alert('Changes saved.');
-                    tb_remove();
-                    location.reload();
-                } else {
-                    alert('Error: ' + (response.data?.message || 'Save failed.'));
-                }
-            }).fail(function() {
-                alert('Error saving notes.');
-            });
-            return;
+        switch(id) {
+            case 'cb-walkin-submit':
+                handleWalkinSubmit($button);
+                break;
+            case 'cb-bulk-update-submit':
+                handleBulkUpdateSubmit();
+                break;
+            case 'cb-admin-notes-submit':
+                handleAdminNotesSubmit($button);
+                break;
+            case 'cb-event-details-submit':
+                handleEventDetailsSubmit($button);
+                break;
         }
     });
 
@@ -381,6 +411,7 @@ content = `
         // Clear old options
         $('#initial_session, #location, #followup_session').empty();
     
+        $('#initial_session').append(`<option value="">Select a session</option>`);
         $('#followup_session').append(`<option value="">Select a session</option>`);
         $('#location').append(`<option value="">Select a location</option>`);
         
@@ -388,9 +419,9 @@ content = `
         $.get('/wp-json/calendly-bookings/v1/event-types', function(response) {
             if (response.success && response.data) {
                 response.data.forEach(type => {
-                        $('#initial_session').append(`<option name="${type.name}" value="${type.name}" data-id="${type.id}" data-uuid="${type.uuid}">${type.name}</option>`);
-                        if(type.name.toLowerCase() !== "initial meeting") {
-                            $('#followup_session').append(`<option name="${type.name}" value="${type.name}" data-id="${type.id}" data-uuid="${type.uuid}">${type.name}</option>`);
+                        $('#initial_session').append(`<option name="${type.name}" value="${type.name}" data-id="${type.id}" data-pid="${type.product_id}" data-uuid="${type.uuid}">${type.name}</option>`);
+                        if(type.name.toLowerCase() !== "initial consultation") {
+                            $('#followup_session').append(`<option name="${type.name}" value="${type.name}" data-id="${type.id}" data-pid="${type.product_id}" data-uuid="${type.uuid}">${type.name}</option>`);
                         }
                 });
             }
@@ -533,17 +564,6 @@ content = `
 		}
     });
 
-
-
-    function canEdit(start_time, status)  {
-        // Parse start_time into a Date object
-        const eventDate = new Date(start_time);
-        const now = new Date();
-        // Two weeks in milliseconds
-        const twoWeeksMs = 14 * 24 * 60 * 60 * 1000;
-        // Check if event is less than 2 weeks old
-        return ((now - eventDate) <= twoWeeksMs && status === 'active')?true:false;
-    }
 
 
     /**

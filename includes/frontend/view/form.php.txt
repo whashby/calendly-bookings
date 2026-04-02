@@ -22,7 +22,7 @@ $email        = esc_attr($current_user->user_email ?? '');
     <input type="email" id="cb_email" name="billing_email" value="<?php echo $email; ?>" required>
   </div>
 
-  <!-- Location -->
+  <!-- 📍 Location -->
   <div class="cb-field-row">
     <div class="cb-field">
       <label for="cb_meeting_location"><?php esc_html_e('Location', 'calendly-bookings'); ?></label>

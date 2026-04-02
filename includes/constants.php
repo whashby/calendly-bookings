@@ -19,6 +19,20 @@ final class CB_Constants {
     public const OPT_LAST_SYNC_LOCATIONS = 'cb_last_sync_locations';
     public const OPT_WEBHOOK_SECRET = 'cb_webhook_secret';
     public const OPT_WEBHOOK_URL = 'cb_webhook_url';
+    public const OPT_LICENSE_KEY = 'cb_license_key';
+    public const OPT_LICENSE_STATUS = 'cb_license_status';
+    public const OPT_ENCRYPTION_KEY = 'cb_encryption_key';
+    public const OPT_LAST_REPORT_MONTH = 'cb_last_report_month';
+    public const TRANSIENT_SYNC_LOCK = 'cb_sync_lock';
+    public const TRANSIENT_SYNC_LOCK_TIMEOUT = 300; // 5 minutes
+    public const TRANSIENT_SYNC_INTERVAL = 300; // 5 minutes
+    public const API_BASE_URL = 'https://api.calendly.com';
+    public const API_USER_AGENT = 'CalendlyBookingsWP/' . self::VERSION;
+    public const GITHUB_REPO = 'calendly-bookings/calendly-bookings';
+    public const GITHUB_API_URL = 'https://api.github.com/repos/' . self::GITHUB_REPO;
+    public const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/' . self::GITHUB_REPO . '/main/';
+    public const GITHUB_RELEASES_URL = 'https://api.github.com/repos/' . self::GITHUB_REPO . '/releases';
+    public const GITHUB_TOKEN_OPTION = 'cb_github_token';
 
     public static function plugin_file(): string {
         return dirname(__DIR__) . '/calendly-bookings.php';

@@ -1,7 +1,9 @@
 <?php
 namespace Calendly_Bookings\Modules;
 
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) {
+    exit;
+}
 
 final class CB_WC_Sync {
     private const META_EVENT_UUID          = '_cb_event_uuid';
@@ -12,7 +14,9 @@ final class CB_WC_Sync {
     }
 
     public static function link_product(int $product_id, string $event_uuid, ?string $scheduling_url = null): bool {
-        if ($product_id <= 0 || $event_uuid === '' || $scheduling_url == null || $scheduling_url === '' ) return false;
+        if ($product_id <= 0 || $event_uuid === '' || $scheduling_url == null || $scheduling_url === '' ) {
+            return false;
+        }
         update_post_meta($product_id, self::META_EVENT_UUID, sanitize_text_field($event_uuid));
         update_post_meta($product_id, self::META_EVENT_SCHEDULING_URL, esc_url_raw($scheduling_url));
 
@@ -20,7 +24,9 @@ final class CB_WC_Sync {
     }
 
     public static function unlink_product(int $product_id): bool {
-        if ($product_id <= 0) return false;
+        if ($product_id <= 0) {
+            return false;
+        }
         $a = delete_post_meta($product_id, self::META_EVENT_UUID);
         $b = delete_post_meta($product_id, self::META_EVENT_SCHEDULING_URL);
         return (bool) ($a || $b);
@@ -68,7 +74,9 @@ final class CB_WC_Sync {
         $duration       = absint($event_type['duration'] ?? 0); // minutes
         $price          = isset($event_type['price']) ? floatval($event_type['price']) : 0.0;
 
-        if ($uuid === '') return 0;
+        if ($uuid === '') {
+            return 0;
+        }
 
         $pid = $product_id ?: self::find_product_by_event($uuid);
         $post_data = [
@@ -82,7 +90,9 @@ final class CB_WC_Sync {
             wp_update_post($post_data);
         } else {
             $pid = wp_insert_post($post_data);
-            if (is_wp_error($pid) || !$pid) return 0;
+            if (is_wp_error($pid) || !$pid) {
+                return 0;
+            }
             self::link_product($pid, $uuid, $scheduling_url);
         }
 
@@ -95,8 +105,7 @@ final class CB_WC_Sync {
         }
 
         // Optionally: fetch availability and store as meta
-        $api   = new CB_API();
-        $slots = $api->get_event_type_availability('https://api.calendly.com/event_types/' . $uuid, gmdate('c'));
+        $slots = CB_API::instance()->get_event_type_availability('https://api.calendly.com/event_types/' . $uuid, gmdate('c'));
         update_post_meta($pid, '_cb_event_availability', $slots['collection'] ?? []);
 
         return (int) $pid;

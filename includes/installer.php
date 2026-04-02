@@ -1,6 +1,8 @@
 <?php
 // includes/installer.php
 namespace Calendly_Bookings;
+use Calendly_Bookings\Utils\CB_Encryption;
+use Calendly_Bookings\Modules\CB_Audit_Log;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -22,6 +24,10 @@ final class CB_Installer
     public static function activate(): void
     {
         self::run(true);
+        CB_Audit_Log::log('Plugin activated and installer run', 'installer', 'activate');
+        require_once plugin_dir_path(__FILE__) . '/utils/class-cb-encryption.php';
+        CB_Encryption::init();
+        CB_Audit_Log::log('Encryption keys initialized', 'installer', 'activate');
     }
 
     /**
