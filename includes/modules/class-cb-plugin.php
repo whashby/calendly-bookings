@@ -1,7 +1,12 @@
 <?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 namespace Calendly_Bookings\Modules;
 use Calendly_Bookings\CB_Constants;
-if(!defined('ABSPATH'))exit;
+
 final class CB_Plugin{
     public static function init():void{
         CB_Audit_Log::log('method_entry', 'plugin', __METHOD__, [], 'info');

@@ -1,11 +1,15 @@
 <?php
-namespace Calendly_Bookings\Modules;
 
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+namespace Calendly_Bookings\Modules;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
 
-class CB_Maintenance_REST {
+final class CB_Maintenance_REST {
 
     public static function init(): void {
         add_action('rest_api_init', [__CLASS__, 'register_routes']);

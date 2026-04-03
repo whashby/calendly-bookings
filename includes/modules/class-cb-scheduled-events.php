@@ -1,10 +1,10 @@
 <?php
 
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 namespace Calendly_Bookings\Modules;
-
-use wpdb;
-
-if (!defined('ABSPATH')) exit;
 
 final class CB_Scheduled_Events {
 

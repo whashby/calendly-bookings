@@ -1,8 +1,11 @@
 <?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 //includes/utils/class-cb-timezone-converter.php
 namespace Calendly_Bookings\Utils;
-
-if (!defined('ABSPATH')) exit;
 
 /**
  * Utility class for converting UTC times to the site's timezone.

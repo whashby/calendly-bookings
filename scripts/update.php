@@ -1,4 +1,9 @@
 <?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 $version     = getenv("NEW_VERSION");
 $main        = getenv("PLUGIN_MAIN_FILE");
 $constants   = getenv("CONSTANTS_FILE");

@@ -1,4 +1,9 @@
 <?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 /* includes/modules/class-cb-admin-ajax.php
  * Handles AJAX requests for admin actions like updating scheduled events, adding notes, maintenance tasks, and creating walk-ins.
  */
@@ -7,9 +12,7 @@ namespace Calendly_Bookings\Modules;
 use Calendly_Bookings\Modules\CB_Audit_Log;
 use Calendly_Bookings\Utils\CB_Encryption;
 use Calendly_Bookings\Utils\CB_Mail;
-use Calendly_Bookings\CB_Scheduled_Events;
-
-if (!defined('ABSPATH')) {exit;}
+use Calendly_Bookings\Modules\CB_Scheduled_Events;
 
 final class CB_Admin_Ajax {
 

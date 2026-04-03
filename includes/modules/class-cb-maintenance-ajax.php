@@ -1,7 +1,12 @@
 <?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 namespace Calendly_Bookings\Modules;
 
-class CB_Maintenance_Ajax {
+final class CB_Maintenance_Ajax {
 
     public static function init(): void {
         // Register AJAX actions for logged-in admins

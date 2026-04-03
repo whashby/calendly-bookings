@@ -1,7 +1,11 @@
 <?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 namespace Calendly_Bookings\Utils;
 
-if (!defined('ABSPATH')) exit;
 
 final class CB_Encryption {
     private static $key;

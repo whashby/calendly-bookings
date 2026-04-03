@@ -1,13 +1,14 @@
 <?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 // includes/bootstrap.php
 namespace Calendly_Bookings;
 
 use Calendly_Bookings\Modules\CB_Audit_Log;
 use Calendly_Bookings\Modules\CB_API;
-
-if (!defined('ABSPATH')) {
-    exit;
-}
 
 require_once __DIR__ . '/installer.php';
 require_once __DIR__ . '/utils/functions.php';

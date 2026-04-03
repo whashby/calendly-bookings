@@ -1,12 +1,14 @@
 <?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 // includes/utils/functions.php
 namespace Calendly_Bookings\Utils;
-
 use Calendly_Bookings\Modules\CB_API;
 use Calendly_Bookings\Modules\CB_Audit_Log;
 use Calendly_Bookings\CB_Constants;
-
-if (!defined('ABSPATH')) {exit;}
 
 function cb_resolve_timezone(): ?string {
     $tz = wp_timezone_string();

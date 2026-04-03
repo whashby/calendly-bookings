@@ -1,7 +1,12 @@
 <?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 namespace Calendly_Bookings\Modules;
 
-class CB_Maintenance {
+final class CB_Maintenance {
 
     /** @var self|null */
     private static $instance = null;

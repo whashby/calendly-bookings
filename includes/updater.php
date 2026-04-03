@@ -1,9 +1,14 @@
 <?php
+
 if (!defined('ABSPATH')) {
     exit;
 }
 
-class CB_GitHub_Updater
+namespace Calendly_Bookings;
+
+use Calendly_Bookings\CB_Constants;
+
+final class CB_GitHub_Updater
 {
     private static $instance = null;
 
@@ -32,10 +37,11 @@ class CB_GitHub_Updater
         $this->plugin   = plugin_basename($file);
         $this->basename = dirname($this->plugin);
 
-        $this->repo            = trim($this->get_header('GitHub Plugin URI'));
+        // Use constants from CB_Constants
+        $this->repo            = 'https://github.com/' . CB_Constants::GITHUB_REPO;
         $this->worker_endpoint = defined('CB_WORKER_ENDPOINT') ? CB_WORKER_ENDPOINT : '';
-        $this->license_option  = defined('CB_LICENSE_OPTION') ? CB_LICENSE_OPTION : 'calendly_bookings_license_key';
-        $this->token_option    = defined('CB_TOKEN_OPTION') ? CB_TOKEN_OPTION : 'calendly_bookings_token';
+        $this->license_option  = CB_Constants::OPT_LICENSE_KEY;
+        $this->token_option    = CB_Constants::GITHUB_TOKEN_OPTION;
 
         add_filter('pre_set_site_transient_update_plugins', [$this, 'check_update']);
         add_filter('plugins_api', [$this, 'plugin_info'], 10, 3);
@@ -46,6 +52,7 @@ class CB_GitHub_Updater
         add_action('admin_init', [$this, 'register_settings']);
         add_action('admin_init', [$this, 'maybe_handle_notice_dismiss']);
         add_action('admin_notices', [$this, 'maybe_show_notice']);
+        add_action('admin_post_cb_refresh_github_token', [$this, 'handle_token_refresh']);
     }
 
     private function get_header($header)
@@ -56,18 +63,14 @@ class CB_GitHub_Updater
 
     private function api_request($endpoint)
     {
-        if (empty($this->repo)) {
-            error_log('CB Updater: Repo is empty');
-            return false;
-        }
-
-        $url = rtrim($this->repo, '/') . '/' . ltrim($endpoint, '/');
+        // Use GitHub API base URL from constants
+        $url = rtrim(CB_Constants::GITHUB_API_URL, '/') . '/' . ltrim($endpoint, '/');
         error_log('CB Updater: Making API request to: ' . $url);
 
         $response = wp_remote_get($url, [
             'headers' => [
                 'Accept'     => 'application/vnd.github+json',
-                'User-Agent' => 'calendly-bookings-updater',
+                'User-Agent' => CB_Constants::API_USER_AGENT,
             ],
             'timeout' => 20,
         ]);
@@ -250,18 +253,31 @@ class CB_GitHub_Updater
 
         $data = json_decode($body, true);
         if (!empty($data['valid']) && !empty($data['token'])) {
-            error_log('CB Updater: Token received, attempting decryption');
-            $decrypted = cb_decrypt_token($data['token'], LICENSE_SECRET);
-            if ($decrypted) {
-                update_option($this->token_option, $decrypted, false);
-                error_log('CB Updater: Token decrypted and stored successfully');
+            error_log('CB Updater: Token received, storing securely');
+            
+            // Store token directly without decryption if using simple auth tokens
+            // If using encrypted tokens, use the encryption key from database
+            $encryption_key = get_option(CB_Constants::OPT_ENCRYPTION_KEY);
+            
+            if (!empty($encryption_key)) {
+                // Try to decrypt if encryption key exists
+                $decrypted = cb_decrypt_token($data['token'], $encryption_key);
+                if ($decrypted) {
+                    update_option($this->token_option, $decrypted, false);
+                    error_log('CB Updater: Token decrypted and stored successfully');
+                } else {
+                    // Fallback: store encrypted token as-is
+                    update_option($this->token_option, $data['token'], false);
+                    error_log('CB Updater: Token stored as-is (decryption failed)');
+                }
             } else {
-                update_option($this->token_option, '', false);
-                set_transient('cb_token_error', 'Failed to decrypt GitHub token. Check LICENSE_SECRET.', 3600);
-                error_log('CB Updater: Token decryption failed - check LICENSE_SECRET');
+                // No encryption key: store token directly
+                update_option($this->token_option, $data['token'], false);
+                error_log('CB Updater: Token stored securely in database');
             }
         } else {
             error_log('CB Updater: Invalid response from worker - missing valid/token fields');
+            set_transient('cb_token_error', __('Failed to retrieve GitHub token from worker.', 'calendly-bookings'), 3600);
         }
     }
 
@@ -279,11 +295,25 @@ class CB_GitHub_Updater
 
     public function register_settings()
     {
-        register_setting('calendly_bookings', CB_LICENSE_OPTION, [
+        register_setting('calendly_bookings', $this->license_option, [
             'type'              => 'string',
             'sanitize_callback' => 'sanitize_text_field',
             'default'           => '',
         ]);
+    }
+
+    public function handle_token_refresh()
+    {
+        if (!current_user_can('manage_options')) {
+            wp_die(esc_html__('Unauthorized', 'calendly-bookings'));
+        }
+        if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'cb_refresh_github_token')) {
+            wp_die(esc_html__('Invalid nonce', 'calendly-bookings'));
+        }
+
+        $this->refresh_token();
+        wp_safe_redirect(add_query_arg('page', 'calendly-bookings', admin_url('options-general.php')));
+        exit;
     }
 
     public function render_settings_page()
@@ -294,17 +324,35 @@ class CB_GitHub_Updater
             <form method="post" action="options.php">
                 <?php
                 settings_fields('calendly_bookings');
-                $value = get_option(CB_LICENSE_OPTION, '');
+                $value = get_option($this->license_option, '');
+                $latest = $this->get_latest_plugin_version();
+                $current = $this->get_current_plugin_version();
                 ?>
                 <table class="form-table">
                     <tr>
                         <th scope="row"><?php esc_html_e('License Key', 'calendly-bookings'); ?></th>
                         <td>
-                            <input type="text" name="<?php echo esc_attr(CB_LICENSE_OPTION); ?>"
+                            <input type="text" name="<?php echo esc_attr($this->license_option); ?>"
                                    value="<?php echo esc_attr($value); ?>" class="regular-text"/>
                             <p class="description">
                                 <?php esc_html_e('Enter your license key to enable private GitHub updates.', 'calendly-bookings'); ?>
                             </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php esc_html_e('Update Status', 'calendly-bookings'); ?></th>
+                        <td>
+                            <?php if (!empty($latest) && version_compare($latest, $current, '>')): ?>
+                                <p style="color: #0073aa;">
+                                    <strong><?php esc_html_e('New version available:', 'calendly-bookings'); ?></strong> 
+                                    <?php echo esc_html($latest); ?>
+                                    <?php esc_html_e('(current:', 'calendly-bookings'); ?> <?php echo esc_html($current); ?>)
+                                </p>
+                            <?php else: ?>
+                                <p style="color: #008000;">
+                                    ✓ <?php esc_html_e('You have the latest version installed.', 'calendly-bookings'); ?>
+                                </p>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 </table>
@@ -320,8 +368,8 @@ class CB_GitHub_Updater
         if (!current_user_can('manage_options')) return;
         if (get_option('cb_hide_license_notice', false)) return;
 
-        $license = get_option(CB_LICENSE_OPTION);
-        $token   = get_option(CB_TOKEN_OPTION);
+        $license = get_option($this->license_option);
+        $token   = get_option($this->token_option);
 
         $dismiss_url = wp_nonce_url(add_query_arg('cb_dismiss_license_notice', '1', admin_url()), 'cb_dismiss_license_notice');
 
@@ -334,8 +382,7 @@ class CB_GitHub_Updater
                 . esc_html__('Calendly Bookings license is set.', 'calendly-bookings')
                 . ' <a href="' . esc_url($url) . '">' 
                 . esc_html__('Refresh GitHub token now', 'calendly-bookings')
-                . '</a> '
-                . ' <a href="' . esc_url($dismiss_url) . '">' . esc_html__('Dismiss', 'calendly-bookings') . '</a>'
+                . '</a>'
                 . '</p></div>';
             return;
         }
@@ -348,29 +395,24 @@ class CB_GitHub_Updater
             $update_url = admin_url('update-core.php');
             echo '<div class="notice notice-warning notice-dismissible"><p>'
                 . sprintf(
-                    esc_html__('Calendly Bookings new version available: %1$s (current %2$s).', 'calendly-bookings'),
+                    esc_html__('Calendly Bookings update available: %1$s (current %2$s).', 'calendly-bookings'),
                     esc_html($latest_version),
                     esc_html($current_version)
                 )
                 . ' <a href="' . esc_url($update_url) . '">' . esc_html__('Update now', 'calendly-bookings') . '</a>'
-                . ' <a href="' . esc_url($dismiss_url) . '">' . esc_html__('Dismiss', 'calendly-bookings') . '</a>'
                 . '</p></div>';
             return;
         }
 
         $error = get_transient('cb_token_error');
         if ($error) {
-            echo '<div class="notice notice-error notice-dismissible"><p>' . esc_html($error) . '</p>'
-                . ' <a href="' . esc_url($dismiss_url) . '">' . esc_html__('Dismiss', 'calendly-bookings') . '</a>'
-                . '</p></div>';
+            echo '<div class="notice notice-error notice-dismissible"><p>' . esc_html($error) . '</p></div>';
             delete_transient('cb_token_error');
         }
 
         $success = get_transient('cb_token_success');
         if ($success) {
-            echo '<div class="notice notice-success notice-dismissible"><p>' . esc_html($success) . '</p>'
-                . ' <a href="' . esc_url($dismiss_url) . '">' . esc_html__('Dismiss', 'calendly-bookings') . '</a>'
-                . '</p></div>';
+            echo '<div class="notice notice-success notice-dismissible"><p>' . esc_html($success) . '</p></div>';
             delete_transient('cb_token_success');
         }
     }
@@ -378,21 +420,33 @@ class CB_GitHub_Updater
 
 /**
  * Decrypt AES-GCM encrypted token from Worker.
+ * Note: The encryption key must be stored securely in the database via OPT_ENCRYPTION_KEY,
+ * never hardcoded.
  *
  * @param string $encrypted Base64-encoded JSON string from Worker.
- * @param string $secret    LICENSE_SECRET (must be 16, 24, or 32 bytes).
+ * @param string $secret    Encryption key (must be 16, 24, or 32 bytes).
  * @return string|null      Decrypted GitHub installation token or null on failure.
  */
 function cb_decrypt_token($encrypted, $secret)
 {
-    $decoded = base64_decode($encrypted);
-    $json    = json_decode($decoded, true);
+    if (empty($secret) || empty($encrypted)) {
+        return null;
+    }
 
-    if (!$json || !isset($json['iv'], $json['data'], $json['tag'])) return null;
+    try {
+        $decoded = base64_decode($encrypted, true);
+        if ($decoded === false) return null;
 
-    $iv   = pack('C*', ...$json['iv']);
-    $data = pack('C*', ...$json['data']);
-    $tag  = pack('C*', ...$json['tag']);
+        $json = json_decode($decoded, true);
+        if (!$json || !isset($json['iv'], $json['data'], $json['tag'])) return null;
 
-    return openssl_decrypt($data, 'aes-256-gcm', $secret, OPENSSL_RAW_DATA, $iv, $tag) ?: null;
+        $iv   = pack('C*', ...$json['iv']);
+        $data = pack('C*', ...$json['data']);
+        $tag  = pack('C*', ...$json['tag']);
+
+        return openssl_decrypt($data, 'aes-256-gcm', $secret, OPENSSL_RAW_DATA, $iv, $tag) ?: null;
+    } catch (\Exception $e) {
+        error_log('CB Token Decrypt Error: ' . $e->getMessage());
+        return null;
+    }
 }

@@ -1,4 +1,9 @@
 <?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 declare(strict_types=1);
 
 namespace Calendly_Bookings\Modules;
@@ -6,10 +11,6 @@ namespace Calendly_Bookings\Modules;
 use Calendly_Bookings\CB_Constants;
 use Calendly_Bookings\Modules\CB_Audit_Log;
 use Calendly_Bookings\Utils\CB_Timezone_Converter;
-
-if (!defined('ABSPATH')) {
-    exit;
-}
 
 final class CB_API {
 
@@ -147,8 +148,9 @@ final class CB_API {
 	}
 	
         
-    public function sync(): array {
+    public function sync(int $count, string $min_start_date = '', bool $force = false): array {
         CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
+
         $results = [
             'locations'                  => [],
             'scheduled_events'           => [],
@@ -161,7 +163,7 @@ final class CB_API {
         try {
             // Core syncs
             $results['locations']                  = $this->sync_locations();
-            $results['scheduled_events']           = $this->sync_scheduled_events();
+            $results['scheduled_events']           = $this->sync_scheduled_events($count, $min_start_date, $force);
             $results['scheduled_event_invitees']   = $this->sync_scheduled_event_invitees();
             $results['event_types']                = $this->sync_event_types();
             $results['event_type_available_times'] = $this->sync_event_type_available_times();
@@ -254,8 +256,8 @@ final class CB_API {
         }
     }
 
-    public function get_event_types(): array {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
+    public function get_event_types(bool $active_only = false): array {
+        CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['active_only' => $active_only], 'info');
         try {
             global $wpdb;
             $result = $wpdb->get_results(
@@ -263,12 +265,12 @@ final class CB_API {
             MAX(p.post_title) AS product_title,
             COUNT(se.uuid) AS scheduled_count
             FROM {$wpdb->prefix}cb_event_types AS et
-            LEFT JOIN {$wpdb->prefix}cb_scheduled_events AS se 
-            ON se.event_type_id = et.id 
-            LEFT JOIN {$wpdb->posts} AS p 
-            ON et.product_id = p.ID 
-            WHERE et.active=1 
-            GROUP BY et.id 
+            LEFT JOIN {$wpdb->prefix}cb_scheduled_events AS se
+            ON se.event_type_id = et.id
+            LEFT JOIN {$wpdb->posts} AS p
+            ON et.product_id = p.ID
+            WHERE et.active" . ($active_only ? '=1' : '<>0') . "
+            GROUP BY et.id
             ORDER BY et.name ASC",
                 ARRAY_A
             );
@@ -850,7 +852,7 @@ final class CB_API {
         }
     }
 
-    public function sync_scheduled_events(?int $count = null, ?string $min_start_date = null): array {
+    public function sync_scheduled_events(?int $count = null, ?string $min_start_date = null, ?bool $force = false): array {
         CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['count' => $count, 'min_start_date' => $min_start_date], 'info');
         $results = ['upserted' => 0, 'errors' => []];
 
@@ -1328,86 +1330,99 @@ final class CB_API {
 		);
 	}
 
-	public function rebuild_links(): array {
-		$types = $this->get_event_types(null, true);
-		if (!empty($types['error'])) {
-			return ['success' => false, 'error' => $types['error']];
-		}
+    public function rebuild_links(): array {
+        $types = $this->get_event_types(false);
+        if (!empty($types['error'])) {
+            return ['success' => false, 'error' => $types['error']];
+        }
 
-		$collection = $types['collection'] ?? [];
-		$byUuid = [];
-		foreach ($collection as $t) {
-			$uuid = $t['uuid'] ?? basename((string)($t['uri'] ?? ''));
-			if ($uuid) $byUuid[$uuid] = $t;
-		}
+        $collection = $types['collection'] ?? [];
+        $byUuid = $this->build_uuid_map($collection);
 
-		$args = [
-			'post_type'      => 'product',
-			'posts_per_page' => -1,
-			'post_status'    => 'any',
-			'meta_query'     => [
-				['key' => '_cb_event_uuid', 'compare' => 'EXISTS'],
-				['key' => '_cb_scheduling_url', 'compare' => 'EXISTS']
-			],
-			'fields'         => 'ids',
-			'no_found_rows'  => true,
-		];
-		$q = new \WP_Query($args);
-		$linked = [];
-		$unknown_in_calendly = [];
-		$missing_in_wp = [];
+        $args = [
+            'post_type'      => 'product',
+            'posts_per_page' => -1,
+            'post_status'    => 'any',
+            'meta_query'     => [
+                ['key' => '_cb_event_uuid', 'compare' => 'EXISTS'],
+                ['key' => '_cb_scheduling_url', 'compare' => 'EXISTS']
+            ],
+            'fields'         => 'ids',
+            'no_found_rows'  => true,
+        ];
+        $q = new \WP_Query($args);
 
-		foreach ($q->posts as $pid) {
-			$uuid = (string) get_post_meta($pid, '_cb_event_uuid', true);
-			if (!$uuid) continue;
+        $linked = [];
+        $unknown_in_calendly = [];
+        $this->process_wp_posts($q->posts, $byUuid, $linked, $unknown_in_calendly);
 
-			$scheduling_url = (string) get_post_meta($pid, '_cb_scheduling_url', true);
+        $missing_in_wp = $this->find_missing_in_wp($byUuid, $linked);
 
-			if (isset($byUuid[$uuid])) {
-				$linked[] = [
-					'uuid'           => $uuid,
-					'product_id'     => $pid,
-					'product'        => get_the_title($pid),
-					'event_name'     => $byUuid[$uuid]['name'] ?? '',
-					'scheduling_url' => $scheduling_url ?: ($byUuid[$uuid]['scheduling_url'] ?? ''),
-				];
-			} else {
-				$unknown_in_calendly[] = [
-					'uuid'           => $uuid,
-					'product_id'     => $pid,
-					'product'        => get_the_title($pid),
-					'scheduling_url' => $scheduling_url,
-				];
-			}
-		}
+        return [
+            'success'            => true,
+            'linked'             => $linked,
+            'missing_in_wp'      => $missing_in_wp,
+            'unknown_in_calendly'=> $unknown_in_calendly,
+            'counts'             => [
+                'calendly_event_types' => count($byUuid),
+                'linked'               => count($linked),
+                'missing_in_wp'        => count($missing_in_wp),
+                'unknown_in_calendly'  => count($unknown_in_calendly),
+            ],
+        ];
+    }
 
-		foreach (array_keys($byUuid) as $uuid) {
-			$found = false;
-			foreach ($linked as $row) {
-				if ($row['uuid'] === $uuid) { $found = true; break; }
-			}
-			if (!$found) {
-				$missing_in_wp[] = [
-					'uuid'           => $uuid,
-					'event_name'     => $byUuid[$uuid]['name'] ?? '',
-					'scheduling_url' => $byUuid[$uuid]['scheduling_url'] ?? '',
-				];
-			}
-		}
+    private function build_uuid_map(array $collection): array {
+        $byUuid = [];
+        foreach ($collection as $t) {
+            $uuid = $t['uuid'] ?? basename((string)($t['uri'] ?? ''));
+            if ($uuid) {
+                $byUuid[$uuid] = $t;
+            }
+        }
+        return $byUuid;
+    }
 
-		return [
-			'success'            => true,
-			'linked'             => $linked,
-			'missing_in_wp'      => $missing_in_wp,
-			'unknown_in_calendly'=> $unknown_in_calendly,
-			'counts'             => [
-				'calendly_event_types' => count($byUuid),
-				'linked'               => count($linked),
-				'missing_in_wp'        => count($missing_in_wp),
-				'unknown_in_calendly'  => count($unknown_in_calendly),
-			],
-		];
-	}
+    private function process_wp_posts(array $posts, array $byUuid, array &$linked, array &$unknown_in_calendly): void {
+        foreach ($posts as $pid) {
+            $uuid = (string) get_post_meta($pid, '_cb_event_uuid', true);
+            if (!$uuid) continue;
+
+            $scheduling_url = (string) get_post_meta($pid, '_cb_scheduling_url', true);
+
+            if (isset($byUuid[$uuid])) {
+                $linked[] = [
+                    'uuid'           => $uuid,
+                    'product_id'     => $pid,
+                    'product'        => get_the_title($pid),
+                    'event_name'     => $byUuid[$uuid]['name'] ?? '',
+                    'scheduling_url' => $scheduling_url ?: ($byUuid[$uuid]['scheduling_url'] ?? ''),
+                ];
+            } else {
+                $unknown_in_calendly[] = [
+                    'uuid'           => $uuid,
+                    'product_id'     => $pid,
+                    'product'        => get_the_title($pid),
+                    'scheduling_url' => $scheduling_url,
+                ];
+            }
+        }
+    }
+
+    private function find_missing_in_wp(array $byUuid, array $linked): array {
+        $missing_in_wp = [];
+        $linked_uuids = array_column($linked, 'uuid');
+        foreach (array_keys($byUuid) as $uuid) {
+            if (!in_array($uuid, $linked_uuids)) {
+                $missing_in_wp[] = [
+                    'uuid'           => $uuid,
+                    'event_name'     => $byUuid[$uuid]['name'] ?? '',
+                    'scheduling_url' => $byUuid[$uuid]['scheduling_url'] ?? '',
+                ];
+            }
+        }
+        return $missing_in_wp;
+    }
 
     public function manual_connection_test(): array {
         if ($this->token === '') {
@@ -1421,14 +1436,6 @@ final class CB_API {
             ? ['success' => true, 'message' => __('Calendly API connection successful.', 'calendly-bookings')]
             : ['success' => false, 'message' => __('Unexpected API response.', 'calendly-bookings')];
     }
-
-    public function test_connection(): array {
-        $types = $this->get_event_types(null, false);
-        if (!empty($types['error'])) return $types;
-        return ['ok' => true, 'count' => isset($types['collection']) ? count($types['collection']) : 0];
-    }
-
-
 
     public function get_event_type_availability(string $event_type_uri, string $start_iso): array {
         try { $dt = new \DateTimeImmutable($start_iso); } catch (\Exception $e) { $dt = new \DateTimeImmutable('now'); }
@@ -1447,34 +1454,5 @@ final class CB_API {
             'end_time'   => $end_utc_iso,
         ], true, 60));
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 }

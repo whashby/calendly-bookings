@@ -1,6 +1,10 @@
 <?php
-// class-cb-audit-log.php
 
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+// class-cb-audit-log.php
 namespace Calendly_Bookings\Modules;
 
 class CB_Audit_Log {

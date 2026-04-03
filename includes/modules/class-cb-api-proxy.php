@@ -1,10 +1,12 @@
 <?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 //includes/modules/class-cb-api-proxy.php
 namespace Calendly_Bookings\Modules;
-
 use Calendly_Bookings\CB_Constants;
-
-if (!defined('ABSPATH')) exit;
 
 final class CB_API_Proxy {
 
@@ -28,23 +30,7 @@ final class CB_API_Proxy {
 				'uuid' => ['required' => false, 'type' => 'string']
 			],
 		]);
-		
-		register_rest_route($ns, '/meeting-details', [
-            'methods' => 'GET',
-            'callback' => [__CLASS__, 'get_meeting_details'],
-            'permission_callback' => '__return_true',
-            'args' => [
-                'event_uuid' => [
-                    'required' => true,
-                    'sanitize_callback' => 'sanitize_text_field',
-                ],
-                'invitee_uuid' => [
-                    'required' => true,
-                    'sanitize_callback' => 'sanitize_text_field',
-                ],
-            ],
-		]);
-		
+
         // Sync
         register_rest_route($ns, '/sync', [
             'methods'             => 'POST',
@@ -62,20 +48,6 @@ final class CB_API_Proxy {
             'permission_callback' => '__return_true',
         ]);
 
-        // Event types sync (all)
-        register_rest_route($ns, '/event-types/sync', [
-            'methods'             => 'POST',
-            'callback'            => [__CLASS__, 'rest_event_types_sync_all'],
-            'permission_callback' => [__CLASS__, 'can_manage'],
-        ]);
-
-        // Event type sync (single UUID)
-        register_rest_route($ns, '/event-types/(?P<uuid>[0-9a-fA-F-]+)/sync', [
-            'methods'             => 'POST',
-            'callback'            => [__CLASS__, 'rest_event_types_sync_one'],
-            'permission_callback' => [__CLASS__, 'can_manage'],
-        ]);
-
         // Availability (support uuid or full uri)
         register_rest_route($ns, '/event-availability', [
             'methods'             => 'GET',
@@ -91,7 +63,7 @@ final class CB_API_Proxy {
         // Scheduled events passthrough (persists via CB_API)
         register_rest_route($ns, '/scheduled-events', [
             'methods'             => 'GET',
-            'callback'            => [__CLASS__, 'restScheduledEvents'],
+            'callback'            => [__CLASS__, 'rest_scheduled_events'],
             'permission_callback' => [__CLASS__, 'can_manage'],
             'args'                => ['count' => ['required' => false, 'type' => 'integer']],
         ]);
@@ -114,7 +86,7 @@ final class CB_API_Proxy {
 
         register_rest_route($ns, '/manual-test', [
             'methods'=>'POST',
-            'callback'=>[__CLASS__,'restManualTest'],
+            'callback'=>[__CLASS__,'rest_manual_test'],
             'permission_callback'=>[__CLASS__,'can_manage'],
         ]);
 
@@ -126,9 +98,9 @@ final class CB_API_Proxy {
         ]);
 
     }
-
+	
 public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Error {
-    $res = CB_API::instance()->sync((int) ($r->get_param('count') ?: 100));
+    $res = CB_API::instance()->sync(absint($r->get_param('count') ?: 100), CB_Constants::OPT_MIN_START_DATE, true);
 
     if (empty($res['success'])) {
         CB_Audit_Log::log('sync_failed', 'scheduled_events', '', ['errors' => $res['errors']], 'error');
@@ -155,26 +127,13 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
 }
 
     public static function rest_event_types_list(): \WP_REST_Response {
-        global $wpdb;
-        $rows = $wpdb->get_results("SELECT id, uuid, name, duration, uri, scheduling_url, product_id FROM {$wpdb->prefix}cb_event_types ORDER BY name ASC", ARRAY_A);
+        $rows = CB_API::instance()->get_event_types(true);
+
+        if (!is_array($rows)) {
+            return new \WP_REST_Response(['success' => false, 'data' => [], 'message' => __('Failed to load event types', 'calendly-bookings')], 500);
+        }
+
         return new \WP_REST_Response(['success' => true, 'data' => $rows], 200);
-    }
-
-    public static function rest_event_types_sync_all(): \WP_REST_Response|\WP_Error {
-        $res = CB_API::instance()->get_event_types(null, true);
-        if (!empty($res['error'])) {
-            return new \WP_Error('event_types_failed', $res['error'], ['status' => 500]);
-        }
-        return new \WP_REST_Response(['success' => true, 'count' => (int) ($res['count'] ?? count($res['collection'] ?? []))], 200);
-    }
-
-    public static function rest_event_types_sync_one(\WP_REST_Request $r): \WP_REST_Response|\WP_Error {
-        $uuid = sanitize_text_field((string) $r['uuid']);
-        $res  = CB_API::instance()->get_event_types($uuid, true);
-        if (!empty($res['error'])) {
-            return new \WP_Error('event_type_failed', $res['error'], ['status' => 404]);
-        }
-        return new \WP_REST_Response(['success' => true, 'data' => $res['collection'][0] ?? null], 200);
     }
 
     public static function rest_event_availability(\WP_REST_Request $r): \WP_REST_Response {
@@ -190,48 +149,44 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
         }
 
         $res = CB_API::instance()->get_event_type_available_times($uuid, $start_iso);
-        if (!empty($res['error'])) {
-            return new \WP_REST_Response(['success'=>false,'message'=>$res['error']], 200);
-        }
+        if (!empty($res['error'])) return new \WP_REST_Response(['success'=>false,'message'=>$res['error']], 200);
         return new \WP_REST_Response(['success'=>true,'data'=>$res['collection'] ?? []], 200);
     }
 
-    public static function restScheduledEvents(\WP_REST_Request $r): \WP_REST_Response {
-        if (!is_user_logged_in() || !current_user_can('manage_options')) {
-            CB_Audit_Log::log('unauthorized', 'scheduled_events', '', [], 'warning');
-            return new \WP_REST_Response(['success' => false, 'message' => 'Unauthorized'], 401);
-        }
+	public static function rest_scheduled_events(\WP_REST_Request $r): \WP_REST_Response {
+		if (!is_user_logged_in() || !current_user_can('manage_options')) {
+			CB_Audit_Log::log('unauthorized', 'scheduled_events', '', [], 'warning');
+			return new \WP_REST_Response(['success' => false, 'message' => 'Unauthorized'], 401);
+		}
 
-        $count = absint($r->get_param('count') ?: 50);
-        $events = CB_API::instance()->get_scheduled_events('admin', $count);
+		$count = absint($r->get_param('count') ?: 50);
+		$events = CB_API::instance()->get_scheduled_events([], 'admin', $count);
 
-        CB_Audit_Log::log('rest_fetch', 'scheduled_events', '', [
-            'context' => 'admin',
-            'count'   => count($events)
-        ], 'info');
+		CB_Audit_Log::log('rest_fetch', 'scheduled_events', '', [
+			'context' => 'admin',
+			'count'   => count($events)
+		], 'info');
 
-        set_transient('cb_last_sync', [
-            'time'   => current_time('mysql'),
-            'count'  => count($events),
-            'source' => 'scheduled-events',
-        ], MINUTE_IN_SECONDS * 30);
+		set_transient('cb_last_sync', [
+			'time'   => current_time('mysql'),
+			'count'  => count($events),
+			'source' => 'scheduled-events',
+		], MINUTE_IN_SECONDS * 30);
 
-        return new \WP_REST_Response([
-            'success'          => true,
-            'events_upserted'  => count($events),
-            'scheduled_events' => $events,
-        ], 200);
-    }
+		return new \WP_REST_Response([
+			'success'          => true,
+			'events_upserted'  => count($events),
+			'scheduled_events' => $events,
+		], 200);
+	}
 
     public static function rest_event_invitees(\WP_REST_Request $r): \WP_REST_Response {
         $uri = sanitize_text_field((string)$r->get_param('scheduled_event_uri'));
         if (!$uri || !str_starts_with($uri,'https://api.calendly.com/scheduled_events/')) {
             return new \WP_REST_Response(['success'=>false,'message'=>'Invalid scheduled_event_uri'], 400);
         }
-        $res = CB_API::instance()->get_event_invitees($uri);
-        if (!empty($res['error'])) {
-            return new \WP_REST_Response(['success'=>false,'message'=>$res['error']], 200);
-        }
+            $res = CB_API::instance()->get_event_invitees($uri);
+        if (!empty($res['error'])) return new \WP_REST_Response(['success'=>false,'message'=>$res['error']], 200);
         return new \WP_REST_Response(['success'=>true,'data'=>$res['collection'] ?? []], 200);
     }
 
@@ -240,119 +195,85 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
         return new \WP_REST_Response(['success'=>true,'message'=>__('API cache cleared', 'calendly-bookings')], 200);
     }
     
-    public static function restManualTest(): \WP_REST_Response {
+    public static function rest_manual_test(\WP_REST_Request $r): \WP_REST_Response {
         $res = CB_API::instance()->manual_connection_test();
         return new \WP_REST_Response($res,200);
     }
-	
-	
-public static function rest_save_settings(\WP_REST_Request $r): \WP_REST_Response {
-    $token = trim(sanitize_text_field((string)($r->get_param('token') ?? '')));
-    $uuid  = trim(sanitize_text_field((string)($r->get_param('uuid') ?? '')));
 
-    if ($uuid !== '' && !preg_match('/^[0-9a-fA-F-]{36}$/', $uuid)) {
-        if (preg_match('/([0-9a-fA-F-]{36})$/', $uuid, $m)) {
-            $uuid = $m[1];
-        } else {
-            CB_Audit_Log::log('invalid_uuid', 'settings', '', ['uuid' => $uuid], 'error');
+    public static function rest_save_settings(\WP_REST_Request $r): \WP_REST_Response {
+        $token = trim(sanitize_text_field((string)($r->get_param('token') ?? '')));
+        $uuid  = trim(sanitize_text_field((string)($r->get_param('uuid') ?? '')));
+
+        if ($uuid !== '' && !preg_match('/^[0-9a-fA-F-]{36}$/', $uuid)) {
+            if (preg_match('/([0-9a-fA-F-]{36})$/', $uuid, $m)) {
+                $uuid = $m[1];
+            } else {
+                CB_Audit_Log::log('invalid_uuid', 'settings', '', ['uuid' => $uuid], 'error');
+                return new \WP_REST_Response([
+                    'success' => false,
+                    'message' => __('Invalid UUID format.', 'calendly-bookings')
+                ], 200);
+            }
+        }
+
+        CB_API::instance()->set_credentials($token ?: null, $uuid ?: null);
+
+        // Test scheduled events connectivity
+        //$test = $api->get_scheduled_events('admin', 1);
+        $test = CB_API::instance()->manual_connection_test();
+        if (empty($test)) {
+            CB_Audit_Log::log('connection_failed', 'scheduled_events', '', ['reason' => 'no events'], 'error');
             return new \WP_REST_Response([
                 'success' => false,
-                'message' => __('Invalid UUID format.', 'calendly-bookings')
+                'message' => __('Connection test failed: no events returned.', 'calendly-bookings')
             ], 200);
         }
-    }
 
-    // Test scheduled events connectivity
-    //$test = $api->get_scheduled_events('admin', 1);
-    $test = CB_API::instance()->manual_connection_test();
-    if (empty($test)) {
-        CB_Audit_Log::log('connection_failed', 'scheduled_events', '', ['reason' => 'no events'], 'error');
+        if ($token !== '') {
+            update_option(CB_Constants::OPT_API_TOKEN, $token, false);
+        }
+        if ($uuid !== '') {
+            update_option(CB_Constants::OPT_USER_UUID, $uuid, false);
+        }
+
+        // Sync upcoming events
+        //$sync = $api->get_scheduled_events('admin', 100);
+        $sync = CB_API::instance()->sync_scheduled_events(100, '', false);
+
+        CB_Audit_Log::log('settings_saved', 'scheduled_events', '', [
+            'token_set' => !empty($token),
+            'uuid_set'  => !empty($uuid),
+            'synced'    => count($sync)
+        ], 'info');
+
+        $message = sprintf(
+            __('Settings saved and connection successful. Synced %d upcoming events.', 'calendly-bookings'),
+            count($sync)
+        );
+
         return new \WP_REST_Response([
-            'success' => false,
-            'message' => __('Connection test failed: no events returned.', 'calendly-bookings')
+            'success' => true,
+            'message' => $message,
+            'sync'    => $sync
         ], 200);
     }
 
-    if ($token !== '') { update_option(CB_Constants::OPT_API_TOKEN, $token, false); }
-    if ($uuid !== '') { update_option(CB_Constants::OPT_USER_UUID, $uuid, false); }
+    public static function rest_debug_event_types(\WP_REST_Request $req): \WP_REST_Response {
+        $uuid = $req->get_param('uuid');
 
-    // Sync upcoming events
-    //$sync = $api->get_scheduled_events('admin', 100);
-    $sync = CB_API::instance()->sync_scheduled_events(100,false);
+        // Fetch without persisting, so you see raw API data
+        $result = CB_API::instance()->get_event_types(false);
 
-    CB_Audit_Log::log('settings_saved', 'scheduled_events', '', [
-        'token_set' => !empty($token),
-        'uuid_set'  => !empty($uuid),
-        'synced'    => count($sync)
-    ], 'info');
+        CB_Audit_Log::log('debug_event_types', 'event', $uuid ?: 'ALL', [
+            'success' => empty($result['error']),
+            'error'   => $result['error'] ?? null
+        ], empty($result['error']) ? 'info' : 'warning');
 
-    $message = sprintf(
-        __('Settings saved and connection successful. Synced %d upcoming events.', 'calendly-bookings'),
-        count($sync)
-    );
-
-    return new \WP_REST_Response([
-        'success' => true,
-        'message' => $message,
-        'sync'    => $sync
-    ], 200);
-}
-
-
-public static function rest_debug_event_types(\WP_REST_Request $req): \WP_REST_Response {
-    $uuid = $req->get_param('uuid');
-
-    // Fetch without persisting, so you see raw API data
-    $result = CB_API::instance()->get_event_types($uuid ?: null, false);
-
-    CB_Audit_Log::log('debug_event_types', 'event', $uuid ?: 'ALL', [
-        'success' => empty($result['error']),
-        'error'   => $result['error'] ?? null
-    ], empty($result['error']) ? 'info' : 'warning');
-
-    return new \WP_REST_Response([
-        'success' => empty($result['error']),
-        'uuid'    => $uuid ?: 'ALL',
-        'data'    => $result
-    ], 200);
-}
-
-
-public static function get_meeting_details(\WP_REST_Request $request): \WP_REST_Response {
-    $event_uuid   = sanitize_text_field($request->get_param('event_uuid'));
-    $invitee_uuid = sanitize_text_field($request->get_param('invitee_uuid'));
-
-    $results = CB_API::instance()->get_event_details($event_uuid, $invitee_uuid);
-
-    if (isset($results['error']) && $results['error'] === true) {
-        CB_Audit_Log::log('get_meeting_details_failed', 'event', $event_uuid, [
-            'invitee_uuid' => $invitee_uuid,
-            'success'      => true
-        ], 'info');
-
-        return new \WP_REST_Response($results, 200);
+        return new \WP_REST_Response([
+            'success' => empty($result['error']),
+            'uuid'    => $uuid ?: 'ALL',
+            'data'    => $result
+        ], 200);
     }
-
-
-	public static function sync_master(): array {
-		try {
-			$api = new CB_API();
-			$result = $api->sync();
-
-			update_option(CB_Constants::OPT_LAST_SYNC, gmdate('Y-m-d H:i:s'));
-
-			return [
-				'status' 	=> 'success',
-				'message'   => 'Sync completed',
-				'last_sync' => get_option(CB_Constants::OPT_LAST_SYNC),
-				'details'	=> $result,
-			];
-		} catch (\Exception $e) {
-			return [
-				'status' => 'error',
-				'message' => 'Sync failed: ' . $e->getMessage(),
-			];
-		}
-	}
 
 }

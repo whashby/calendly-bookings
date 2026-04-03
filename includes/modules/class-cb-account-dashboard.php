@@ -1,10 +1,14 @@
 <?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 // includes/modules/cb-account-dashboard.php
 namespace Calendly_Bookings\Modules;
-
 use Calendly_Bookings\Modules\CB_API;
 
-class CB_Account_Dashboard {
+final class CB_Account_Dashboard {
 
     public static function init() {
         // Render cards on WooCommerce My Account dashboard

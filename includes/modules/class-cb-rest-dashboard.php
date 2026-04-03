@@ -1,12 +1,13 @@
 <?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 namespace Calendly_Bookings\Modules;
-
 use Calendly_Bookings\CB_Constants;
-
 use WP_REST_Request;
 use WP_REST_Response;
-
-if (!defined('ABSPATH')) exit;
 
 final class CB_REST_Dashboard {
     public static function init(): void {

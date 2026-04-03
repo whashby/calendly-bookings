@@ -1,11 +1,15 @@
 <?php
-// includes/constants.php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 namespace Calendly_Bookings;
 
-if (!defined('ABSPATH')) exit;
+// includes/constants.php
 
 final class CB_Constants {
-        public const VERSION = '6.9.48';
+    public const VERSION = '6.9.48';
     public const OPT_GROUP = 'calendly_bookings';
     public const OPT_API_TOKEN = 'cb_api_token';
     public const OPT_USER_UUID = 'cb_user_uuid';

@@ -3,7 +3,9 @@
  * Template Name: Meeting Scheduled (Plugin)
  */
 
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) {
+    exit;
+}
 
 use Calendly_Bookings\Utils\CB_Timezone_Converter;
 
