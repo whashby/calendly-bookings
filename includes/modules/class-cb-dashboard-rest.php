@@ -325,7 +325,14 @@ final class CB_Dashboard_REST {
 	public static function sync_health(\WP_REST_Request $r): array {
 		try {
 			$result = CB_API::instance()->sync(absint($r->get_param('count') ?: 100), get_option(CB_Constants::OPT_MIN_START_DATE), true);
-			update_option(CB_Constants::OPT_LAST_SYNC, gmdate('Y-m-d H:i:s'));
+			// Get site timezone (fallback to UTC if not set)
+			$tz = new DateTimeZone(get_option('timezone_string') ?: 'UTC');
+
+			// Create DateTime in site timezone
+			$now = new DateTime('now', $tz);
+
+			// Save formatted local time (12H format)
+			update_option(CB_Constants::OPT_LAST_SYNC, $now->format('Y-m-d h:i:s'));
 
 			return [
 				'status' 	=> 'success',
