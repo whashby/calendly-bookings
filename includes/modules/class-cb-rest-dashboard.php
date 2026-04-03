@@ -321,9 +321,8 @@ final class CB_REST_Dashboard {
 
 	public static function sync_health(): array {
 		try {
-			$api = new CB_API();
-			$result = $api->sync();
 
+			$result = CB_API::instance()->sync(absint($r->get_param('count') ?: 100), CB_Constants::OPT_MIN_START_DATE, true);
 			update_option(CB_Constants::OPT_LAST_SYNC, gmdate('Y-m-d H:i:s'));
 
 			return [
