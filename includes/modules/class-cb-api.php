@@ -852,11 +852,11 @@ final class CB_API {
     }
 
     public function sync_scheduled_events(?string $min_start_date = null, ?bool $force = false): array {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['count' => $count, 'min_start_date' => $min_start_date], 'info');
+        CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['min_start_date' => $min_start_date], 'info');
         $results = ['upserted' => 0, 'errors' => []];
 
         try {
-            $events = self::query_scheduled_events($count, $min_start_date);
+            $events = self::query_scheduled_events(null,$count, $min_start_date);
 
             if (empty($events)) {
                 $results['errors'][] = 'No scheduled events returned from Calendly';
