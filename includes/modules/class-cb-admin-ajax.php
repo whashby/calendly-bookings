@@ -389,6 +389,17 @@ final class CB_Admin_Ajax {
         // Append encrypted token to product URL
         $followup_url = add_query_arg(['token' => rawurlencode($encrypted)], $product_url);
 
+        // Convert ISO date and time to 12H format in site timezone
+        $tz = new DateTimeZone(get_option('timezone_string') ?: 'America/Barbados');
+
+        $dateObj = new DateTime($followup_date, new DateTimeZone('UTC'));
+        $dateObj->setTimezone($tz);
+        $formattedDate = $dateObj->format('F j, Y'); // e.g., April 3, 2026
+
+        $timeObj = new DateTime($followup_time, new DateTimeZone('UTC'));
+        $timeObj->setTimezone($tz);
+        $formattedTime = $timeObj->format('g:i A'); // e.g., 10:30 AM
+
         // Compose email body
         $body = sprintf(
             "Dear %s,\n\n".
@@ -399,22 +410,15 @@ final class CB_Admin_Ajax {
             "Looking forward to the continued journey.\n\nRegards,\nMichael A. Clarke",
             $firstname,
             $followup_session,
-            $followup_date,
-            $followup_time,
+            $formattedDate,
+            $formattedTime,
             $reset_link,
             $followup_url,
             $product_url
         );
 
-        // Send email
-        //add_filter('wp_mail_from_name', fn() => 'Michael A. Clarke');
-        //add_filter('wp_mail_from', fn() => 'michael@hierlife.com');
-        
+        // Send email (using CB_Mail wrapper which can be extended for logging, templates, etc.)
         CB_Mail::send_email($email, 'Follow-up Session Invitation', $body);
-        
-        // Remove filters afterwards to avoid affecting other plugins
-        //remove_filter('wp_mail_from_name', '__return_false');
-        //remove_filter('wp_mail_from', '__return_false');
 
         // Return JSON success response
         wp_send_json_success([ 'success' => true, 'message' => 'Walk-in created' ]);
