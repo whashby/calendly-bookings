@@ -39,7 +39,7 @@ final class CB_GitHub_Updater
 
         // Use constants from CB_Constants
         $this->repo            = 'https://github.com/' . CB_Constants::GITHUB_REPO;
-        $this->worker_endpoint = defined('CB_WORKER_ENDPOINT') ? CB_WORKER_ENDPOINT : '';
+        $this->worker_endpoint = CB_Constants::CB_WORKER_ENDPOINT;
         $this->license_option  = CB_Constants::OPT_LICENSE_KEY;
         $this->token_option    = CB_Constants::GITHUB_TOKEN_OPTION;
 

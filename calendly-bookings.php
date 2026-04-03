@@ -20,10 +20,6 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('CB_LICENSE_OPTION', 'calendly_bookings_license_key');
-define('CB_TOKEN_OPTION', 'calendly_bookings_encrypted_token');
-define('CB_WORKER_ENDPOINT', 'https://calendly-bookings.whashby.workers.dev');
-
 require_once __DIR__ . '/includes/constants.php';
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/updater.php';
