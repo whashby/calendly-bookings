@@ -87,13 +87,25 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Rewrite version lines
+      - name: Rewrite version lines with sed
         env:
           NEW_VERSION: ${{ needs.bump_version.outputs.new_version }}
           PLUGIN_MAIN_FILE: ${{ env.PLUGIN_MAIN_FILE }}
           CONSTANTS_FILE: ${{ env.CONSTANTS_FILE }}
           VERSION_FILE: ${{ env.VERSION_FILE }}
-        run: php scripts/update.php
+        run: |
+          # Update plugin header line (preserve leading space before *)
+          sed -i "s/^\(\s*\*\s*Version:\s*\).*/\1${NEW_VERSION}/" "${PLUGIN_MAIN_FILE}"
+
+          # Update constants.php line
+          sed -i "s/^\(\s*public\s\+const\s\+VERSION\s*=\s*\)'[^']*';/\1'${NEW_VERSION}';/" "${CONSTANTS_FILE}"
+
+          # Update readme.txt Stable tag
+          sed -i "s/^\(Stable tag:\s*\).*/\1${NEW_VERSION}/" readme.txt
+
+          # Update version.txt
+          echo "${NEW_VERSION}" > "${VERSION_FILE}"
+
 
       - name: Validate version bump
         env:
