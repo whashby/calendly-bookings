@@ -2,6 +2,7 @@
   'use strict';
 
   const uuid = CB_REST.uuid;
+  const siteTimezone = CB_REST.site_timezone || 'America/Barbados';
   const $dateSelect = $('#cb_meeting_date');
   const $timeSelect = $('#cb_meeting_time');
   const $locationSelect = $('#cb_meeting_location');
@@ -47,15 +48,26 @@
   $(document).on('click', e => { if ($(e.target).is('#cb-login-modal')) $('#cb-login-modal').fadeOut(); });
   $(document).on('keyup', e => { if (e.key === "Escape") $('#cb-login-modal').fadeOut(); });
 
-  // Helpers
+  // Helpers (timezone-aware)
   function formatDateLabel(iso) {
     const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' });
+    return new Intl.DateTimeFormat('en-US', {
+      weekday: 'short',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: siteTimezone
+    }).format(d);
   }
 
   function formatTimeLabel(iso) {
     const d = new Date(iso);
-    return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', hour12: true }).format(d);
+    return new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: siteTimezone
+    }).format(d);
   }
 
   function renderDates(dates) {
