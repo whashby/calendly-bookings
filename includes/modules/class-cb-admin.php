@@ -1,11 +1,11 @@
 <?php
 
+namespace Calendly_Bookings\Modules;
+
 if (!defined('ABSPATH')) {
     exit;
 }
 
-//includes/modules/class-cb-admin.php
-namespace Calendly_Bookings\Modules;
 use Calendly_Bookings\CB_Constants;
 use Calendly_Bookings\Modules\CB_API;
 

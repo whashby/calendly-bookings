@@ -1,10 +1,10 @@
 <?php
 
+namespace Calendly_Bookings;
+
 if (!defined('ABSPATH')) {
     exit;
 }
-
-namespace Calendly_Bookings;
 
 use Calendly_Bookings\CB_Constants;
 

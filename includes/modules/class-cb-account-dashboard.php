@@ -1,11 +1,11 @@
 <?php
 
+namespace Calendly_Bookings\Modules;
+
 if (!defined('ABSPATH')) {
     exit;
 }
 
-// includes/modules/cb-account-dashboard.php
-namespace Calendly_Bookings\Modules;
 use Calendly_Bookings\Modules\CB_API;
 
 final class CB_Account_Dashboard {

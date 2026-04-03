@@ -15,11 +15,11 @@ env:
 
 jobs:
   bump_version:
-    name: Read version from version.txt
+    name: Bump semantic version
     runs-on: ubuntu-latest
     outputs:
-      current_version: ${{ steps.read.outputs.current_version }}
-      current_tag: ${{ steps.read.outputs.current_tag }}
+      new_version: ${{ steps.bump.outputs.new_version }}
+      new_tag: ${{ steps.bump.outputs.new_tag }}
 
     steps:
       - name: Checkout
@@ -27,23 +27,58 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Read version.txt
+      - name: Read current version
         id: read
         run: |
           current=$(cat ${{ env.VERSION_FILE }} 2>/dev/null || echo "0.0.0")
-          current=$(echo "$current" | tr -d '\n\r' | xargs)
-          tag="v${current}"
-          echo "current_version=$current" >> $GITHUB_OUTPUT
-          echo "current_tag=$tag" >> $GITHUB_OUTPUT
-          echo "📌 Current version from version.txt: $current"
+          current=$(echo "$current" | tr -d '\n\r')
+          echo "current=$current" >> $GITHUB_OUTPUT
+
+      - name: Determine bump type
+        id: bump_type
+        run: |
+          commits=$(git log -1 --pretty=%B)
+          bump="patch"
+          if echo "$commits" | grep -q "BREAKING CHANGE"; then
+            bump="major"
+          elif echo "$commits" | grep -Eiq "^feat(\(|:)" ; then
+            bump="minor"
+          elif echo "$commits" | grep -Eiq "^fix(\(|:)" ; then
+            bump="patch"
+          fi
+          echo "bump=$bump" >> $GITHUB_OUTPUT
+
+      - name: Increment version
+        id: bump
+        run: |
+          base="${{ steps.read.outputs.current }}"
+          IFS='.' read -r major minor patch <<< "$base"
+          [ -z "$major" ] && major=0
+          [ -z "$minor" ] && minor=0
+          [ -z "$patch" ] && patch=0
+
+          bump="${{ steps.bump_type.outputs.bump }}"
+          if [ "$bump" = "major" ]; then
+            major=$((major + 1)); minor=0; patch=0
+          elif [ "$bump" = "minor" ]; then
+            minor=$((minor + 1)); patch=0
+          else
+            patch=$((patch + 1))
+          fi
+
+          new_version="${major}.${minor}.${patch}"
+          new_tag="v${new_version}"
+
+          echo "new_version=$new_version" >> $GITHUB_OUTPUT
+          echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
 
   update_sources:
-    name: Sync source files to version.txt
+    name: Update source files
     needs: bump_version
     runs-on: ubuntu-latest
     outputs:
-      current_version: ${{ needs.bump_version.outputs.current_version }}
-      current_tag: ${{ needs.bump_version.outputs.current_tag }}
+      new_version: ${{ needs.bump_version.outputs.new_version }}
+      new_tag: ${{ needs.bump_version.outputs.new_tag }}
 
     steps:
       - name: Checkout with write access
@@ -52,44 +87,34 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Sync version in source files
+      - name: Rewrite version lines
         env:
-          SYNC_VERSION: ${{ needs.bump_version.outputs.current_version }}
+          NEW_VERSION: ${{ needs.bump_version.outputs.new_version }}
           PLUGIN_MAIN_FILE: ${{ env.PLUGIN_MAIN_FILE }}
           CONSTANTS_FILE: ${{ env.CONSTANTS_FILE }}
-        run: |
-          # Update calendly-bookings.php: Version: X.X.X
-          sed -i "s/\* Version: [0-9.]\+/\* Version: $SYNC_VERSION/" "$PLUGIN_MAIN_FILE"
-          
-          # Update readme.txt: Stable tag: X.X.X
-          sed -i "s/Stable tag: [0-9.]\+/Stable tag: $SYNC_VERSION/" readme.txt
-          
-          # Update includes/constants.php: Version: X.X.X (handle commented and uncommented)
-          sed -i "s/\(\/\/ \)\?define.*PLUGIN_VERSION.*['\"][0-9.]*['\"]/define( 'PLUGIN_VERSION', '$SYNC_VERSION' )/" "$CONSTANTS_FILE"
+          VERSION_FILE: ${{ env.VERSION_FILE }}
+        run: php scripts/update.php
 
-      - name: Verify changes
+      - name: Commit changes
         env:
-          SYNC_VERSION: ${{ needs.bump_version.outputs.current_version }}
-        run: |
-          echo "Verifying version sync to $SYNC_VERSION..."
-          grep -n "Version: $SYNC_VERSION" ${{ env.PLUGIN_MAIN_FILE }} || echo "⚠️  calendly-bookings.php: version line not found"
-          grep -n "Stable tag: $SYNC_VERSION" readme.txt || echo "⚠️  readme.txt: stable tag not found"
-          grep -n "PLUGIN_VERSION.*$SYNC_VERSION" ${{ env.CONSTANTS_FILE }} || echo "⚠️  constants.php: PLUGIN_VERSION not found"
-
-      - name: Commit version sync
-        env:
-          SYNC_VERSION: ${{ needs.bump_version.outputs.current_version }}
+          NEW_VERSION: ${{ needs.bump_version.outputs.new_version }}
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add "${{ env.PLUGIN_MAIN_FILE }}" "${{ env.CONSTANTS_FILE }}" readme.txt || true
+          git add "${PLUGIN_MAIN_FILE}" "${CONSTANTS_FILE}" readme.txt "${VERSION_FILE}" || true
           if git diff --cached --quiet; then
-            echo "✓ Files already in sync with version.txt"
+            echo "No changes to commit."
           else
-            git commit -m "chore: sync files to version $SYNC_VERSION from version.txt"
+            git commit -m "chore(release): v${NEW_VERSION}"
             git push origin HEAD
-            echo "✓ Pushed version sync commit"
           fi
+
+      - name: Tag release
+        env:
+          NEW_TAG: ${{ needs.bump_version.outputs.new_tag }}
+        run: |
+          git tag "${NEW_TAG}"
+          git push origin "${NEW_TAG}"
 
   build_and_release:
     name: Build ZIP & Release
@@ -101,13 +126,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Create release tag
-        env:
-          RELEASE_TAG: ${{ needs.update_sources.outputs.current_tag }}
-        run: |
-          git tag "$RELEASE_TAG" || echo "Tag $RELEASE_TAG already exists, skipping"
-          git push origin "$RELEASE_TAG" || echo "Tag $RELEASE_TAG already pushed"
 
       - name: Prepare plugin folder
         env:
@@ -132,55 +150,12 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.update_sources.outputs.current_tag }}
-          name: Release ${{ needs.update_sources.outputs.current_tag }}
+          tag_name: ${{ needs.update_sources.outputs.new_tag }}
+          name: Release ${{ needs.update_sources.outputs.new_tag }}
           generate_release_notes: true
           files: "build/${{ env.PLUGIN_SLUG }}.zip"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  increment_version:
-    name: Increment version.txt for next release
-    needs: [ update_sources, build_and_release ]
-    runs-on: ubuntu-latest
-    if: success()
-
-    steps:
-      - name: Checkout with write access
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Increment version.txt
-        env:
-          CURRENT_VERSION: ${{ needs.update_sources.outputs.current_version }}
-        run: |
-          # Parse current version
-          IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
-          [ -z "$major" ] && major=0
-          [ -z "$minor" ] && minor=0
-          [ -z "$patch" ] && patch=0
-          
-          # Increment patch for next dev version
-          patch=$((patch + 1))
-          next_version="${major}.${minor}.${patch}"
-          
-          # Write new version to version.txt
-          echo "$next_version" > ${{ env.VERSION_FILE }}
-          
-          echo "✓ Incremented version.txt: $CURRENT_VERSION → $next_version"
-
-      - name: Commit and push incremented version
-        env:
-          CURRENT_VERSION: ${{ needs.update_sources.outputs.current_version }}
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add ${{ env.VERSION_FILE }}
-          git commit -m "chore: increment version.txt for next development cycle (post-$CURRENT_VERSION)"
-          git push origin HEAD
-          echo "✓ Pushed incremented version.txt"
 
 #  deploy_wordpress_org:
 #    name: Deploy to WordPress.org

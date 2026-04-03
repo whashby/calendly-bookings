@@ -1,12 +1,11 @@
 <?php
 
+namespace Calendly_Bookings\Modules;
+
 if (!defined('ABSPATH')) {
     exit;
 }
 
-//includes/modules/class-cb-shortcodes.php
-
-namespace Calendly_Bookings\Modules;
 use Calendly_Bookings\CB_Constants;
 use Calendly_Bookings\Utils\CB_Timezone_Converter;
 final class CB_Shortcodes {

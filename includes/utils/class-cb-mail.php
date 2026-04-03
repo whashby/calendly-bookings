@@ -1,10 +1,10 @@
 <?php
 
+namespace Calendly_Bookings\Utils;
+
 if (!defined('ABSPATH')) {
     exit;
 }
-
-namespace Calendly_Bookings\Utils;
 
 final class CB_Mail {
     /**

@@ -1,10 +1,11 @@
 <?php
 
+namespace Calendly_Bookings\Modules;
+
 if (!defined('ABSPATH')) {
     exit;
 }
 
-namespace Calendly_Bookings\Modules;
 use WP_REST_Request;
 
 final class CB_Admin_Rest {

@@ -1,12 +1,10 @@
 <?php
 
+namespace Calendly_Bookings;
+
 if (!defined('ABSPATH')) {
     exit;
 }
-
-namespace Calendly_Bookings;
-
-// includes/constants.php
 
 final class CB_Constants {
     public const VERSION = '6.9.48';

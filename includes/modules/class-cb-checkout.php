@@ -1,11 +1,11 @@
 <?php
 
+namespace Calendly_Bookings\Modules;
+
 if (!defined('ABSPATH')) {
     exit;
 }
 
-//includes/modules/class-cb-checkout.php
-namespace Calendly_Bookings\Modules;
 use WC_Order;
 use Calendly_Bookings\CB_Constants;
 

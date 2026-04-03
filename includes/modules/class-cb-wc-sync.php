@@ -1,10 +1,10 @@
 <?php
 
+namespace Calendly_Bookings\Modules;
+
 if (!defined('ABSPATH')) {
     exit;
 }
-
-namespace Calendly_Bookings\Modules;
 
 final class CB_WC_Sync {
     private const META_EVENT_UUID          = '_cb_event_uuid';

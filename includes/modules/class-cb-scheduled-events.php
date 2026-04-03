@@ -1,10 +1,10 @@
 <?php
 
+namespace Calendly_Bookings\Modules;
+
 if (!defined('ABSPATH')) {
     exit;
 }
-
-namespace Calendly_Bookings\Modules;
 
 final class CB_Scheduled_Events {
 

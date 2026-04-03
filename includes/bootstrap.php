@@ -1,11 +1,10 @@
 <?php
 
+namespace Calendly_Bookings;
+
 if (!defined('ABSPATH')) {
     exit;
 }
-
-// includes/bootstrap.php
-namespace Calendly_Bookings;
 
 use Calendly_Bookings\Modules\CB_Audit_Log;
 use Calendly_Bookings\Modules\CB_API;
