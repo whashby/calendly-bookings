@@ -323,7 +323,8 @@ final class CB_Dashboard_REST {
 	}
 
 	public static function sync_health(\WP_REST_Request $r): array {
-		try {absint($r->get_param('count') ?: 100), get_option(CB_Constants::OPT_MIN_START_DATE), true);
+		try {
+			$result = CB_API::instance()->sync(get_option(CB_Constants::OPT_MIN_START_DATE), true);
 			// Get site timezone (fallback to UTC if not set)
 			$tz = new DateTimeZone(get_option('timezone_string') ?: 'UTC');
 
