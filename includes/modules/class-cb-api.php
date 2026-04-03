@@ -856,7 +856,7 @@ final class CB_API {
         $results = ['upserted' => 0, 'errors' => []];
 
         try {
-            $events = self::query_scheduled_events(null,$count, $min_start_date);
+            $events = self::query_scheduled_events(null, $min_start_date);
 
             if (empty($events)) {
                 $results['errors'][] = 'No scheduled events returned from Calendly';
