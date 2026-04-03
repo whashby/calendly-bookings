@@ -54,22 +54,48 @@ final class CB_GitHub_Updater
     }
 
     /** Retrieve latest release info from GitHub */
-    private function api_request($endpoint)
-    {
-        $url = rtrim(CB_Constants::GITHUB_API_URL, '/') . '/' . ltrim($endpoint, '/');
-        $response = wp_remote_get($url, [
-            'headers' => [
-                'Accept'     => 'application/vnd.github+json',
-                'User-Agent' => CB_Constants::API_USER_AGENT,
-            ],
-            'timeout' => 20,
-        ]);
+private function api_request($endpoint)
+{
+    $url = rtrim(CB_Constants::GITHUB_API_URL, '/') . '/' . ltrim($endpoint, '/');
+    \Calendly_Bookings\Modules\CB_Audit_Log::log(
+        'request', 'api', $url, ['message' => 'Starting API request'], 'info'
+    );
 
-        if (is_wp_error($response)) return false;
-        if (wp_remote_retrieve_response_code($response) !== 200) return false;
+    $response = wp_remote_get($url, [
+        'headers' => [
+            'Accept'     => 'application/vnd.github+json',
+            'User-Agent' => CB_Constants::API_USER_AGENT,
+        ],
+        'timeout' => 20,
+    ]);
 
-        return json_decode(wp_remote_retrieve_body($response));
+    if (is_wp_error($response)) {
+        \Calendly_Bookings\Modules\CB_Audit_Log::log(
+            'error', 'api', $url, ['error' => $response->get_error_message()], 'error'
+        );
+        return false;
     }
+
+    $status = wp_remote_retrieve_response_code($response);
+    \Calendly_Bookings\Modules\CB_Audit_Log::log(
+        'response', 'api', $url, ['status' => $status], $status === 200 ? 'info' : 'warning'
+    );
+
+    if ($status !== 200) {
+        \Calendly_Bookings\Modules\CB_Audit_Log::log(
+            'failure', 'api', $url, ['body' => wp_remote_retrieve_body($response)], 'error'
+        );
+        return false;
+    }
+
+    $body = wp_remote_retrieve_body($response);
+    \Calendly_Bookings\Modules\CB_Audit_Log::log(
+        'success', 'api', $url, ['body' => $body], 'info'
+    );
+
+    return json_decode($body);
+}
+
 
     /** Check for plugin updates */
     public function check_update($transient)
@@ -111,50 +137,82 @@ final class CB_GitHub_Updater
     }
 
     /** Request token from Worker and store securely */
-    private function request_and_store_token()
-    {
-        if (empty($this->worker_endpoint)) return;
-        $license = get_option($this->license_option, '');
-        if (empty($license)) return;
-
-        $response = wp_remote_post($this->worker_endpoint, [
-            'headers' => ['Content-Type' => 'application/json'],
-            'body'    => wp_json_encode(['license' => $license]),
-            'timeout' => 20,
-        ]);
-
-        if (is_wp_error($response)) return;
-
-        $data = json_decode(wp_remote_retrieve_body($response), true);
-        if (empty($data['valid']) || empty($data['token'])) {
-            set_transient('cb_token_error', __('Failed to retrieve GitHub token.', 'calendly-bookings'), 3600);
-            return;
-        }
-
-        $key = get_option(CB_Constants::OPT_ENCRYPTION_KEY);
-        $token = !empty($key) ? cb_decrypt_token($data['token'], $key) : $data['token'];
-        update_option($this->token_option, $token ?: $data['token'], false);
+private function request_and_store_token()
+{
+    if (empty($this->worker_endpoint)) {
+        \Calendly_Bookings\Modules\CB_Audit_Log::log('missing_endpoint', 'worker', '', [], 'error');
+        return;
     }
+
+    $license = get_option($this->license_option, '');
+    if (empty($license)) {
+        \Calendly_Bookings\Modules\CB_Audit_Log::log('missing_license', 'worker', '', [], 'error');
+        return;
+    }
+
+    \Calendly_Bookings\Modules\CB_Audit_Log::log('request', 'worker', $license, ['endpoint' => $this->worker_endpoint], 'info');
+
+    $response = wp_remote_post($this->worker_endpoint, [
+        'headers' => ['Content-Type' => 'application/json'],
+        'body'    => wp_json_encode(['license' => $license]),
+        'timeout' => 20,
+    ]);
+
+    if (is_wp_error($response)) {
+        \Calendly_Bookings\Modules\CB_Audit_Log::log('error', 'worker', $license, ['error' => $response->get_error_message()], 'error');
+        return;
+    }
+
+    $status = wp_remote_retrieve_response_code($response);
+    $body   = wp_remote_retrieve_body($response);
+    \Calendly_Bookings\Modules\CB_Audit_Log::log('response', 'worker', $license, ['status' => $status, 'body' => $body], $status === 200 ? 'info' : 'warning');
+
+    $data = json_decode($body, true);
+    if (empty($data['valid']) || empty($data['token'])) {
+        \Calendly_Bookings\Modules\CB_Audit_Log::log('invalid', 'worker', $license, ['data' => $data], 'error');
+        set_transient('cb_token_error', __('Failed to retrieve GitHub token.', 'calendly-bookings'), 3600);
+        return;
+    }
+
+    $key   = get_option(CB_Constants::OPT_ENCRYPTION_KEY);
+    $token = !empty($key) ? cb_decrypt_token($data['token'], $key) : $data['token'];
+
+    \Calendly_Bookings\Modules\CB_Audit_Log::log('store_token', 'worker', $license, ['decrypted' => !empty($token)], $token ? 'info' : 'warning');
+
+    update_option($this->token_option, $token ?: $data['token'], false);
+}
+
 
     /** Inject decrypted token into GitHub requests */
-    public function inject_github_auth_header($args, $url)
-    {
-        if (strpos($url, 'github.com') === false && strpos($url, 'api.github.com') === false) return $args;
+public function inject_github_auth_header($args, $url)
+{
+    if (strpos($url, 'github.com') === false && strpos($url, 'api.github.com') === false) return $args;
 
-        $token = get_option($this->token_option, '');
-        $key   = get_option(CB_Constants::OPT_ENCRYPTION_KEY);
+    $token = get_option($this->token_option, '');
+    $key   = get_option(CB_Constants::OPT_ENCRYPTION_KEY);
 
-        if (!empty($key) && !empty($token)) {
-            $decrypted = cb_decrypt_token($token, $key);
-            if ($decrypted) $token = $decrypted;
+    if (!empty($key) && !empty($token)) {
+        $decrypted = cb_decrypt_token($token, $key);
+        if ($decrypted) {
+            \Calendly_Bookings\Modules\CB_Audit_Log::log('auth_header', 'github', $url, ['decrypted' => true], 'info');
+            $token = $decrypted;
+        } else {
+            \Calendly_Bookings\Modules\CB_Audit_Log::log('auth_header', 'github', $url, ['decrypted' => false], 'warning');
         }
+    }
 
-        if (empty($token)) return $args;
-
-        $args['headers']['Authorization'] = 'token ' . $token;
-        $args['headers']['Accept']        = 'application/vnd.github+json';
+    if (empty($token)) {
+        \Calendly_Bookings\Modules\CB_Audit_Log::log('auth_header', 'github', $url, ['error' => 'No token available'], 'error');
         return $args;
     }
+
+    \Calendly_Bookings\Modules\CB_Audit_Log::log('auth_header', 'github', $url, ['message' => 'Injecting token'], 'info');
+
+    $args['headers']['Authorization'] = 'token ' . $token;
+    $args['headers']['Accept']        = 'application/vnd.github+json';
+    return $args;
+}
+
 
     /** Manual refresh handler */
     public function handle_token_refresh()
