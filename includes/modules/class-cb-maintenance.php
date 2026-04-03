@@ -10,7 +10,7 @@ final class CB_Maintenance {
 
     /** @var self|null */
     private static $instance = null;
- 
+
     public static function init(): void {
         self::instance();
     }
@@ -165,4 +165,5 @@ final class CB_Maintenance {
         }
         return $updated;
     }
+
 }

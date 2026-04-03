@@ -104,4 +104,5 @@ final class CB_Maintenance_REST {
         CB_Maintenance::instance()->normalize_statuses();
         return new WP_REST_Response(['success' => true, 'message' => 'Normalized statuses'], 200);
     }
+
 }
