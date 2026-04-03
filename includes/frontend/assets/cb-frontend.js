@@ -49,17 +49,22 @@
   $(document).on('keyup', e => { if (e.key === "Escape") $('#cb-login-modal').fadeOut(); });
 
   // Helpers (timezone-aware)
-  function formatDateLabel(iso) {
-    const d = new Date(iso);
-    return new Intl.DateTimeFormat('en-US', {
-      weekday: 'short',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      timeZone: siteTimezone
-    }).format(d);
-  }
+function formatDateLabel(iso) {
+  // Remove time portion if present
+  const dateOnly = iso.split('T')[0];
 
+  // Create a Date object using only the date part
+  const d = new Date(dateOnly + 'T00:00:00');
+
+  // Format naturally in the site’s timezone
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: CB_REST.site_timezone // e.g., 'America/Barbados'
+  }).format(d);
+}
   function formatTimeLabel(iso) {
     const d = new Date(iso);
     return new Intl.DateTimeFormat('en-US', {

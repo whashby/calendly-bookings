@@ -68,16 +68,6 @@ $email        = esc_attr($current_user->user_email ?? '');
     </select>
   </div>
 
-  <!-- Notes -->
-  <div class="cb-field-row">
-    <div class="cb-field">
-      <label for="cb_notes"><?php esc_html_e('Notes', 'calendly-bookings'); ?></label>
-      <div class="has-small-font-size">
-        <?php esc_html_e('As you prepare for our first meeting please share anything that you believe would be important for me to know about you that would assist us in making the most of this first session.', 'calendly-bookings'); ?>
-      </div>
-      <textarea id="cb_notes" name="order_comments" rows="4" placeholder="<?php esc_attr_e('Enter notes or leave blank for Nil', 'calendly-bookings'); ?>"></textarea>
-    </div>
-  </div>
-
-  <input type="hidden" name="cb_prefill" value="1">
-
+  <p>
+    <input type="hidden" name="cb_prefill" value="1">
+  </p>

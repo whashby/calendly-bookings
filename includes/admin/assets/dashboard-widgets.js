@@ -16,12 +16,13 @@ function apiFetch(endpoint) {
 function formatLocalTime(isoString) {
   if (!isoString) return '';
   const d = new Date(isoString);
-    return new Intl.DateTimeFormat('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: siteTimezone
-  }).format(d);
+  return d.toLocaleString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 }
 
 // Widget renderer using the helper

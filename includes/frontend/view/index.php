@@ -6,9 +6,7 @@ use Calendly_Bookings\Utils\CB_Encryption;
 
 global $product, $context;
 
-/**
- * 1. Validation notice: account exists but not logged in
- */
+// 1. Validation notice: account exists but not logged in
 if (!empty($context['account_exists']) && empty($context['logged_in'])) {
     echo '<p class="cb-notice error">' . esc_html__(
         'An account exists for this email. Please log in before continuing.',
@@ -17,9 +15,7 @@ if (!empty($context['account_exists']) && empty($context['logged_in'])) {
     return;
 }
 
-/**
- * 2. Product logic
- */
+// 2. Product logic
 if (is_product() && $product instanceof WC_Product) {
 
     // Decode follow-up token if present
@@ -31,14 +27,13 @@ if (is_product() && $product instanceof WC_Product) {
     }
 
     // Localize site timezone and REST data for frontend JS
-    wp_localize_script('cb-frontend', 'CB_REST', [
+    wp_localize_script('cb-frontend', 'CB_TZ_DATA', [
         'site_timezone' => get_option('timezone_string') ?: 'America/Barbados',
         'uuid'          => $product->get_id(),
         'root'          => esc_url(rest_url('calendly-bookings/v1/')),
         'nonce'         => wp_create_nonce('wp_rest')
     ]);
 
-    // Handle initial consultation redirect logic
     if ($product->get_slug() === 'initial-consultation' && is_user_logged_in()) {
         $user_id = get_current_user_id();
         $has_meeting_purchase = false;
