@@ -1,12 +1,11 @@
 <?php
 
+declare(strict_types=1);
 namespace Calendly_Bookings\Modules;
 
 if (!defined('ABSPATH')) {
     exit;
 }
-
-declare(strict_types=1);
 
 use Calendly_Bookings\CB_Constants;
 use Calendly_Bookings\Modules\CB_Audit_Log;

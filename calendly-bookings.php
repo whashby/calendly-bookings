@@ -52,7 +52,7 @@ add_action('admin_post_cb_refresh_github_token', function () {
  * GitHub updater bootstrap.
  */
 add_action('init', function () {
-    CB_GitHub_Updater::instance(__FILE__);
+    \Calendly_Bookings\CB_GitHub_Updater::instance(__FILE__);
 });
 
 /**
