@@ -4,7 +4,7 @@
  */
 namespace Calendly_Bookings\Modules;
 
-use Calendly_Bookings\Utils\CB_Audit_Log;
+use Calendly_Bookings\Modules\CB_Audit_Log;
 use Calendly_Bookings\Utils\CB_Encryption;
 use Calendly_Bookings\Utils\CB_Mail;
 use Calendly_Bookings\CB_Scheduled_Events;

@@ -5,7 +5,7 @@ function canEdit(start_time, status)  {
     // Two weeks in milliseconds
     const twoWeeksMs = 14 * 24 * 60 * 60 * 1000;
     // Check if event is less than 2 weeks old
-    return !!(((now - eventDate) <= twoWeeksMs && status === 'active'));
+    return !!((now - eventDate) <= twoWeeksMs && status != 'canceled');
 }
 
 jQuery(document).ready(function($) {
