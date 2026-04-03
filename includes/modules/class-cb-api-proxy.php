@@ -100,7 +100,7 @@ final class CB_API_Proxy {
     }
 	
 public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Error {
-    $res = CB_API::instance()->sync(absint($r->get_param('count') ?: 100), get_option(CB_Constants::OPT_MIN_START_DATE), true);
+    $res = CB_API::instance()->sync(get_option(CB_Constants::OPT_MIN_START_DATE), true);
 
     if (empty($res['success'])) {
         CB_Audit_Log::log('sync_failed', 'scheduled_events', '', ['errors' => $res['errors']], 'error');

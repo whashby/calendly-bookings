@@ -77,7 +77,7 @@ add_action('plugins_loaded', function () {
      * Cron callback: sync scheduled events every 5 minutes.
      */
     add_action('cb_sync_scheduled_events_cron', function () {
-        CB_API::instance()->sync();
+        CB_API::instance()->sync(get_option(CB_Constants::OPT_MIN_START_DATE), true);
         update_option('cb_last_sync', current_time('mysql'));
         update_option('cb_last_sync_all', current_time('mysql'));
     });

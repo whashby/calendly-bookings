@@ -147,7 +147,7 @@ final class CB_API {
 	}
 	
         
-    public function sync(int $count, string $min_start_date = '', bool $force = false): array {
+    public function sync(string $min_start_date = '', bool $force = false): array {
         CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
 
         $results = [
@@ -162,7 +162,7 @@ final class CB_API {
         try {
             // Core syncs
             $results['locations']                  = $this->sync_locations();
-            $results['scheduled_events']           = $this->sync_scheduled_events($count, $min_start_date, $force);
+            $results['scheduled_events']           = $this->sync_scheduled_events($min_start_date, $force);
             $results['scheduled_event_invitees']   = $this->sync_scheduled_event_invitees();
             $results['event_types']                = $this->sync_event_types();
             $results['event_type_available_times'] = $this->sync_event_type_available_times();
@@ -851,7 +851,7 @@ final class CB_API {
         }
     }
 
-    public function sync_scheduled_events(?int $count = null, ?string $min_start_date = null, ?bool $force = false): array {
+    public function sync_scheduled_events(?string $min_start_date = null, ?bool $force = false): array {
         CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['count' => $count, 'min_start_date' => $min_start_date], 'info');
         $results = ['upserted' => 0, 'errors' => []];
 

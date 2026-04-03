@@ -31,7 +31,8 @@ final class CB_Constants {
     public const TRANSIENT_SYNC_INTERVAL = 300; // 5 minutes
     public const API_BASE_URL = 'https://api.calendly.com';
     public const API_USER_AGENT = 'CalendlyBookingsWP/' . self::VERSION;
-    public const GITHUB_REPO = 'calendly-bookings/calendly-bookings';
+    public const CB_WORKER_ENDPOINT = 'https://calendly-bookings-worker.whashby.workers.dev';
+    public const GITHUB_REPO = 'whashby/calendly-bookings';
     public const GITHUB_API_URL = 'https://api.github.com/repos/' . self::GITHUB_REPO;
     public const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/' . self::GITHUB_REPO . '/main/';
     public const GITHUB_RELEASES_URL = 'https://api.github.com/repos/' . self::GITHUB_REPO . '/releases';
