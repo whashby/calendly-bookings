@@ -35,7 +35,9 @@ jobs:
       - name: Create release artifacts
         run: |
           mkdir -p release
-          zip -r release/${{ env.PLUGIN_SLUG }}-${{ steps.tag_alpha.outputs.tag }}.zip . -x "*.git*" ".github/*"
+          zip -r release/${{ env.PLUGIN_SLUG }}-${{ steps.tag_alpha.outputs.tag }}.zip . \
+                  -i '*.php' '*.html' '*.js' '*.css' \
+                  -x "*.git*" ".github/*"
 
       - name: Create Git tag
         run: |

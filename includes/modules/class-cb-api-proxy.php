@@ -125,30 +125,8 @@ final class CB_API_Proxy {
             'args'=>['token'=>['required'=>false],'uuid'=>['required'=>false]],
         ]);
 
-        register_rest_route($ns, '/sync-master', [
-            'methods' => 'POST',
-            'callback' => [__CLASS__, 'sync_master'],
-            'permission_callback' => '__return_true',
-        ]);
-	
-        register_rest_route($ns, '/schedule', [
-            'methods'             => 'POST',
-            'callback'            => [__CLASS__, 'handle_schedule'],
-            'permission_callback' => function() {
-                return current_user_can('manage_woocommerce'); // adjust as needed
-            },
-            'args' => [
-                'order_id' => [
-                    'required' => true,
-                    'type'     => 'integer',
-                ],
-            ],
-        ]);
-*/
-			
-		
     }
-	
+
 public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Error {
     $res = CB_API::instance()->sync((int) ($r->get_param('count') ?: 100));
 
@@ -320,80 +298,6 @@ public static function rest_save_settings(\WP_REST_Request $r): \WP_REST_Respons
     ], 200);
 }
 
-        if ($uuid !== '' && !preg_match('/^[0-9a-fA-F-]{36}$/', $uuid)) {
-            if (preg_match('/([0-9a-fA-F-]{36})$/', $uuid, $m)) {
-                $uuid = $m[1];
-            } else {
-                CB_Audit_Log::log('invalid_uuid', 'settings', '', ['uuid' => $uuid], 'error');
-                return new \WP_REST_Response([
-                    'success' => false,
-                    'message' => __('Invalid UUID format.', 'calendly-bookings')
-                ], 200);
-            }
-        }
-
-        $api = new \Calendly_Bookings\Modules\CB_API($token ?: null, $uuid ?: null);
-
-        // Test scheduled events connectivity
-        $test = $api->manual_connection_test();
-        if (empty($test)) {
-            CB_Audit_Log::log('connection_failed', 'scheduled_events', '', ['reason' => 'no events'], 'error');
-            return new \WP_REST_Response([
-                'success' => false,
-                'message' => __('Connection test failed: no events returned.', 'calendly-bookings')
-            ], 200);
-        }
-
-        if ($token !== '') update_option(CB_Constants::OPT_API_TOKEN, $token, false);
-        if ($uuid !== '')  update_option(CB_Constants::OPT_USER_UUID, $uuid, false);
-
-        // Sync upcoming events
-        $sync = $api->sync_scheduled_events(100,false);
-
-        CB_Audit_Log::log('settings_saved', 'scheduled_events', '', [
-            'token_set' => !empty($token),
-            'uuid_set'  => !empty($uuid),
-            'synced'    => count($sync)
-        ], 'info');
-
-        $message = sprintf(
-            __('Settings saved and connection successful. Synced %d upcoming events.', 'calendly-bookings'),
-            count($sync)
-        );
-
-        return new \WP_REST_Response([
-            'success' => true,
-            'message' => $message,
-            'sync'    => $sync
-        ], 200);
-    }
-
-
-    public static function rest_debug_event_types(\WP_REST_Request $req): \WP_REST_Response {
-        $uuid = $req->get_param('uuid');
-        $api  = new CB_API();
-
-        // Fetch without persisting, so you see raw API data
-        $result = $api->get_event_types($uuid ?: null, false);
-
-        CB_Audit_Log::log('debug_event_types', 'event', $uuid ?: 'ALL', [
-            'success' => empty($result['error']),
-            'error'   => $result['error'] ?? null
-        ], empty($result['error']) ? 'info' : 'warning');
-
-        return new \WP_REST_Response([
-            'success' => empty($result['error']),
-            'uuid'    => $uuid ?: 'ALL',
-            'data'    => $result
-        ], 200);
-    }
-
-    public static function get_meeting_details(\WP_REST_Request $request): \WP_REST_Response {
-        $event_uuid   = sanitize_text_field($request->get_param('event_uuid'));
-        $invitee_uuid = sanitize_text_field($request->get_param('invitee_uuid'));
-
-        $api     = new CB_API();
-        $results = $api->get_event_details($event_uuid, $invitee_uuid);
 
 public static function rest_debug_event_types(\WP_REST_Request $req): \WP_REST_Response {
     $uuid = $req->get_param('uuid');
@@ -413,47 +317,7 @@ public static function rest_debug_event_types(\WP_REST_Request $req): \WP_REST_R
     ], 200);
 }
 
-/*public static function handle_schedule(\WP_REST_Request $request): \WP_REST_Response {
-    $order_id = absint($request->get_param('order_id'));
-    $order    = wc_get_order($order_id);
 
-    if (!$order) {
-        CB_Audit_Log::log('schedule_meeting_failed', 'order', (string) $order_id, ['reason' => 'order not found'], 'error');
-        return new \WP_REST_Response(['error' => 'Order not found'], 404);
-    }
-
-    $iso_time = $order->get_meta('_cb_meeting_time');
-    $notes    = $order->get_meta('_cb_meeting_notes');
-
-    // Get scheduling URL from first product
-    $scheduling_url = '';
-    foreach ($order->get_items() as $item) {
-        $product_id = $item->get_product_id();
-        $url = get_post_meta($product_id, '_cb_scheduling_url', true);
-        if ($url) {
-            $scheduling_url = $url;
-            break;
-        }
-
-    // Persist scheduled event UUID in order meta
-    if (!empty($res['resource']['uuid'])) {
-        $order->update_meta_data('_cb_scheduled_event_uuid', $res['resource']['uuid']);
-        $order->save();
-    }
-
-    CB_Audit_Log::log('schedule_meeting', 'order', (string) $order_id, [
-        'scheduling_url' => $scheduling_url,
-        'iso_time'       => $iso_time,
-        'success'        => true
-    ], 'info');
-
-    return new \WP_REST_Response([
-        'success'         => true,
-        'order_id'        => $order_id,
-        'scheduled_event' => $res['resource'] ?? [],
-    ], 200);
-}
-    */
 public static function get_meeting_details(\WP_REST_Request $request): \WP_REST_Response {
     $event_uuid   = sanitize_text_field($request->get_param('event_uuid'));
     $invitee_uuid = sanitize_text_field($request->get_param('invitee_uuid'));
