@@ -95,6 +95,26 @@ jobs:
           VERSION_FILE: ${{ env.VERSION_FILE }}
         run: php scripts/update.php
 
+      - name: Validate version bump
+        env:
+          NEW_VERSION: ${{ needs.bump_version.outputs.new_version }}
+          PLUGIN_MAIN_FILE: ${{ env.PLUGIN_MAIN_FILE }}
+          CONSTANTS_FILE: ${{ env.CONSTANTS_FILE }}
+          VERSION_FILE: ${{ env.VERSION_FILE }}
+        run: |
+          files="${PLUGIN_MAIN_FILE} ${CONSTANTS_FILE} readme.txt ${VERSION_FILE}"
+          for f in $files; do
+            if [ ! -f "$f" ]; then
+              echo "File $f not found!"
+              exit 1
+            fi
+            if ! grep -q "$NEW_VERSION" "$f"; then
+              echo "Version mismatch: $f does not contain $NEW_VERSION"
+              exit 1
+            fi
+          done
+          echo "All files correctly updated to $NEW_VERSION"
+
       - name: Commit changes
         env:
           NEW_VERSION: ${{ needs.bump_version.outputs.new_version }}
