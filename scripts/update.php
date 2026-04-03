@@ -1,9 +1,5 @@
 <?php
 
-if (!defined('ABSPATH')) {
-    exit;
-}
-
 $version     = getenv("NEW_VERSION");
 $main        = getenv("PLUGIN_MAIN_FILE");
 $constants   = getenv("CONSTANTS_FILE");
@@ -11,19 +7,30 @@ $versionFile = getenv("VERSION_FILE");
 
 // Update plugin header
 $code = file_get_contents($main);
-$code_new = preg_replace('/^(\s*\*\s*Version:\s*).*/mi', "* Version: {$version}", $code, 1);
+// Update plugin header version line, preserving formatting
+$code_new = preg_replace(
+    '/^(\s*\*\s*Version:\s*).*/mi',
+    '$1' . $version,
+    $code,
+    1
+);
 file_put_contents($main, $code_new);
 
 // Update constants
 $c = file_get_contents($constants);
-$c = preg_replace("/public\s+const\s+VERSION\s*=\s*'[^']*';/", "    public const VERSION = '{$version}';", $c, 1);
+$c = preg_replace(
+    "/^(\s*public\s+const\s+VERSION\s*=\s*)'[^']*';/m",
+    "$1'{$version}';",
+    $c,
+    1
+);
 file_put_contents($constants, $c);
-
 
 // Update readme
 if (file_exists("readme.txt")) {
     $r = file_get_contents("readme.txt");
-    $r_new = preg_replace('/^Stable tag:\s*.*/mi', "Stable tag: {$version}", $r, 1);
+    // Capture "Stable tag:" and any spaces, then replace only the version
+    $r_new = preg_replace('/^(Stable tag:\s*).*/mi', '$1' . $version, $r, 1);
     file_put_contents("readme.txt", $r_new);
 }
 
