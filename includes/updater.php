@@ -290,7 +290,26 @@ final class CB_GitHub_Updater
             delete_transient('cb_token_success');
         }
     }
+
+    /** Get current plugin version from plugin header */
+    private function get_current_plugin_version(): string
+    {
+        $data = get_plugin_data($this->file, false, false);
+        return $data['Version'] ?? '0.0.0';
+    }
+
+    /** Get latest plugin version from GitHub */
+    private function get_latest_plugin_version(): ?string
+    {
+        $api = $this->api_request('releases/latest');
+        if (!$api || empty($api->tag_name)) {
+            return null;
+        }
+        return ltrim($api->tag_name, 'v');
+    }
+
 }
+
 
 /**
  * Decrypt AES-GCM encrypted token from Worker.

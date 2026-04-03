@@ -17,11 +17,13 @@ function formatLocalTime(isoString) {
   if (!isoString) return '';
   const d = new Date(isoString);
   return d.toLocaleString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
+    weekday: 'long',   // e.g. "Friday"
+    month: 'long',     // e.g. "April"
+    day: 'numeric',    // e.g. "3"
+    year: 'numeric',   // e.g. "2026"
+    hour: 'numeric',   // e.g. "11"
+    minute: '2-digit', // e.g. "21"
+    hour12: true       // ensures AM/PM format
   });
 }
 
