@@ -16,6 +16,8 @@ $code_new = preg_replace(
 );
 file_put_contents($main, $code_new);
 
+
+
 // Update constants
 $c = file_get_contents($constants);
 $c = preg_replace(
