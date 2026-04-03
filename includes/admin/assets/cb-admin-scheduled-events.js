@@ -5,7 +5,7 @@ function canEdit(start_time, status)  {
     // Two weeks in milliseconds
     const twoWeeksMs = 14 * 24 * 60 * 60 * 1000;
     // Check if event is less than 2 weeks old
-    return !!((now - eventDate) <= twoWeeksMs && status != 'canceled');
+    return !!(((now - eventDate) <= twoWeeksMs && status === 'active'));
 }
 
 jQuery(document).ready(function($) {
@@ -17,7 +17,7 @@ jQuery(document).ready(function($) {
         $('#filter-name').val('');
         $('#cb-filter-form').submit();
     });
-
+    
     /**
      * Bulk Update Status
      */
@@ -25,63 +25,63 @@ jQuery(document).ready(function($) {
         e.preventDefault();
         tb_show('Bulk Update Status', '#TB_inline?inlineId=cb-bulk-update-content-modal');
     });
-
+    
     /**
      * View Invitee History
      */
     $(document).on('click', '.cb-view-history', function(e) {
         e.preventDefault();
-
+        
         const invitee  = $(this).data('invitee');
         const uuid  = $(this).data('uuid');
         const endpoint = '/wp-json/calendly-bookings/v1/scheduled-events/invitee-history/' + encodeURIComponent(invitee);
-
+        
         $('#cb-dynamic-history-modal').remove();
-
+        
         const $modal = $('<div id="cb-dynamic-history-modal" style="display:none;"></div>');
         $modal.append('<div class="cb-thickbox-form"><div class="cb-history-content"><p>Loading history…</p></div></div>');
         $('body').append($modal);
-
+        
         const $container = $modal.find('.cb-history-content');
-
+        
         $.get(endpoint, function(response) {
             let content = '';
-
+            
             if (response && response.success && response.data && response.data.length > 0) {
                 response.data.forEach(row => {
                     let notes = {};
                     try { notes = row.notes ? JSON.parse(row.notes) : {}; } catch(e) { notes = {}; }
-
+                    
                     content += `
                     <div class="history-item">
-                    <p><strong>Date/Time:</strong> ${row.start_time}</p>
-                    <p><strong>Event:</strong> ${row.event_name}</p>
-                    <p><strong>Status:</strong> ${row.status}</p>
-                    <p><strong>Location:</strong> ${row.location}</p>
-                    <div class="notes-section">
-                    <p><strong>What was discussed:</strong> ${notes.discussed || ''}</p>
-                    <p><strong>Guidance provided:</strong> ${notes.guidance || ''}</p>
-                    <p><strong>Follow-up actions:</strong> ${notes.follow_up || ''}</p>`;
+                        <p><strong>Date/Time:</strong> ${row.start_time}</p>
+                        <p><strong>Event:</strong> ${row.event_name}</p>
+                        <p><strong>Status:</strong> ${row.status}</p>
+                        <p><strong>Location:</strong> ${row.location}</p>
+                        <div class="notes-section">
+                            <p><strong>What was discussed:</strong> ${notes.discussed || ''}</p>
+                            <p><strong>Guidance provided:</strong> ${notes.guidance || ''}</p>
+                            <p><strong>Follow-up actions:</strong> ${notes.follow_up || ''}</p>`;
                     if(canEdit(row.start_time, row.status)) {
                         content+= `<p><strong>Admin notes:</strong> <span class="admin-notes-text">${notes.admin || ''}</span></p>`;
                     } else {
                         content+= `<p><strong>Admin notes:</strong> ${notes.admin || ''}</p>`;
                     }
                     content+= `
-                    </div>
+                        </div>
                     </div>`;
-
+                        
                     if(canEdit(row.start_time, row.status)) {
                         content+= `
                         <div id="admin-notes-url" class="admin-notes">
-                        <p><a href="#" class="cb-add-admin-notes" data-uuid="` + uuid + `">Add/Edit Notes</a></p>
+                            <p><a href="#" class="cb-add-admin-notes" data-uuid="` + uuid + `">Add/Edit Notes</a></p>
                         </div>`;
                     }
                 });
             } else {
                 content = '<p>No history found for ' + invitee + '.</p>';
             }
-
+            
             $container.html(content);
 
             tb_show('Invitee History: ' + invitee.replace(/_/g, ' '), '#TB_inline?inlineId=cb-dynamic-history-modal');
@@ -90,8 +90,8 @@ jQuery(document).ready(function($) {
             tb_show('View Invitee History', '#TB_inline?inlineId=cb-dynamic-history-modal');
         });
     });
-
-
+    
+    
     /**
      * Add Admin Notes
      */
@@ -106,16 +106,16 @@ jQuery(document).ready(function($) {
         $('#admin-notes-url').after(
         //tb_show('Add Admin Notes', '#TB_inline?inlineId=cb-admin-notes-content-modal')
         `<div id="cb-admin-notes-content-modal" style="margin-bottom:30px;">
-        <h2>Add Admin Notes</h2>
-        <div class="cb-thickbox-form">
-        <label for="notes-admin">Thoughts for next session
-        <textarea id="notes-discussed" name="notes-admin" class="large-text" autofocus>${notes || ''}</textarea>
-        </label>
-        </div>
-        <div class="cb-thickbox-actions">
-        <button type="submit" id="cb-admin-notes-submit" data-uuid="` + uuid + `" class="button button-primary cb-save-btn">Save</button>
-        <button type="button" id="cb-admin-notes-cancel" class="button cb-cancel-btn">Cancel</button>
-        </div>
+            <h2>Add Admin Notes</h2>
+            <div class="cb-thickbox-form">
+                <label for="notes-admin">Thoughts for next session
+                <textarea id="notes-discussed" name="notes-admin" class="large-text" autofocus>${notes || ''}</textarea>
+                </label>
+            </div>
+            <div class="cb-thickbox-actions">
+                <button type="submit" id="cb-admin-notes-submit" data-uuid="` + uuid + `" class="button button-primary cb-save-btn">Save</button>
+                <button type="button" id="cb-admin-notes-cancel" class="button cb-cancel-btn">Cancel</button>
+            </div>
         </div>`
         );
     });
@@ -126,55 +126,57 @@ jQuery(document).ready(function($) {
      */
     $(document).on('click', '.cb-view-record', function(e) {
         e.preventDefault();
-
+        
         const uuid = $(this).data('uuid');
         const endpoint = '/wp-json/calendly-bookings/v1/scheduled-events/view/' + encodeURIComponent(uuid);
-
+    
         $('#cb-event-' + uuid + '-modal').remove();
-
+    
         const $modal = $('<div id="cb-event-' + uuid + '-modal" style="display:none;"></div>');
         $modal.append('<div class="cb-thickbox-form"><div class="cb-event-content"><p>Loading event…</p></div></div>');
         $('body').append($modal);
-
+        
         const $container = $modal.find('.cb-event-content');
-
+    
         $.get(endpoint, function(response) {
             let content = '';
-
+        
             if (response && response.success && response.data) {
                 const row = response.data;
-
+            
                 let notes = {};
                 try { notes = row.notes ? JSON.parse(row.notes) : {}; } catch(e) { notes = {}; }
+            
+content = `
+  <h2>Event Details</h2>
+  <div class="cb-thickbox-form cb-event-details">
+    <p><strong>Invitee:</strong> ${row.invitee_name}</p>
+    <p><strong>Event:</strong> ${row.event_name}</p>
+    <p><strong>Date/Time:</strong> ${row.start_time}</p>
+    <p><strong>Location:</strong> ${row.location}</p>
+    <p><strong>Status:</strong> <span class="record-status" data-status="${row.status}">${row.status}</span></p>
+    
+    <h3>Notes</h3>
+    <p><strong>What was discussed:</strong> <span class="note-text" data-field="discussed">${notes.discussed || ''}</span></p>
+    <p><strong>Guidance provided:</strong> <span class="note-text" data-field="guidance">${notes.guidance || ''}</span></p>
+    <p><strong>Follow-up actions:</strong> <span class="note-text" data-field="follow_up">${notes.follow_up || ''}</span></p>
+    <p><strong>Admin notes:</strong> <span class="note-text" data-field="admin">${notes.admin || ''}</span></p>
+    
+    <input type="hidden" name="uuid" value="${uuid}">
+    <div class="cb-thickbox-actions">
+        <button type="button" class="button cb-edit-toggle"${canEdit(row.start_time,row.status) ? '' : ' style=display:none;'}>Edit</button>
+        <button type="submit" id="cb-event-details-submit" class="button button-primary cb-save-btn" style="display:none;">Save</button>
+        <button type="button" id="cb-edit-event-cancel" class="button cb-cancel-btn" style="display:none;">Cancel</button>
+    </div>
+  </div>
+`;
 
-                content = `
-                <h2>Event Details</h2>
-                <div class="cb-thickbox-form cb-event-details">
-                <p><strong>Invitee:</strong> ${row.invitee_name}</p>
-                <p><strong>Event:</strong> ${row.event_name}</p>
-                <p><strong>Date/Time:</strong> ${row.start_time}</p>
-                <p><strong>Location:</strong> ${row.location}</p>
-                <p><strong>Status:</strong> <span class="record-status" data-status="${row.status}">${row.status}</span></p>
-
-                <h3>Notes</h3>
-                <p><strong>What was discussed:</strong> <span class="note-text" data-field="discussed">${notes.discussed || ''}</span></p>
-                <p><strong>Guidance provided:</strong> <span class="note-text" data-field="guidance">${notes.guidance || ''}</span></p>
-                <p><strong>Follow-up actions:</strong> <span class="note-text" data-field="follow_up">${notes.follow_up || ''}</span></p>
-                <p><strong>Admin notes:</strong> <span class="note-text" data-field="admin">${notes.admin || ''}</span></p>
-
-                <input type="hidden" name="uuid" value="${uuid}">
-                <div class="cb-thickbox-actions">
-                <button type="button" class="button cb-edit-toggle"${canEdit(row.start_time,row.status) ? '' : ' style=display:none;'}>Edit</button>
-                <button type="submit" id="cb-event-details-submit" class="button button-primary cb-save-btn" style="display:none;">Save</button>
-                <button type="button" id="cb-edit-event-cancel" class="button cb-cancel-btn" style="display:none;">Cancel</button>
-                </div>
-                </div>
-                `;
-
+            
+            
             } else {
-            content = '<p>No event details found.</p>';
+                content = '<p>No event details found.</p>';
             }
-
+    
             $container.html(content);
 
             tb_show('Scheduled Event', '#TB_inline?inlineId=cb-event-' + uuid + '-modal');
@@ -182,8 +184,8 @@ jQuery(document).ready(function($) {
             $container.html('<p>Error loading event.</p>');
             tb_show('Scheduled Event', '#TB_inline?inlineId=cb-event-' + uuid + '-modal');
         });
-});
-
+    });
+    
     /**
      * Edit toggle inside ThickBox
      */
@@ -218,21 +220,7 @@ jQuery(document).ready(function($) {
         form.find('.cb-cancel-btn').show();
         $(this).hide();
     });
-
-    // Replace each note-text span with a textarea
-    $form.find('.note-text').each(function() {
-    const field = $(this).data('field');
-    const value = $(this).text();
-    $(this).replaceWith(
-    `<textarea name="notes-${field}">${value}</textarea>`
-    );
-    });
-
-    $form.find('.cb-save-btn').show();
-    $form.find('.cb-cancel-btn').show();
-    $(this).hide();
-    });
-
+    
     /**
      * Handle walk-in submission
      */
@@ -438,7 +426,7 @@ jQuery(document).ready(function($) {
                 });
             }
         });
-
+    
         // Fetch meeting locations
         $.get('/wp-json/calendly-bookings/v1/scheduled-events/locations', function(response) {
             if (response.success && response.data) {
@@ -550,7 +538,7 @@ jQuery(document).ready(function($) {
      *  Cancel button handler
      */
     $(document).on('click', '.cb-cancel-btn', function() {
-
+        
         if($(this).attr("id") === 'cb-edit-event-cancel') {
             const form = $(this).closest('.cb-thickbox-form');
         
@@ -559,7 +547,7 @@ jQuery(document).ready(function($) {
                 const field = $(this).attr('name').replace('notes-', '');
                 const value = $(this).val();
                 $(this).replaceWith(
-                `<span class="note-text" data-field="${field}">${value}</span>`
+                    `<span class="note-text" data-field="${field}">${value}</span>`
                 );
             });
         
