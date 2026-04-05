@@ -134,15 +134,19 @@ final class CB_GitHub_Updater
         $package = '';
         if (!empty($api->assets) && is_array($api->assets)) {
             foreach ($api->assets as $asset) {
-                if (!empty($asset->browser_download_url) && $asset->name === 'calendly-bookings.zip') {
-                    $package = $asset->browser_download_url;
+                if (!empty($asset->id) && $asset->name === 'calendly-bookings.zip') {
+                    // Use the GitHub API release asset endpoint
+                    $package = "https://api.github.com/repos/whashby/calendly-bookings/releases/assets/{$asset->id}";
                     break;
                 }
             }
         }
+
+        // Fallback only if asset not found
         if (empty($package)) {
             $package = $api->zipball_url ?? '';
         }
+
         $update_available = ($current_version && version_compare($new_version, $current_version, '>') && !empty($package));
 
         if ($update_available) {
