@@ -227,7 +227,7 @@ final class CB_GitHub_Updater
 
         $args['headers']['Authorization'] = 'token ' . $token;
 
-        if (strpos($url, '/releases/download/') !== false) {
+        if (strpos($url, '/releases/assets/') !== false || strpos($url, '/releases/download/') !== false) {
             $args['headers']['Accept'] = 'application/octet-stream';
         } else {
             $args['headers']['Accept'] = 'application/vnd.github+json';
