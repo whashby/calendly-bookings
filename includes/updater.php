@@ -214,7 +214,6 @@ final class CB_GitHub_Updater
         }
 
         $token = get_option(self::TOKEN_OPTION, '');
-
         if (empty($token)) {
             CB_Audit_Log::log('auth_header', 'github', $url, ['error' => 'No token available'], 'error');
             return $args;
@@ -223,15 +222,18 @@ final class CB_GitHub_Updater
         CB_Audit_Log::log('auth_header', 'github', $url, ['message' => 'Injecting token'], 'info');
 
         $args['headers']['Authorization'] = 'token ' . $token;
+
         if (strpos($url, '/releases/download/') !== false) {
             $args['headers']['Accept'] = 'application/octet-stream';
         } else {
             $args['headers']['Accept'] = 'application/vnd.github+json';
         }
 
+        // NEW: log the exact URL WordPress is about to request
+        CB_Audit_Log::log('http_request', 'github', $url, ['headers' => $args['headers']], 'info');
+
         return $args;
     }
-
 
     /** Manual refresh handler */
     public function handle_token_refresh() {
