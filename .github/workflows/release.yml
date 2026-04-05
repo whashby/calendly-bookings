@@ -153,7 +153,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-verify_release:
+  verify_release:
   name: Verify GitHub Release Asset
   needs: build_and_release
   runs-on: ubuntu-latest
