@@ -182,7 +182,6 @@ jobs:
         run: |
           files="extracted/${{ env.PLUGIN_SLUG }}/${{ env.PLUGIN_MAIN_FILE }} \
                  extracted/${{ env.PLUGIN_SLUG }}/${{ env.CONSTANTS_FILE }} \
-                 extracted/${{ env.PLUGIN_SLUG }}/readme.txt \
                  extracted/${{ env.PLUGIN_SLUG }}/${{ env.VERSION_FILE }}"
           for f in $files; do
             if ! grep -q "$NEW_VERSION" "$f"; then
