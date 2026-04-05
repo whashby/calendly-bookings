@@ -131,7 +131,18 @@ final class CB_GitHub_Updater
         $new_version     = ltrim($api->tag_name, 'v');
         $current_version = $transient->checked[$this->plugin] ?? null;
 
-        $package = $api->zipball_url ?? '';
+        $package = '';
+        if (!empty($api->assets) && is_array($api->assets)) {
+            foreach ($api->assets as $asset) {
+                if (!empty($asset->browser_download_url) && $asset->name === 'calendly-bookings.zip') {
+                    $package = $asset->browser_download_url;
+                    break;
+                }
+            }
+        }
+        if (empty($package)) {
+            $package = $api->zipball_url ?? '';
+        }
         $update_available = ($current_version && version_compare($new_version, $current_version, '>') && !empty($package));
 
         if ($update_available) {
