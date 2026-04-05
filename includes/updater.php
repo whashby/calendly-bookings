@@ -6,6 +6,7 @@ if (!defined('ABSPATH')) {
 }
 
 use Calendly_Bookings\CB_Constants;
+use Calendly_Bookings\Modules\CB_Audit_Log;
 
 /**
  * Handles secure GitHub update checks and token management.
@@ -14,17 +15,39 @@ final class CB_GitHub_Updater
 {
     private static $instance = null;
 
-    private $file;
-    private $plugin;
-    private $basename;
-    private $repo;
-    private $worker_endpoint;
-    private $license_option;
-    private $token_option;
+    private const GITHUB_API_URL = CB_Constants::GITHUB_API_URL;
+    private const WORKER = CB_Constants::CB_WORKER_ENDPOINT;
+    private const REPO = 'https://github.com/' . CB_Constants::GITHUB_REPO;
+    private const API_USER_AGENT = CB_Constants::API_USER_AGENT;
+    private const TOKEN_OPTION = CB_Constants::GITHUB_TOKEN_OPTION;
+    private const LICENSE_OPTION = CB_Constants::OPT_LICENSE_KEY;
+
+    private string $basename;
+    private string $file;
+    private string $plugin;
+    private string $license;
+    private string $token;
+
+
+    public static function init(): void {
+        CB_Audit_Log::log('init', 'updater', '', [], 'info');
+        try {
+            self::instance(CB_Constants::plugin_file());
+            add_action('admin_init', [self::instance(), 'request_and_store_token']);
+            add_action('admin_init', [self::instance(), 'check_for_updates']);
+            add_action('admin_post_cb_refresh_github_token', [self::instance(), 'handle_token_refresh']);
+            add_action('admin_notices', [self::instance(), 'show_admin_notices']);
+            add_filter('pre_set_site_transient_update_plugins', [self::instance(), 'check_for_updates']);
+            add_filter('plugins_api', [self::instance(), 'plugin_info'], 10, 3);
+            add_filter('http_request_args', [self::instance(), 'inject_github_auth_header'], 10, 2);
+            CB_Audit_Log::log('init_success', 'updater', '', [], 'info');
+        } catch (\Exception $e) {
+            CB_Audit_Log::log('init_error', 'updater', '', ['error' => $e->getMessage()], 'error');
+        }
+    }
 
     /** Singleton accessor */
-    public static function instance($file = null)
-    {
+    public static function instance($file = null): self {
         if (self::$instance === null && $file !== null) {
             self::$instance = new self($file);
         }
@@ -32,280 +55,195 @@ final class CB_GitHub_Updater
     }
 
     /** Private constructor */
-    private function __construct($file)
-    {
-        $this->file     = $file;
+    private function __construct($file) {
+        $this->file = $file;
         $this->plugin   = plugin_basename($file);
         $this->basename = dirname($this->plugin);
+        $this->license = get_option(self::LICENSE_OPTION) ?? '';
+        $this->token   = get_option(self::TOKEN_OPTION) ?? '';
+        CB_Audit_Log::log('constructor', 'updater', $this->plugin, ['license_set' => !empty($this->license)], 'info');
 
-        $this->repo            = 'https://github.com/' . CB_Constants::GITHUB_REPO;
-        $this->worker_endpoint = CB_Constants::CB_WORKER_ENDPOINT;
-        $this->license_option  = CB_Constants::OPT_LICENSE_KEY;
-        $this->token_option    = CB_Constants::GITHUB_TOKEN_OPTION;
-
-        add_filter('pre_set_site_transient_update_plugins', [$this, 'check_update']);
+        add_filter('pre_set_site_transient_update_plugins', [$this, 'check_for_updates']);
         add_filter('plugins_api', [$this, 'plugin_info'], 10, 3);
         add_filter('http_request_args', [$this, 'inject_github_auth_header'], 10, 2);
 
-        add_action('admin_menu', [$this, 'add_settings_page']);
-        add_action('admin_init', [$this, 'register_settings']);
+        add_action('admin_init', [$this, 'request_and_store_token']);
+        add_action('admin_init', [$this, 'check_for_updates']);
         add_action('admin_post_cb_refresh_github_token', [$this, 'handle_token_refresh']);
-        add_action('admin_notices', [$this, 'maybe_show_notice']);
+        add_action('admin_notices', [$this, 'show_admin_notices']);
+        CB_Audit_Log::log('constructor_complete', 'updater', $this->plugin, ['license_set' => !empty($this->license)], 'info');
     }
 
-    /** Retrieve latest release info from GitHub */
-private function api_request($endpoint)
-{
-    $url = rtrim(CB_Constants::GITHUB_API_URL, '/') . '/' . ltrim($endpoint, '/');
-    \Calendly_Bookings\Modules\CB_Audit_Log::log(
-        'request', 'api', $url, ['message' => 'Starting API request'], 'info'
-    );
+    /** Request token from Worker and store securely */
+    public function request_and_store_token(): void {
+        $this->license = get_option(self::LICENSE_OPTION, '');
+        if (empty($this->license)) {
+            CB_Audit_Log::log('missing_license', 'worker', '', [], 'error');
+            return;
+        }
 
-    $response = wp_remote_get($url, [
-        'headers' => [
-            'Accept'     => 'application/vnd.github+json',
-            'User-Agent' => CB_Constants::API_USER_AGENT,
-        ],
-        'timeout' => 20,
-    ]);
+        CB_Audit_Log::log('request', 'worker', $this->license, ['endpoint' => self::WORKER], 'info');
+        $response = wp_remote_post(self::WORKER, [
+            'headers' => ['Content-Type' => 'application/json'],
+            'body'    => wp_json_encode(['license' => $this->license]),
+            'timeout' => 20,
+        ]);
 
-    if (is_wp_error($response)) {
-        \Calendly_Bookings\Modules\CB_Audit_Log::log(
-            'error', 'api', $url, ['error' => $response->get_error_message()], 'error'
-        );
-        return false;
+        if (is_wp_error($response)) {
+            CB_Audit_Log::log('error', 'worker', $this->license, ['error' => $response->get_error_message()], 'error');
+            return;
+        }
+
+        $status = wp_remote_retrieve_response_code($response);
+        $body   = wp_remote_retrieve_body($response);
+        $data   = json_decode($body, true);
+        CB_Audit_Log::log('response', 'worker', $this->license, ['status' => $status, 'body' => $data], $status === 200 ? 'info' : 'warning');
+
+        if (empty($data['valid']) || empty($data['token'])) {
+            CB_Audit_Log::log('invalid', 'worker', $this->license, ['data' => $data], 'error');
+            set_transient('cb_token_error', __('Failed to retrieve GitHub token.', 'calendly-bookings'), 3600);
+            return;
+        }
+
+        $this->token = $data['token'];
+        CB_Audit_Log::log('store_token', 'worker', $this->license, ['decrypted' => !empty($this->token)], $this->token ? 'info' : 'warning');
+        update_option(self::TOKEN_OPTION, $this->token, false);
     }
-
-    $status = wp_remote_retrieve_response_code($response);
-    \Calendly_Bookings\Modules\CB_Audit_Log::log(
-        'response', 'api', $url, ['status' => $status], $status === 200 ? 'info' : 'warning'
-    );
-
-    if ($status !== 200) {
-        \Calendly_Bookings\Modules\CB_Audit_Log::log(
-            'failure', 'api', $url, ['body' => wp_remote_retrieve_body($response)], 'error'
-        );
-        return false;
-    }
-
-    $body = wp_remote_retrieve_body($response);
-    \Calendly_Bookings\Modules\CB_Audit_Log::log(
-        'success', 'api', $url, ['body' => $body], 'info'
-    );
-
-    return json_decode($body);
-}
-
 
     /** Check for plugin updates */
-    public function check_update($transient)
-    {
-        if (empty($transient->checked) || empty($this->plugin)) return $transient;
+    public function check_for_updates($transient) {
+        // Return #1: invalid transient or plugin
+        if (empty($transient->checked) || empty($this->plugin)) {
+            CB_Audit_Log::log('check_for_updates', 'updater', $this->plugin, ['message' => 'Invalid transient or plugin'], 'warning');
+            return $transient;
+        }
 
-        $this->get_token(); // ensure token exists
+        CB_Audit_Log::log('check_for_updates', 'updater', $this->plugin, ['message' => 'Checking for updates'], 'info');
+        $this->request_and_store_token(); // always refresh
+        $this->get_token();
 
         $api = $this->api_request('releases/latest');
-        if (!$api || empty($api->tag_name)) return $transient;
+        if (!$api || empty($api->tag_name)) {
+            CB_Audit_Log::log('check_for_updates', 'updater', $this->plugin, ['message' => 'Failed to retrieve API data'], 'warning');
+            return $transient; // Return #2: API failure
+        }
 
         $new_version     = ltrim($api->tag_name, 'v');
         $current_version = $transient->checked[$this->plugin] ?? null;
 
-        if (!$current_version || version_compare($new_version, $current_version, '<=')) return $transient;
-
         $package = $api->zipball_url ?? '';
-        if (empty($package)) return $transient;
+        $update_available = ($current_version && version_compare($new_version, $current_version, '>') && !empty($package));
 
-        $transient->response[$this->plugin] = (object)[
-            'slug'        => $this->basename,
-            'plugin'      => $this->plugin,
-            'new_version' => $new_version,
-            'url'         => $this->repo,
-            'package'     => $package,
-        ];
+        if ($update_available) {
+            CB_Audit_Log::log('update_available', 'updater', $this->plugin, ['new_version' => $new_version], 'info');
+            $transient->response[$this->plugin] = (object)[
+                'slug'        => $this->basename,
+                'plugin'      => $this->plugin,
+                'new_version' => $new_version,
+                'url'         => self::REPO,
+                'package'     => $package,
+            ];
+        } else {
+            CB_Audit_Log::log('update_not_available', 'updater', $this->plugin, [
+                'new_version'     => $new_version,
+                'current_version' => $current_version,
+                'package'         => $package
+            ], 'info');
+        }
 
-        return $transient;
+        return $transient; // Return #3: final return
     }
 
-    /** Retrieve or refresh token */
-    private function get_token()
-    {
-        $token = get_option($this->token_option, '');
-        if (!empty($token)) return $token;
+    /** Retrieve latest release info from GitHub */
+    private function api_request($endpoint) {
+        $url = rtrim(self::GITHUB_API_URL, '/') . '/' . ltrim($endpoint, '/');
+        CB_Audit_Log::log(
+            'request', 'api', $url, ['message' => 'Starting API request'], 'info'
+        );
 
-        $this->request_and_store_token();
-        return get_option($this->token_option, '');
+        $response = wp_remote_get($url, [
+            'headers' => [
+                'Accept'     => 'application/vnd.github+json',
+                'User-Agent' => self::API_USER_AGENT,
+            ],
+            'timeout' => 20,
+        ]);
+
+        if (is_wp_error($response)) {
+            CB_Audit_Log::log(
+                'error', 'api', $url, ['error' => $response->get_error_message()], 'error'
+            );
+            return false;
+        }
+
+        $status = wp_remote_retrieve_response_code($response);
+        CB_Audit_Log::log(
+            'response', 'api', $url, ['status' => $status], $status === 200 ? 'info' : 'warning'
+        );
+
+        if ($status !== 200) {
+            CB_Audit_Log::log(
+                'failure', 'api', $url, ['body' => wp_remote_retrieve_body($response)], 'error'
+            );
+            return false;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        CB_Audit_Log::log(
+            'success', 'api', $url, ['body' => $body], 'info'
+        );
+
+        return json_decode($body);
     }
-
-    /** Request token from Worker and store securely */
-private function request_and_store_token()
-{
-    if (empty($this->worker_endpoint)) {
-        \Calendly_Bookings\Modules\CB_Audit_Log::log('missing_endpoint', 'worker', '', [], 'error');
-        return;
-    }
-
-    $license = get_option($this->license_option, '');
-    if (empty($license)) {
-        \Calendly_Bookings\Modules\CB_Audit_Log::log('missing_license', 'worker', '', [], 'error');
-        return;
-    }
-
-    \Calendly_Bookings\Modules\CB_Audit_Log::log('request', 'worker', $license, ['endpoint' => $this->worker_endpoint], 'info');
-
-    $response = wp_remote_post($this->worker_endpoint, [
-        'headers' => ['Content-Type' => 'application/json'],
-        'body'    => wp_json_encode(['license' => $license]),
-        'timeout' => 20,
-    ]);
-
-    if (is_wp_error($response)) {
-        \Calendly_Bookings\Modules\CB_Audit_Log::log('error', 'worker', $license, ['error' => $response->get_error_message()], 'error');
-        return;
-    }
-
-    $status = wp_remote_retrieve_response_code($response);
-    $body   = wp_remote_retrieve_body($response);
-    \Calendly_Bookings\Modules\CB_Audit_Log::log('response', 'worker', $license, ['status' => $status, 'body' => $body], $status === 200 ? 'info' : 'warning');
-
-    $data = json_decode($body, true);
-    if (empty($data['valid']) || empty($data['token'])) {
-        \Calendly_Bookings\Modules\CB_Audit_Log::log('invalid', 'worker', $license, ['data' => $data], 'error');
-        set_transient('cb_token_error', __('Failed to retrieve GitHub token.', 'calendly-bookings'), 3600);
-        return;
-    }
-
-    $key   = get_option(CB_Constants::OPT_ENCRYPTION_KEY);
-    $token = !empty($key) ? cb_decrypt_token($data['token'], $key) : $data['token'];
-
-    \Calendly_Bookings\Modules\CB_Audit_Log::log('store_token', 'worker', $license, ['decrypted' => !empty($token)], $token ? 'info' : 'warning');
-
-    update_option($this->token_option, $token ?: $data['token'], false);
-}
-
 
     /** Inject decrypted token into GitHub requests */
-public function inject_github_auth_header($args, $url)
-{
-    if (strpos($url, 'github.com') === false && strpos($url, 'api.github.com') === false) return $args;
-
-    $token = get_option($this->token_option, '');
-    $key   = get_option(CB_Constants::OPT_ENCRYPTION_KEY);
-
-    if (!empty($key) && !empty($token)) {
-        $decrypted = cb_decrypt_token($token, $key);
-        if ($decrypted) {
-            \Calendly_Bookings\Modules\CB_Audit_Log::log('auth_header', 'github', $url, ['decrypted' => true], 'info');
-            $token = $decrypted;
-        } else {
-            \Calendly_Bookings\Modules\CB_Audit_Log::log('auth_header', 'github', $url, ['decrypted' => false], 'warning');
+    public function inject_github_auth_header($args, $url) {
+        if (strpos($url, 'github.com') === false && strpos($url, 'api.github.com') === false) {
+            return $args;
         }
-    }
 
-    if (empty($token)) {
-        \Calendly_Bookings\Modules\CB_Audit_Log::log('auth_header', 'github', $url, ['error' => 'No token available'], 'error');
+        $token = get_option(self::TOKEN_OPTION, '');
+
+        if (empty($token)) {
+            CB_Audit_Log::log('auth_header', 'github', $url, ['error' => 'No token available'], 'error');
+            return $args;
+        }
+
+        CB_Audit_Log::log('auth_header', 'github', $url, ['message' => 'Injecting token'], 'info');
+
+        $args['headers']['Authorization'] = 'token ' . $token;
+        $args['headers']['Accept']        = 'application/vnd.github+json';
         return $args;
     }
 
-    \Calendly_Bookings\Modules\CB_Audit_Log::log('auth_header', 'github', $url, ['message' => 'Injecting token'], 'info');
-
-    $args['headers']['Authorization'] = 'token ' . $token;
-    $args['headers']['Accept']        = 'application/vnd.github+json';
-    return $args;
-}
-
 
     /** Manual refresh handler */
-    public function handle_token_refresh()
-    {
+    public function handle_token_refresh() {
         if (!current_user_can('manage_options')) wp_die(__('Unauthorized', 'calendly-bookings'));
+        CB_Audit_Log::log('manual_refresh', 'github', '', ['message' => 'Manual token refresh initiated'], 'info');
+
         if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'cb_refresh_github_token')) {
             wp_die(__('Invalid nonce', 'calendly-bookings'));
+            CB_Audit_Log::log('manual_refresh', 'github', '', ['error' => 'Invalid nonce'], 'error');
         }
 
+        CB_Audit_Log::log('manual_refresh', 'github', '', ['message' => 'Nonce verified, refreshing token'], 'info');
         $this->request_and_store_token();
         set_transient('cb_token_success', __('GitHub token refreshed successfully.', 'calendly-bookings'), 30);
+        CB_Audit_Log::log('manual_refresh', 'github', '', ['message' => 'Token refresh complete'], 'info');
+
         wp_safe_redirect(add_query_arg('page', 'calendly-bookings', admin_url('options-general.php')));
         exit;
     }
 
-    /** Settings page */
-    public function add_settings_page()
-    {
-        add_options_page(
-            __('Calendly Bookings', 'calendly-bookings'),
-            __('Calendly Bookings', 'calendly-bookings'),
-            'manage_options',
-            'calendly-bookings',
-            [$this, 'render_settings_page']
-        );
-    }
-
-    public function register_settings()
-    {
-        register_setting('calendly_bookings', $this->license_option, [
-            'type'              => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-            'default'           => '',
-        ]);
-    }
-
-    /** Render settings UI */
-    public function render_settings_page()
-    {
-        ?>
-        <div class="wrap">
-            <h1><?php esc_html_e('Calendly Bookings Settings', 'calendly-bookings'); ?></h1>
-            <form method="post" action="options.php">
-                <?php
-                settings_fields('calendly_bookings');
-                $license = get_option($this->license_option, '');
-                $latest  = $this->get_latest_plugin_version();
-                $current = $this->get_current_plugin_version();
-                ?>
-                <table class="form-table">
-                    <tr>
-                        <th scope="row"><?php esc_html_e('License Key', 'calendly-bookings'); ?></th>
-                        <td>
-                            <input type="text"
-                                   name="<?php echo esc_attr($this->license_option); ?>"
-                                   value="<?php echo esc_attr($license); ?>"
-                                   class="regular-text" />
-                            <p class="description">
-                                <?php esc_html_e('Enter your license key to enable private GitHub updates.', 'calendly-bookings'); ?>
-                            </p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><?php esc_html_e('Update Status', 'calendly-bookings'); ?></th>
-                        <td>
-                            <?php if (!empty($latest) && version_compare($latest, $current, '>')): ?>
-                                <p style="color:#0073aa;">
-                                    <strong><?php esc_html_e('New version available:', 'calendly-bookings'); ?></strong>
-                                    <?php echo esc_html($latest); ?>
-                                    <?php esc_html_e('(current:', 'calendly-bookings'); ?>
-                                    <?php echo esc_html($current); ?>)
-                                </p>
-                            <?php else: ?>
-                                <p style="color:#008000;">
-                                    ✓ <?php esc_html_e('You have the latest version installed.', 'calendly-bookings'); ?>
-                                </p>
-                            <?php endif; ?>
-                        </td>
-                    </tr>
-                </table>
-                <?php submit_button(); ?>
-            </form>
-        </div>
-        <?php
-    }
-
     /** Admin notices */
-    public function maybe_show_notice()
-    {
-        if (!current_user_can('manage_options')) return;
+    public function show_admin_notices() {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
 
-        $license = get_option($this->license_option);
-        $token   = get_option($this->token_option);
+        $license = get_option($this->license);
+        $token   = get_option($this->token);
 
         if (!empty($license) && empty($token)) {
             $url = wp_nonce_url(
@@ -349,16 +287,27 @@ public function inject_github_auth_header($args, $url)
         }
     }
 
+    /** Retrieve or refresh token */
+    private function get_token() {
+        $this->token = get_option(self::TOKEN_OPTION, '');
+        if(!empty($this->token)) {
+            CB_Audit_Log::log('get_token', 'github', '', ['token_exists' => true], 'info');
+            return $this->token;
+        }
+
+        $this->request_and_store_token();
+        CB_Audit_Log::log('get_token', 'github', '', ['token_exists' => !empty($this->token)], !empty($this->token) ? 'info' : 'warning');
+        return get_option(self::TOKEN_OPTION, '');
+    }
+
     /** Get current plugin version from plugin header */
-    private function get_current_plugin_version(): string
-    {
+    private function get_current_plugin_version(): string {
         $data = get_plugin_data($this->file, false, false);
         return $data['Version'] ?? '0.0.0';
     }
 
     /** Get latest plugin version from GitHub */
-    private function get_latest_plugin_version(): ?string
-    {
+    private function get_latest_plugin_version(): ?string {
         $api = $this->api_request('releases/latest');
         if (!$api || empty($api->tag_name)) {
             return null;
@@ -366,35 +315,4 @@ public function inject_github_auth_header($args, $url)
         return ltrim($api->tag_name, 'v');
     }
 
-}
-
-
-/**
- * Decrypt AES-GCM encrypted token from Worker.
- * @param string $encrypted Base64-encoded JSON string from Worker.
- * @param string $secret    Encryption key (must be 16, 24, or 32 bytes).
- * @return string|null      Decrypted GitHub installation token or null on failure.
- */
-function cb_decrypt_token($encrypted, $secret)
-{
-    if (empty($secret) || empty($encrypted)) {
-        return null;
-    }
-
-    try {
-        $decoded = base64_decode($encrypted, true);
-        if ($decoded === false) return null;
-
-        $json = json_decode($decoded, true);
-        if (!$json || !isset($json['iv'], $json['data'], $json['tag'])) return null;
-
-        $iv   = pack('C*', ...$json['iv']);
-        $data = pack('C*', ...$json['data']);
-        $tag  = pack('C*', ...$json['tag']);
-
-        return openssl_decrypt($data, 'aes-256-gcm', $secret, OPENSSL_RAW_DATA, $iv, $tag) ?: null;
-    } catch (\Exception $e) {
-        error_log('CB Token Decrypt Error: ' . $e->getMessage());
-        return null;
-    }
 }
