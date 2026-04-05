@@ -81,14 +81,11 @@ jobs:
       - name: Rewrite version lines with sed
         env:
           NEW_VERSION: ${{ needs.bump_version.outputs.new_version }}
-          PLUGIN_MAIN_FILE: ${{ env.PLUGIN_MAIN_FILE }}
-          CONSTANTS_FILE: ${{ env.CONSTANTS_FILE }}
-          VERSION_FILE: ${{ env.VERSION_FILE }}
         run: |
-          sed -i "s/^\(\s*\*\s*Version:\s*\).*/\1${NEW_VERSION}/" "${PLUGIN_MAIN_FILE}"
-          sed -i "s/^\(\s*public\s\+const\s\+VERSION\s*=\s*\)'[^']*';/\1'${NEW_VERSION}';/" "${CONSTANTS_FILE}"
+          sed -i "s/^\(\s*\*\s*Version:\s*\).*/\1${NEW_VERSION}/" "${{ env.PLUGIN_MAIN_FILE }}"
+          sed -i "s/^\(\s*public\s\+const\s\+VERSION\s*=\s*\)'[^']*';/\1'${NEW_VERSION}';/" "${{ env.CONSTANTS_FILE }}"
           sed -i "s/^\(Stable tag:\s*\).*/\1${NEW_VERSION}/" readme.txt
-          echo "${NEW_VERSION}" > "${VERSION_FILE}"
+          echo "${NEW_VERSION}" > "${{ env.VERSION_FILE }}"
       - name: Validate version bump
         env:
           NEW_VERSION: ${{ needs.bump_version.outputs.new_version }}
@@ -154,71 +151,31 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   verify_release:
-  name: Verify GitHub Release Asset
-  needs: build_and_release
-  runs-on: ubuntu-latest
-
-  steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-
-    - name: Download release asset with gh
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        TAG: ${{ needs.update_sources.outputs.new_tag }}
-        SLUG: ${{ env.PLUGIN_SLUG }}
-      run: |
-        mkdir release
-        gh release download "$TAG" --pattern "${SLUG}.zip" --dir release
-
-    - name: Inspect ZIP contents
-      run: |
-        unzip -l release/${{ env.PLUGIN_SLUG }}.zip | head -20
-        if ! unzip -l release/${{ env.PLUGIN_SLUG }}.zip | grep -q "${{ env.PLUGIN_SLUG }}/"; then
-          echo "Root folder mismatch in ZIP"
-          exit 1
-        fi
-
-    - name: Extract ZIP
-      run: |
-        mkdir extracted
-        unzip release/${{ env.PLUGIN_SLUG }}.zip -d extracted
-
-    - name: Verify version strings
-      env:
-        NEW_VERSION: ${{ needs.update_sources.outputs.new_version }}
-      run: |
-        files="extracted/${{ env.PLUGIN_SLUG }}/${{ env.PLUGIN_MAIN_FILE }} \
-               extracted/${{ env.PLUGIN_SLUG }}/${{ env.CONSTANTS_FILE }} \
-               extracted/${{ env.PLUGIN_SLUG }}/readme.txt \
-               extracted/${{ env.PLUGIN_SLUG }}/${{ env.VERSION_FILE }}"
-        for f in $files; do
-          if ! grep -q "$NEW_VERSION" "$f"; then
-            echo "Version mismatch: $f does not contain $NEW_VERSION"
-            exit 1
-          fi
-        done
-        echo "Release asset verified: all files aligned with $NEW_VERSION"
     name: Verify GitHub Release Asset
     needs: build_and_release
     runs-on: ubuntu-latest
     steps:
-      - name: Download release asset
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.PLUGIN_SLUG }}.zip
-          path: ./release
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Download release asset with gh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.update_sources.outputs.new_tag }}
+          SLUG: ${{ env.PLUGIN_SLUG }}
+        run: |
+          mkdir release
+          gh release download "$TAG" --pattern "${SLUG}.zip" --dir release
       - name: Inspect ZIP contents
         run: |
-          unzip -l ./release/${{ env.PLUGIN_SLUG }}.zip | head -20
-          if ! unzip -l ./release/${{ env.PLUGIN_SLUG }}.zip | grep -q "${{ env.PLUGIN_SLUG }}/"; then
+          unzip -l release/${{ env.PLUGIN_SLUG }}.zip | head -20
+          if ! unzip -l release/${{ env.PLUGIN_SLUG }}.zip | grep -q "${{ env.PLUGIN_SLUG }}/"; then
             echo "Root folder mismatch in ZIP"
             exit 1
           fi
       - name: Extract ZIP
         run: |
           mkdir extracted
-          unzip ./release/${{ env.PLUGIN_SLUG }}.zip -d extracted
+          unzip release/${{ env.PLUGIN_SLUG }}.zip -d extracted
       - name: Verify version strings
         env:
           NEW_VERSION: ${{ needs.update_sources.outputs.new_version }}
