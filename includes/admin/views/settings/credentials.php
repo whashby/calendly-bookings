@@ -1,10 +1,12 @@
-<?php if (!defined('ABSPATH')) exit; ?>
+<?php
+namespace Calendly_Bookings\Admin\Views\Settings;
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+?>
 
 <h2><?php esc_html_e('API Credentials', 'calendly-bookings'); ?></h2>
-
-<!-- Dummy hidden fields to trap browser autofill -->
-<input type="text" style="display:none" autocomplete="username" />
-<input type="password" style="display:none" autocomplete="new-password" />
 
 <table class="form-table">
   <tr>
