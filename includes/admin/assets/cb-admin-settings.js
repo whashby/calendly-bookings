@@ -1,12 +1,13 @@
 jQuery(function($) {
-  const $form    = $('#cb-settings-form');
-  const $status  = $('#cb-admin-notices');
-  const $testBtn = $('#cb-test-connection');
-  const $saveBtn = $('#cb-save-settings');
-  const $apiKey  = $('#cb_api_key');
-  const $uuid    = $('#cb_uuid');
-  const $runSync = $('#cb-run-sync');
-  const $syncRes = $('#cb-sync-result');
+  const $form       = $('#cb-settings-form');
+  const $status     = $('#cb-admin-notices');
+  const $testBtn    = $('#cb-test-connection');
+  const $saveBtn    = $('#cb-save-settings');
+  const $apiKey     = $('#cb_api_key');
+  const $uuid       = $('#cb_uuid');
+  const $licenseKey = $('#cb_license_key');
+  const $runSync    = $('#cb-run-sync');
+  const $syncRes    = $('#cb-sync-result');
 
   let lastTestSuccess = false;
 
@@ -18,7 +19,7 @@ jQuery(function($) {
   }
 
   function toggleSaveVisibility() {
-    if ($apiKey.val().trim() || $uuid.val().trim()) {
+    if ($apiKey.val().trim() || $uuid.val().trim() || $licenseKey.val().trim()) {
       $saveBtn.show();
     } else {
       $saveBtn.hide();
@@ -32,7 +33,7 @@ jQuery(function($) {
         if (res.success) {
           setStatus(true, res.message || successMsg);
           lastTestSuccess = true;
-          if ($apiKey.val().trim() || $uuid.val().trim()) {
+          if ($apiKey.val().trim() || $uuid.val().trim() || $licenseKey.val().trim()) {
             $saveBtn.show();
           }
         } else {
@@ -51,6 +52,7 @@ jQuery(function($) {
   // Watch inputs for changes
   $apiKey.on('input', toggleSaveVisibility);
   $uuid.on('input', toggleSaveVisibility);
+  $licenseKey.on('input', toggleSaveVisibility);
 
   // Test connection
   $testBtn.on('click', function(e) {
