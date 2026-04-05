@@ -1,4 +1,5 @@
 <?php
+namespace Calendly_Bookings\Admin\Views\Settings;
 
 if (!defined('ABSPATH')) {
     exit;
