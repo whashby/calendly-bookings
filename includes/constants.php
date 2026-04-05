@@ -24,7 +24,6 @@ final class CB_Constants {
     public const OPT_WEBHOOK_URL = 'cb_webhook_url';
     public const OPT_LICENSE_KEY = 'cb_license_key';
     public const OPT_LICENSE_STATUS = 'cb_license_status';
-    public const OPT_ENCRYPTION_KEY = 'cb_encryption_key';
     public const OPT_LAST_REPORT_MONTH = 'cb_last_report_month';
     public const TRANSIENT_SYNC_LOCK = 'cb_sync_lock';
     public const TRANSIENT_SYNC_LOCK_TIMEOUT = 300; // 5 minutes
