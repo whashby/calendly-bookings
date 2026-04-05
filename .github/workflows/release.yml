@@ -137,8 +137,8 @@ jobs:
             ./ build/${{ env.PLUGIN_SLUG }}/
       - name: Create ZIP (only php, html, js, css)
         run: |
-          cd build/${{ env.PLUGIN_SLUG }}
-          zip -r "../${{ env.PLUGIN_SLUG }}.zip" . \
+          cd build/
+          zip -r "${{ env.PLUGIN_SLUG }}.zip" "${{ env.PLUGIN_SLUG }}" \
             -i '*.php' '*.html' '*.js' '*.css'
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
