@@ -1,7 +1,9 @@
 <?php
-namespace Calendly_Bookings\Admin\Views;
+namespace Calendly_Bookings\Admin\Views\Settings;
 
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) {
+    exit;
+}
 ?>
 
 <div class="wrap">
