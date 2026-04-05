@@ -135,11 +135,12 @@ jobs:
             --exclude=".github" \
             --exclude=".gitignore" \
             ./ build/${{ env.PLUGIN_SLUG }}/
-      - name: Create ZIP (only php, html, js, css)
+      - name: Create ZIP (with root folder)
         run: |
-          cd build/
+          cd build
           zip -r "${{ env.PLUGIN_SLUG }}.zip" "${{ env.PLUGIN_SLUG }}" \
-            -i '*.php' '*.html' '*.js' '*.css'
+            -i '*.php' '*.html' '*.js' '*.css' 'readme.txt' \
+            -x '*/.git/*' '*/.github/*' '*/build/*' '*/node_modules/*' '*/vendor/*'
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -182,6 +183,7 @@ jobs:
         run: |
           files="extracted/${{ env.PLUGIN_SLUG }}/${{ env.PLUGIN_MAIN_FILE }} \
                  extracted/${{ env.PLUGIN_SLUG }}/${{ env.CONSTANTS_FILE }} \
+                 extracted/${{ env.PLUGIN_SLUG }}/readme.txt \
                  extracted/${{ env.PLUGIN_SLUG }}/${{ env.VERSION_FILE }}"
           for f in $files; do
             if ! grep -q "$NEW_VERSION" "$f"; then
