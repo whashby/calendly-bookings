@@ -223,7 +223,12 @@ final class CB_GitHub_Updater
         CB_Audit_Log::log('auth_header', 'github', $url, ['message' => 'Injecting token'], 'info');
 
         $args['headers']['Authorization'] = 'token ' . $token;
-        $args['headers']['Accept']        = 'application/vnd.github+json';
+        if (strpos($url, '/releases/download/') !== false) {
+            $args['headers']['Accept'] = 'application/octet-stream';
+        } else {
+            $args['headers']['Accept'] = 'application/vnd.github+json';
+        }
+
         return $args;
     }
 
