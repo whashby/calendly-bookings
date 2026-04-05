@@ -5,7 +5,7 @@
 
 ## Overview
 
-Calendly Bookings is a WordPress plugin designed to integrate Calendly scheduling directly into your WordPress site.  
+Calendly Bookings is a WordPress plugin designed to integrate Calendly scheduling directly into your WordPress site.
 It provides a seamless booking experience for your users while giving administrators full control over versioning, updates, and deployment.
 
 ## Features
