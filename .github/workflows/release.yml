@@ -135,12 +135,14 @@ jobs:
             --exclude=".github" \
             --exclude=".gitignore" \
             ./ build/${{ env.PLUGIN_SLUG }}/
+          # Explicitly copy metadata files into the plugin folder
+          cp readme.txt build/${{ env.PLUGIN_SLUG }}/
+          cp version.txt build/${{ env.PLUGIN_SLUG }}/
       - name: Create ZIP (with root folder)
         run: |
           cd build
           zip -r "${{ env.PLUGIN_SLUG }}.zip" "${{ env.PLUGIN_SLUG }}" \
-            -i '*.php' '*.html' '*.js' '*.css' 'readme.txt' \
-            -x '*/.git/*' '*/.github/*' '*/build/*' '*/node_modules/*' '*/vendor/*'
+            -i '*.php' '*.html' '*.js' '*.css' '*.txt'
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
