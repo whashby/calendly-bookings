@@ -1,45 +1,44 @@
-# Directory Tree for C:\staging\calendly-bookings
+# Calendly Bookings Plugin
 
-- calendly-bookings/
-    - calendly-bookings.php
-    - uninstall.php
-    - includes/
-        - bootstrap.php
-        - constants.php
-        - installer.php
-        - admin/
-            - assets/
-                - cb-admin.js
-                - control-panel.js
-                - dashboard-charts.js
-                - dashboard-widgets.css
-                - dashboard-widgets.js
-                - settings.js
-        - frontend/
-            - assets/
-                - cb-frontend.css
-                - cb-frontend.js
-        - modules/
-            - class-cb-account-dashboard.php
-            - class-cb-admin.php
-            - class-cb-api-proxy.php
-            - class-cb-api.php
-            - class-cb-audit-log.php
-            - class-cb-checkout.php
-            - class-cb-dashboard.php
-            - class-cb-debug.php
-            - class-cb-frontend.php
-            - class-cb-logger.php
-            - class-cb-maintenance.php
-            - class-cb-plugin.php
-            - class-cb-rest-dashboard.php
-            - class-cb-shortcodes.php
-            - class-cb-wc-sync.php
-            - class-cb-webhooks.php
-        - templates/
-            - meeting-scheduled.php
-        - utils/
-            - class-cb-timezone-converter.php
-            - functions.php
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/whashby/calendly-bookings?label=Latest%20Release&style=for-the-badge)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/whashby/calendly-bookings/release.yml?branch=main&label=Release%20Pipeline&style=for-the-badge)
 
+## Overview
 
+Calendly Bookings is a WordPress plugin designed to integrate Calendly scheduling directly into your WordPress site.  
+It provides a seamless booking experience for your users while giving administrators full control over versioning, updates, and deployment.
+
+## Features
+
+- Embed Calendly booking forms into posts, pages, or widgets.
+- Automatic version bumping and tagging via GitHub Actions.
+- CI/CD pipeline with semantic versioning and release asset packaging.
+- Verified release assets with consistent folder structure (`calendly-bookings/`).
+- Ready for WordPress auto‑updates using GitHub release assets.
+
+## Release Pipeline
+
+This repository includes a GitHub Actions workflow (`release.yml`) that:
+
+1. **Bumps the version** based on commit messages (`feat`, `fix`, or `BREAKING CHANGE`).
+2. **Updates source files** (`calendly-bookings.php`, `constants.php`, `readme.txt`, `version.txt`).
+3. **Builds the plugin zip** with a stable root folder.
+4. **Publishes a GitHub Release** with the packaged asset.
+5. **Verifies the release asset** to ensure version alignment and folder structure.
+
+## Installation
+
+1. Download the latest release from the [Releases page](https://github.com/whashby/calendly-bookings/releases).
+2. Upload `calendly-bookings.zip` to your WordPress site via **Plugins → Add New → Upload Plugin**.
+3. Activate the plugin and configure your Calendly integration.
+
+## Development
+
+- Clone the repository.
+- Make changes in the plugin source files.
+- Commit with conventional commit messages (`feat:`, `fix:`, `BREAKING CHANGE:`).
+- Push to `main` or `master` to trigger the release pipeline.
+
+## License
+
+This project is licensed under the MIT License.
