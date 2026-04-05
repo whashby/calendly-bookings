@@ -139,7 +139,7 @@ jobs:
         run: |
           cd build
           zip -r "${{ env.PLUGIN_SLUG }}.zip" "${{ env.PLUGIN_SLUG }}" \
-            -i '*.php' '*.html' '*.js' '*.css' 'readme.txt' \
+            -i '*.php' '*.html' '*.js' '*.css' readme.txt version.txt \
             -x '*/.git/*' '*/.github/*' '*/build/*' '*/node_modules/*' '*/vendor/*'
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
