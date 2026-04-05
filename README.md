@@ -1,6 +1,6 @@
 # Calendly Bookings Plugin
 
-[![Release](https://img.shields.io/github/v/release/whashby/calendly-bookings?label=Latest%20Release)](https://github.com/whashby/calendly-bookings/releases)
+[![Release](https://img.shields.io/github/v/release/whashby/calendly-bookings?label=Latest)](https://github.com/whashby/calendly-bookings/releases)
 [![License](https://img.shields.io/github/license/whashby/calendly-bookings)](LICENSE)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/whashby/calendly-bookings/release.yml?branch=main)](https://github.com/whashby/calendly-bookings/actions)
 
