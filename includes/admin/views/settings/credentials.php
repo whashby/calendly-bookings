@@ -1,4 +1,3 @@
-
 <?php
 
 namespace Calendly_Bookings\Admin\Views\Settings;
