@@ -1,11 +1,3 @@
-<?php
-namespace Calendly_Bookings\Admin\Views\Settings;
-
-if (!defined('ABSPATH')) {
-    exit;
-}
-?>
-
 <div class="wrap">
   <h1>Calendly Bookings Settings</h1>
   <h2 class="nav-tab-wrapper">
