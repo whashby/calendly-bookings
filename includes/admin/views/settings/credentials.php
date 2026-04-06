@@ -1,4 +1,14 @@
 
+<?php
+
+namespace Calendly_Bookings\Admin\Views\Settings;
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+use Calendly_Bookings\CB_Constants;
+?>
 <form method="post" action="options.php" autocomplete="off">
   <!-- Dummy hidden fields to trap browser autofill -->
   <input type="text" style="display:none" autocomplete="username" />
