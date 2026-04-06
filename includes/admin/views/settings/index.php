@@ -1,3 +1,6 @@
+<?php
+$active_tab = $_GET['tab'] ?? 'credentials';
+?>
 <div class="wrap">
   <h1>Calendly Bookings Settings</h1>
   <h2 class="nav-tab-wrapper">
@@ -9,7 +12,7 @@
 
   <div class="tab-content">
     <?php
-      switch ($active_tab = $_GET['tab'] ?? 'credentials') {
+      switch ($active_tab) {
         case 'sync': include_once __DIR__ . '/sync.php'; break;
         case 'email': include_once __DIR__ . '/email.php'; break;
         case 'reports': include_once __DIR__ . '/reports.php'; break;
