@@ -14,7 +14,6 @@ jQuery(document).ready(function($) {
     });
   });
 
-  
   function runSync(action, params = {}) {
     $.post(ajaxurl, { action, ...params }, function(response) {
       alert(response.message);
