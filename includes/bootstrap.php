@@ -13,6 +13,28 @@ require_once __DIR__ . '/installer.php';
 require_once __DIR__ . '/utils/functions.php';
 require_once __DIR__ . '/utils/class-cb-timezone-converter.php';
 require_once __DIR__ . '/utils/class-cb-encryption.php';
+require_once __DIR__ . '/modules/class-cb-plugin.php';
+require_once __DIR__ . '/utils/class-cb-timezone-converter.php';
+require_once __DIR__ . '/utils/class-cb-encryption.php';
+require_once __DIR__ . '/modules/class-cb-shortcodes.php';
+require_once __DIR__ . '/modules/class-cb-dashboard.php';
+require_once __DIR__ . '/modules/class-cb-account-dashboard.php';
+require_once __DIR__ . '/modules/class-cb-dashboard-rest.php';
+require_once __DIR__ . '/modules/class-cb-maintenance.php';
+require_once __DIR__ . '/modules/class-cb-scheduled-events.php';
+require_once __DIR__ . '/modules/class-cb-audit-log.php';
+require_once __DIR__ . '/modules/class-cb-api.php';
+require_once __DIR__ . '/modules/class-cb-api-proxy.php';
+require_once __DIR__ . '/modules/class-cb-wc-sync.php';
+require_once __DIR__ . '/modules/class-cb-webhooks.php';
+require_once __DIR__ . '/modules/class-cb-frontend.php';
+require_once __DIR__ . '/modules/class-cb-frontend-rest.php';
+require_once __DIR__ . '/modules/class-cb-admin.php';
+require_once __DIR__ . '/modules/class-cb-admin-ajax.php';
+require_once __DIR__ . '/modules/class-cb-admin-rest.php';
+require_once __DIR__ . '/modules/class-cb-checkout.php';
+require_once __DIR__ . '/modules/class-cb-debug.php';
+
 
 /**
  * Register 5-minute cron schedule.
@@ -78,27 +100,41 @@ add_filter('cron_schedules', function ($schedules) {
 });
 
 
-require_once __DIR__ . '/modules/class-cb-plugin.php';
-require_once __DIR__ . '/utils/class-cb-timezone-converter.php';
-require_once __DIR__ . '/utils/class-cb-encryption.php';
-require_once __DIR__ . '/modules/class-cb-shortcodes.php';
-require_once __DIR__ . '/modules/class-cb-dashboard.php';
-require_once __DIR__ . '/modules/class-cb-account-dashboard.php';
-require_once __DIR__ . '/modules/class-cb-dashboard-rest.php';
-require_once __DIR__ . '/modules/class-cb-maintenance.php';
-require_once __DIR__ . '/modules/class-cb-scheduled-events.php';
-require_once __DIR__ . '/modules/class-cb-audit-log.php';
-require_once __DIR__ . '/modules/class-cb-api.php';
-require_once __DIR__ . '/modules/class-cb-api-proxy.php';
-require_once __DIR__ . '/modules/class-cb-wc-sync.php';
-require_once __DIR__ . '/modules/class-cb-webhooks.php';
-require_once __DIR__ . '/modules/class-cb-frontend.php';
-require_once __DIR__ . '/modules/class-cb-frontend-rest.php';
-require_once __DIR__ . '/modules/class-cb-admin.php';
-require_once __DIR__ . '/modules/class-cb-admin-ajax.php';
-require_once __DIR__ . '/modules/class-cb-admin-rest.php';
-require_once __DIR__ . '/modules/class-cb-checkout.php';
-require_once __DIR__ . '/modules/class-cb-debug.php';
+/**
+ * Schedule 5-minute cron on activation.
+ */
+register_activation_hook(__FILE__, function () {
+    if (!wp_next_scheduled('cb_sync_master_cron')) {
+        wp_schedule_event(time(), 'every_5_minutes', 'cb_sync_master_cron');
+    }
+
+    // Run installer on activation (schema + meeting page).
+    \Calendly_Bookings\CB_Installer::activate();
+});
+
+/**
+ * Clear cron and uninstall hooks on deactivation.
+ */
+register_deactivation_hook(__FILE__, function () {
+    wp_clear_scheduled_hook('cb_sync_master_cron');
+    wp_clear_scheduled_hook('cb_sync_scheduled_events_cron');
+    wp_clear_scheduled_hook('cb_sync_invitees_cron');
+    wp_clear_scheduled_hook('cb_sync_event_types_cron');
+    wp_clear_scheduled_hook('cb_sync_locations_cron');
+});
+
+// Cron callbacks
+add_action('cb_sync_master_cron', function () {
+    $api = CB_API::instance();
+    $min_start = get_option(CB_Constants::OPT_MIN_START_DATE);
+
+    $api->sync($min_start, true);
+    $api->sync_invitees($min_start, true);
+    $api->sync_event_types($min_start, true);
+    $api->sync_locations($min_start, true);
+
+    update_option('cb_last_sync_all', current_time('mysql'));
+});
 
 add_action('plugins_loaded', function () {
     // Run migrations if needed.
