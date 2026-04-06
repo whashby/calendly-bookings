@@ -6,7 +6,9 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+use Calendly_Bookings\CB_Constants;
 use Calendly_Bookings\Modules\CB_Audit_Log;
+use Calendly_Bookings\Modules\CB_Plugin;
 use Calendly_Bookings\Modules\CB_API;
 
 require_once __DIR__ . '/installer.php';
