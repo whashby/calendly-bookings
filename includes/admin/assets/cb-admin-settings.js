@@ -26,19 +26,19 @@ jQuery(document).ready(function($) {
   $('#cb-sync-event-types').on('click', () => runSync('cb_sync_event_types'));
   $('#cb-sync-locations').on('click', () => runSync('cb_sync_locations'));
 
-$('#cb-generate-report').on('click', function() {
-  window.location.href = ajaxurl + '?action=cb_generate_report';
-});
-
-$('#cb-preview-report').on('click', function() {
-  $.post(ajaxurl, { action: 'cb_preview_report' }, function(response) {
-    if (response.success) {
-      $('#cb-report-preview').html(response.html);
-    } else {
-      alert('Preview failed');
-    }
+  $('#cb-generate-report').on('click', function() {
+    window.location.href = ajaxurl + '?action=cb_generate_report';
   });
-});
 
-  
+  $('#cb-preview-report').on('click', function() {
+    $.post(ajaxurl, { action: 'cb_preview_report' }, function(response) {
+      if (response.success) {
+        $('#cb-report-preview').html(response.html);
+      } else {
+        alert('Preview failed');
+      }
+    });
+  });
+
+
 });

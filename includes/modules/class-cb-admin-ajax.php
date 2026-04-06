@@ -419,18 +419,10 @@ final class CB_Admin_Ajax {
     }
 
     public static function test_connection(): void {
-        $api_key = sanitize_text_field($_POST['api_key']);
-        $uuid    = sanitize_text_field($_POST['user_uuid']);
-        $license = sanitize_text_field($_POST['license_key']);
 
-        // Load existing options if fields are empty
-        $stored_api = get_option(CB_Constants::OPT_API_TOKEN);
-        $stored_uuid = get_option(CB_Constants::OPT_USER_UUID);
-        $stored_license = get_option(CB_Constants::OPT_LICENSE_KEY);
-
-        $test_api = $api_key ?: $stored_api;
-        $test_uuid = $uuid ?: $stored_uuid;
-        $test_license = $license ?: $stored_license;
+        $test_api = sanitize_text_field($_POST['api_key']) ?: get_option(CB_Constants::OPT_API_TOKEN);
+        $test_uuid = sanitize_text_field($_POST['user_uuid']) ?: get_option(CB_Constants::OPT_USER_UUID);;
+        $test_license = sanitize_text_field($_POST['license_key'])?: get_option(CB_Constants::OPT_LICENSE_KEY);
 
         // Connection test logic
         $connection_ok = CB_API::instance()->manual_connection_test($test_api, $test_uuid);
