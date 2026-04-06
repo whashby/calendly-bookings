@@ -16,15 +16,21 @@ use Calendly_Bookings\CB_Constants;
         <?php checked(get_option('cb_master_sync'), 1); ?> />
       <span class="cb-slider"></span>
     </label>
-    <select id="cb_master_frequency" name="cb_master_frequency"
-      <?php disabled(!get_option('cb_master_sync')); ?>>
-      <?php $freq = get_option('cb_master_frequency', 'daily'); ?>
-      <option value="hourly" <?php selected($freq, 'hourly'); ?>>Hourly</option>
-      <option value="twicedaily" <?php selected($freq, 'twicedaily'); ?>>Twice Daily</option>
-      <option value="daily" <?php selected($freq, 'daily'); ?>>Daily</option>
-      <option value="weekly" <?php selected($freq, 'weekly'); ?>>Weekly</option>
-    </select>
+        <?php
+        $schedules = wp_get_schedules(); // returns all intervals registered via cron_schedules
+        $freq = get_option('cb_master_frequency', 'daily');
+        ?>
 
+        <select id="cb_master_frequency" name="cb_master_frequency"
+        <?php disabled(!get_option('cb_master_sync')); ?>>
+        <?php foreach ($schedules as $key => $schedule): ?>
+            <option value="<?php echo esc_attr($key); ?>"
+            <?php selected($freq, $key); ?>>
+            <?php echo esc_html($schedule['display']); ?>
+            </option>
+        <?php endforeach; ?>
+        </select>
+    </div>
     <h2>Individual Syncs</h2>
     <div id="cb-individual-section">
       <?php
