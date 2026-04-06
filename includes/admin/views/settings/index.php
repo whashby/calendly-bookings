@@ -1,4 +1,12 @@
 <?php
+
+namespace Calendly_Bookings\Admin\Views\Settings;
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+use Calendly_Bookings\CB_Constants;
+
 $active_tab = $_GET['tab'] ?? 'credentials';
 ?>
 <div class="wrap">
