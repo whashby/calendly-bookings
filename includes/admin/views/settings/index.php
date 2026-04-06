@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
 
   <div class="tab-content">
     <?php
-      switch ($active_tab ?: 'credentials') {
+      switch ($active_tab = $_GET['tab'] ?? 'credentials') {
         case 'sync': include_once __DIR__ . '/sync.php'; break;
         case 'email': include_once __DIR__ . '/email.php'; break;
         case 'reports': include_once __DIR__ . '/reports.php'; break;
