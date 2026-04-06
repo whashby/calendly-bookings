@@ -29,6 +29,10 @@ final class CB_Admin_Ajax {
         add_action('wp_ajax_cb_test_connection',[__CLASS__, 'test_connection']);
         add_action('wp_ajax_cb_test_email', [__CLASS__, 'test_email']);
         add_action('wp_ajax_cb_preview_email', [__CLASS__, 'preview_email']);
+
+        add_action('wp_ajax_cb_generate_report', [__CLASS__, 'generate_report']);
+        add_action('wp_ajax_cb_preview_report', [__CLASS__, 'preview_report']);
+
 /*        add_action('wp_ajax_cb_sync_all', [__CLASS__, 'sync_all']);
         add_action('wp_ajax_cb_sync_events', [__CLASS__, 'sync_events']);
         add_action('wp_ajax_cb_sync_invitees', [__CLASS__, 'sync_invitees']);
@@ -465,6 +469,37 @@ final class CB_Admin_Ajax {
     public static function preview_email(): void {
         $content = CB_Email::build_email_content();
         wp_send_json(['success' => true, 'html' => $content]);
+    }
+
+    public static function generate_report(): void {
+        $filetype = get_option('cb_report_filetype', 'pdf');
+        $content = CB_Reports::generate_report();
+
+        $filename = 'calendly-report-' . date('Y-m-d') . '.' . $filetype;
+
+        header('Content-Description: File Transfer');
+        header('Content-Type: application/octet-stream');
+        header("Content-Disposition: attachment; filename={$filename}");
+        header('Content-Transfer-Encoding: binary');
+        echo $content;
+        exit;
+    }
+
+    public static function preview_report(): void {
+        $content = CB_Reports::generate_report();
+        $filetype = get_option('cb_report_filetype', 'pdf');
+
+        if ($filetype === 'pdf') {
+            // For preview, embed as base64 PDF
+            $base64 = base64_encode($content);
+            $html = "<embed src='data:application/pdf;base64,{$base64}' type='application/pdf' width='100%' height='600px' />";
+        } elseif ($filetype === 'csv') {
+            $html = "<pre>" . esc_html($content) . "</pre>";
+        } else {
+            $html = "<p>Excel report generated. Download to view.</p>";
+        }
+
+        wp_send_json(['success' => true, 'html' => $html]);
     }
 }
 

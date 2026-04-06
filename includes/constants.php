@@ -36,23 +36,21 @@ final class CB_Constants {
     public const OPT_EMAIL_REPLY_TO = 'cb_email_reply_to';
     public const OPT_EMAIL_BCC = 'cb_email_bcc';
 
+    public const OPT_REPORT_TEMPLATE = 'cb_report_template';
+    public const OPT_REPORT_FILETYPE = 'cb_report_filetype';
+    public const OPT_REPORT_SCHEDULE = 'cb_report_schedule';
+
+    public const OPT_GITHUB_TOKEN = 'cb_github_token';
+
     public const CB_API_BASE_URL = 'https://api.calendly.com';
-
-
     public const CB_WORKER_ENDPOINT = 'https://calendly-bookings-worker.whashby.workers.dev';
-    public const GITHUB_TOKEN_OPTION = 'cb_github_token';
 
 
     public const API_USER_AGENT = 'CalendlyBookingsWP/' . self::VERSION;
-    public const API_REPO_URL = 'https://api.github.com/repos/whashby/calendly-bookings';
-
+    public const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/whashby/calendly-bookings/main/';
     public const GITHUB_REPO_URL = 'https://github.com/whashby/calendly-bookings';
-
-    
-
-    public const GITHUB_API_URL = 'https://api.github.com/repos/' . self::GITHUB_REPO_URL;
-    public const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/' . self::GITHUB_REPO_URL . '/main/';
-    public const GITHUB_RELEASES_URL = 'https://api.github.com/repos/' . self::GITHUB_REPO_URL . '/releases';
+    public const GITHUB_API_REPO_URL = 'https://api.github.com/repos/whashby/calendly-bookings';
+    public const GITHUB_RELEASES_URL = self::GITHUB_API_REPO_URL . '/releases';
 
 
 

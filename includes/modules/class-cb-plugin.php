@@ -45,6 +45,10 @@ public static function register_settings(): void {
         register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_EMAIL_REPLY_TO);
         register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_EMAIL_BCC);
 
+        register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_REPORT_TEMPLATE);
+        register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_REPORT_FILETYPE);
+        register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_REPORT_SCHEDULE);
+
         CB_Audit_Log::log('method_exit', 'plugin', __METHOD__, [], 'info');
     } catch (\Throwable $e) {
         CB_Audit_Log::log('error', 'plugin', __METHOD__, ['error' => $e->getMessage()], 'error');

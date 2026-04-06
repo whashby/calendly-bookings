@@ -1,11 +1,3 @@
-<?php
-namespace Calendly_Bookings\Admin\Views\Settings;
-
-if (!defined('ABSPATH')) {
-    exit;
-}
-?>
-
 <form method="post" action="options.php">
   <?php settings_fields(CB_Constants::OPT_GROUP); ?>
   <?php do_settings_sections(CB_Constants::OPT_GROUP); ?>
