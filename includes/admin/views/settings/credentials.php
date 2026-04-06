@@ -10,8 +10,8 @@ use Calendly_Bookings\CB_Constants;
 ?>
 <form method="post" action="options.php" autocomplete="off">
   <!-- Dummy hidden fields to trap browser autofill -->
-  <input type="text" style="display:none" autocomplete="username" />
-  <input type="password" style="display:none" autocomplete="new-password" />
+  <input type="text" id="cb_dummy_username" style="display:none" autocomplete="username" />
+  <input type="password" id="cb_dummy_password" style="display:none" autocomplete="new-password" />
 
   <?php settings_fields('calendly_bookings_credentials'); ?>
   <?php do_settings_sections('calendly_bookings_credentials'); ?>

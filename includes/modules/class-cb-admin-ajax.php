@@ -27,17 +27,21 @@ final class CB_Admin_Ajax {
         add_action('wp_ajax_cb_maintenance_action',[__CLASS__, 'maintenance_action']);
         add_action('wp_ajax_cb_create_walk_in',[__CLASS__, 'create_walk_in']);
         add_action('wp_ajax_cb_test_connection',[__CLASS__, 'test_connection']);
+        add_action('wp_ajax_cb_save_credentials',[__CLASS__, 'save_credentials']);
         add_action('wp_ajax_cb_test_email', [__CLASS__, 'test_email']);
         add_action('wp_ajax_cb_preview_email', [__CLASS__, 'preview_email']);
 
         add_action('wp_ajax_cb_generate_report', [__CLASS__, 'generate_report']);
         add_action('wp_ajax_cb_preview_report', [__CLASS__, 'preview_report']);
 
-/*        add_action('wp_ajax_cb_sync_all', [__CLASS__, 'sync_all']);
-        add_action('wp_ajax_cb_sync_events', [__CLASS__, 'sync_events']);
-        add_action('wp_ajax_cb_sync_invitees', [__CLASS__, 'sync_invitees']);
-        add_action('wp_ajax_cb_sync_event_types', [__CLASS__, 'sync_event_types']);
-        add_action('wp_ajax_cb_sync_locations', [__CLASS__, 'sync_locations']);*/
+        add_action('wp_ajax_cb_schedule_individual_sync', [__CLASS__, 'schedule_individual_sync']);
+        add_action('wp_ajax_cb_clear_individual_sync', [__CLASS__, 'clear_individual_sync']);
+        add_action('wp_ajax_cb_clear_individual_crons', [__CLASS__, 'clear_individual_crons']);
+        add_action('wp_ajax_cb_sync_all', [__CLASS__, 'sync_all']);
+
+        add_action('wp_ajax_cb_get_active_crons', [__CLASS__, 'get_active_crons']);
+
+
     }
 
     /**
@@ -440,10 +444,46 @@ final class CB_Admin_Ajax {
         wp_send_json([
             'success' => $connection_ok && $license_valid,
             'message' => $connection_ok
-                ? ($license_valid ? 'Connection and license valid.' : 'Connection OK, license invalid.')
+                ? ($license_valid ? 'Connection and license authenticated.' : 'Connection OK, license invalid.')
                 : 'Connection failed.'
         ]);
     }
+
+public static function save_credentials(): void {
+    // Collect posted values
+    $posted_api     = sanitize_text_field($_POST['api_key'] ?? '');
+    $posted_uuid    = sanitize_text_field($_POST['user_uuid'] ?? '');
+    $posted_license = sanitize_text_field($_POST['license_key'] ?? '');
+
+    // Resolve test values (fallback to stored if not entered)
+    $test_api     = $posted_api ?: get_option(CB_Constants::OPT_API_TOKEN);
+    $test_uuid    = $posted_uuid ?: get_option(CB_Constants::OPT_USER_UUID);
+    $test_license = $posted_license ?: get_option(CB_Constants::OPT_LICENSE_KEY);
+
+    // Validate entered values only
+    $api_valid     = !$posted_api   || CB_API::instance()->manual_connection_test($test_api, $test_uuid);
+    $uuid_valid    = !$posted_uuid  || CB_API::instance()->manual_connection_test($test_api, $test_uuid);
+    $license_valid = !$posted_license || CB_API::instance()->validate_license($test_license);
+
+    // Collect errors
+    $errors = [];
+    if ($posted_api   && !$api_valid)     { $errors[] = 'Invalid API key'; }
+    if ($posted_uuid  && !$uuid_valid)    { $errors[] = 'Invalid user UUID'; }
+    if ($posted_license && !$license_valid) { $errors[] = 'Invalid license key'; }
+
+    // Save valid entries
+    if ($posted_api   && $api_valid)     { update_option(CB_Constants::OPT_API_TOKEN, $test_api); }
+    if ($posted_uuid  && $uuid_valid)    { update_option(CB_Constants::OPT_USER_UUID, $test_uuid); }
+    if ($posted_license && $license_valid) { update_option(CB_Constants::OPT_LICENSE_KEY, $test_license); }
+
+    // Response
+    wp_send_json([
+        'success' => empty($errors),
+        'message' => empty($errors)
+            ? 'Credentials saved successfully.'
+            : implode(', ', $errors) . '. Please check and try again.'
+    ]);
+}
 
     public static function test_email(): void {
         $to = get_option(CB_Constants::OPT_EMAIL_TO);
@@ -493,5 +533,130 @@ final class CB_Admin_Ajax {
 
         wp_send_json(['success' => true, 'html' => $html]);
     }
-}
 
+    public static function schedule_individual_sync(): void {
+        check_ajax_referer('cb_admin_nonce', 'nonce');
+
+        $sync_type = sanitize_text_field($_POST['sync_type'] ?? '');
+        $frequency = sanitize_text_field($_POST['frequency'] ?? 'daily');
+
+        $map = [
+            'cb_sync_events'      => 'cb_sync_scheduled_events_cron',
+            'cb_sync_invitees'    => 'cb_sync_invitees_cron',
+            'cb_sync_event_types' => 'cb_sync_event_types_cron',
+            'cb_sync_locations'   => 'cb_sync_locations_cron',
+        ];
+
+        if (!isset($map[$sync_type])) {
+            wp_send_json_error(['message' => 'Invalid sync type']);
+        }
+
+        $hook = $map[$sync_type];
+
+        // Clear any existing job before rescheduling
+        wp_clear_scheduled_hook($hook);
+
+        // Schedule new job
+        wp_schedule_event(time(), $frequency, $hook);
+
+        wp_send_json_success(['message' => ucfirst(str_replace('cb_sync_', '', $sync_type)) . ' sync scheduled (' . $frequency . ').']);
+    }
+
+    /**
+     * Clear an individual sync cron job.
+     */
+    public static function clear_individual_sync(): void {
+        check_ajax_referer('cb_admin_nonce', 'nonce');
+
+        $sync_type = sanitize_text_field($_POST['sync_type'] ?? '');
+
+        $map = [
+            'cb_sync_events'      => 'cb_sync_scheduled_events_cron',
+            'cb_sync_invitees'    => 'cb_sync_invitees_cron',
+            'cb_sync_event_types' => 'cb_sync_event_types_cron',
+            'cb_sync_locations'   => 'cb_sync_locations_cron',
+        ];
+
+        if (!isset($map[$sync_type])) {
+            wp_send_json_error(['message' => 'Invalid sync type']);
+        }
+
+        wp_clear_scheduled_hook($map[$sync_type]);
+
+        wp_send_json_success(['message' => ucfirst(str_replace('cb_sync_', '', $sync_type)) . ' sync cleared.']);
+    }
+
+    public static function clear_individual_crons(): void {
+        check_ajax_referer('cb_admin_nonce', 'nonce');
+
+        $hooks = [
+            'cb_sync_scheduled_events_cron',
+            'cb_sync_invitees_cron',
+            'cb_sync_event_types_cron',
+            'cb_sync_locations_cron',
+        ];
+
+        foreach ($hooks as $hook) {
+            wp_clear_scheduled_hook($hook);
+        }
+
+        wp_send_json_success(['message' => 'All individual syncs cleared.']);
+    }
+
+    public static function get_active_crons(): void {
+        check_ajax_referer('cb_admin_nonce', 'nonce');
+
+        $crons = _get_cron_array();
+        $active = [];
+
+        // Map sync types to cron hooks
+        $map = [
+            'master'           => 'cb_sync_master_cron',
+            'scheduled_events' => 'cb_sync_scheduled_events_cron',
+            'invitees'         => 'cb_sync_invitees_cron',
+            'event_types'      => 'cb_sync_event_types_cron',
+            'locations'        => 'cb_sync_locations_cron',
+        ];
+
+        foreach ($map as $type => $hook) {
+            $active[$type] = [
+                'enabled'   => false,
+                'frequency' => null,
+                'next_run'  => null,
+            ];
+
+            // Scan cron array for this hook
+            foreach ($crons as $timestamp => $jobs) {
+                if (isset($jobs[$hook])) {
+                    $details = $jobs[$hook];
+                    $active[$type] = [
+                        'enabled'   => true,
+                        'frequency' => $details['schedule'] ?? null,
+                        'next_run'  => $timestamp,
+                    ];
+                    break; // Found the job, no need to keep scanning
+                }
+            }
+        }
+
+        wp_send_json_success($active);
+}
+    
+    public static function sync_all(): void {
+        // Verify request
+        check_ajax_referer('cb_admin_nonce', 'nonce');
+
+        // Schedule all syncs immediately
+        $sync_types = ['events', 'invitees', 'event_types', 'locations'];
+        foreach ($sync_types as $type) {
+            $hook = "cb_run_{$type}_sync";
+            if (!wp_next_scheduled($hook)) {
+                wp_schedule_single_event(time(), $hook);
+            }
+        }
+
+        wp_send_json_success(['message' => 'All syncs scheduled successfully.']);
+    }
+
+
+}

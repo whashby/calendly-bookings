@@ -18,14 +18,65 @@ require_once __DIR__ . '/utils/class-cb-encryption.php';
  * Register 5-minute cron schedule.
  */
 add_filter('cron_schedules', function ($schedules) {
+    // Every 5 minutes
     if (!isset($schedules['every_5_minutes'])) {
         $schedules['every_5_minutes'] = [
             'interval' => 300,
             'display'  => __('Every 5 Minutes', 'calendly-bookings'),
         ];
     }
+
+    // Every 15 minutes
+    if (!isset($schedules['every_15_minutes'])) {
+        $schedules['every_15_minutes'] = [
+            'interval' => 900,
+            'display'  => __('Every 15 Minutes', 'calendly-bookings'),
+        ];
+    }
+
+    // Every 30 minutes
+    if (!isset($schedules['every_30_minutes'])) {
+        $schedules['every_30_minutes'] = [
+            'interval' => 1800,
+            'display'  => __('Every 30 Minutes', 'calendly-bookings'),
+        ];
+    }
+
+    // Every hour
+    if (!isset($schedules['hourly'])) {
+        $schedules['hourly'] = [
+            'interval' => 3600,
+            'display'  => __('Every Hour', 'calendly-bookings'),
+        ];
+    }
+
+    // Every 6 hours
+    if (!isset($schedules['every_6_hours'])) {
+        $schedules['every_6_hours'] = [
+            'interval' => 21600,
+            'display'  => __('Every 6 Hours', 'calendly-bookings'),
+        ];
+    }
+
+    // Every 12 hours
+    if (!isset($schedules['every_12_hours'])) {
+        $schedules['every_12_hours'] = [
+            'interval' => 43200,
+            'display'  => __('Every 12 Hours', 'calendly-bookings'),
+        ];
+    }
+
+    // Every 24 hours
+    if (!isset($schedules['daily'])) {
+        $schedules['daily'] = [
+            'interval' => 86400,
+            'display'  => __('Every 24 Hours', 'calendly-bookings'),
+        ];
+    }
+
     return $schedules;
 });
+
 
 require_once __DIR__ . '/modules/class-cb-plugin.php';
 require_once __DIR__ . '/utils/class-cb-timezone-converter.php';
@@ -73,12 +124,4 @@ add_action('plugins_loaded', function () {
     Modules\CB_Debug::init();
     Utils\CB_Encryption::init();
 
-    /**
-     * Cron callback: sync scheduled events every 5 minutes.
-     */
-    add_action('cb_sync_scheduled_events_cron', function () {
-        CB_API::instance()->sync(get_option(CB_Constants::OPT_MIN_START_DATE), true);
-        update_option('cb_last_sync', current_time('mysql'));
-        update_option('cb_last_sync_all', current_time('mysql'));
-    });
 });

@@ -1431,7 +1431,7 @@ final class CB_API {
      *
      * @return bool True if the connection is successful, false otherwise.
      */
-    public static function manual_connection_test(?string $api_key = null, ?string $user_uuid = null): array {
+    public static function manual_connection_test(?string $api_key = null, ?string $user_uuid = null): bool {
         if (empty($api_key) || empty($user_uuid)) {
             CB_Audit_Log::log('manual_connection_test', 'api', __METHOD__, ['error' => 'API key or User UUID missing'], 'error');
             return false;
@@ -1472,10 +1472,8 @@ final class CB_API {
         $endpoint = CB_Constants::CB_WORKER_ENDPOINT;
 
         $response = wp_remote_post($endpoint, [
-            'body' => [
-                'license_key' => $license_key,
-                'plugin_slug' => 'calendly-bookings',
-            ],
+            'headers' => ['Content-Type' => 'application/json'],
+            'body' => wp_json_encode(['license' => $license_key,]),
             'timeout' => 15,
         ]);
 

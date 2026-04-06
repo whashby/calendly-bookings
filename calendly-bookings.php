@@ -56,8 +56,8 @@ add_action('init', function () {
  * Schedule 5-minute cron on activation.
  */
 register_activation_hook(__FILE__, function () {
-    if (!wp_next_scheduled('cb_sync_scheduled_events_cron')) {
-        wp_schedule_event(time(), 'every_5_minutes', 'cb_sync_scheduled_events_cron');
+    if (!wp_next_scheduled('cb_sync_master_cron')) {
+        wp_schedule_event(time(), 'every_5_minutes', 'cb_sync_master_cron');
     }
 
     // Run installer on activation (schema + meeting page).
@@ -68,9 +68,25 @@ register_activation_hook(__FILE__, function () {
  * Clear cron and uninstall hooks on deactivation.
  */
 register_deactivation_hook(__FILE__, function () {
+    wp_clear_scheduled_hook('cb_sync_master_cron');
     wp_clear_scheduled_hook('cb_sync_scheduled_events_cron');
+    wp_clear_scheduled_hook('cb_sync_invitees_cron');
+    wp_clear_scheduled_hook('cb_sync_event_types_cron');
+    wp_clear_scheduled_hook('cb_sync_locations_cron');
 });
 
+// Cron callbacks
+add_action('cb_sync_master_cron', function () {
+    $api = CB_API::instance();
+    $min_start = get_option(CB_Constants::OPT_MIN_START_DATE);
+
+    $api->sync($min_start, true);
+    $api->sync_invitees($min_start, true);
+    $api->sync_event_types($min_start, true);
+    $api->sync_locations($min_start, true);
+
+    update_option('cb_last_sync_all', current_time('mysql'));
+});
 /**
  * Uninstall hook.
  */
