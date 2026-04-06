@@ -83,7 +83,7 @@ final class CB_API_Proxy {
             'callback'            => [__CLASS__, 'rest_clear_cache'],
             'permission_callback' => [__CLASS__, 'can_manage'],
         ]);
-
+/*
         register_rest_route($ns, '/manual-test', [
             'methods'=>'POST',
             'callback'=>[__CLASS__,'rest_manual_test'],
@@ -96,7 +96,7 @@ final class CB_API_Proxy {
             'permission_callback'=>[__CLASS__,'can_manage'],
             'args'=>['token'=>['required'=>false],'uuid'=>['required'=>false]],
         ]);
-
+*/
     }
 	
 public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Error {

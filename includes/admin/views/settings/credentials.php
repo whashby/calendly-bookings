@@ -5,47 +5,25 @@ if (!defined('ABSPATH')) {
     exit;
 }
 ?>
+<form method="post" action="options.php" autocomplete="off">
+  <?php settings_fields('calendly_bookings_credentials'); ?>
+  <?php do_settings_sections('calendly_bookings_credentials'); ?>
 
-<h2><?php esc_html_e('API Credentials', 'calendly-bookings'); ?></h2>
+  <table class="form-table">
+    <tr>
+      <th scope="row"><label for="cb_api_key">API Key</label></th>
+      <td><input type="password" id="cb_api_key" name="cb_api_key" value="" autocomplete="off" /></td>
+    </tr>
+    <tr>
+      <th scope="row"><label for="cb_user_uuid">User UUID</label></th>
+      <td><input type="text" id="cb_user_uuid" name="cb_user_uuid" value="" autocomplete="off" /></td>
+    </tr>
+    <tr>
+      <th scope="row"><label for="cb_license_key">License Key</label></th>
+      <td><input type="text" id="cb_license_key" name="cb_license_key" value="" autocomplete="off" /></td>
+    </tr>
+  </table>
 
-<table class="form-table">
-  <tr>
-    <th scope="row">
-      <label for="cb_api_key"><?php esc_html_e('API Key', 'calendly-bookings'); ?></label>
-    </th>
-    <td>
-      <input type="password" id="cb_api_key" name="cb_api_key" value="" placeholder="••••••••" autocomplete="new-password" class="regular-text" />
-      <p class="description"><?php esc_html_e('Enter your Calendly API key.', 'calendly-bookings'); ?></p>
-    </td>
-  </tr>
-  <tr>
-    <th scope="row">
-      <label for="cb_uuid"><?php esc_html_e('User UUID', 'calendly-bookings'); ?></label>
-    </th>
-    <td>
-      <input type="text" id="cb_uuid" name="cb_uuid"
-             value="" placeholder="••••••••"
-             autocomplete="off" class="regular-text" />
-      <p class="description"><?php esc_html_e('Enter your Calendly user UUID.', 'calendly-bookings'); ?></p>
-    </td>
-  </tr>
-  <tr>
-    <th scope="row">
-      <label for="cb_license_key"><?php esc_html_e('License Key', 'calendly-bookings'); ?></label>
-    </th>
-    <td>
-      <input type="text" id="cb_license_key" name="cb_license_key"
-             value="" autocomplete="off" class="regular-text" />
-      <p class="description"><?php esc_html_e('Enter your license key to enable private GitHub updates.', 'calendly-bookings'); ?></p>
-    </td>
-  </tr>
-</table>
-
-<p>
-  <button id="cb-test-connection" class="button">
-    <?php esc_html_e('Test Connection', 'calendly-bookings'); ?>
-  </button>
-  <button id="cb-save-settings" class="button button-primary" style="display:none;">
-    <?php esc_html_e('Save Settings', 'calendly-bookings'); ?>
-  </button>
-</p>
+  <?php submit_button('Save Credentials'); ?>
+  <button type="button" class="button" id="cb-test-connection">Test Connection</button>
+</form>

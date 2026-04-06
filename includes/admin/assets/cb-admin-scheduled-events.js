@@ -262,7 +262,7 @@ content = `
         if (!confirm("Are you sure you want to create this walk-in?")) return;
     
         $.post(ajaxurl, {
-            action: 'cb_create_walkin',
+            action: 'cb_create_walk_in',
             data: JSON.stringify(data)
         }, function(response) {
             if (response.success) {

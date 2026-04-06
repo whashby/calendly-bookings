@@ -7,21 +7,22 @@ if (!defined('ABSPATH')) {
 ?>
 
 <div class="wrap">
-  <h1><?php esc_html_e('Calendly Bookings Settings', 'calendly-bookings'); ?></h1>
+  <h1>Calendly Bookings Settings</h1>
+  <h2 class="nav-tab-wrapper">
+    <a href="?page=calendly-bookings-settings&tab=credentials" class="nav-tab <?php echo $active_tab == 'credentials' ? 'nav-tab-active' : ''; ?>">Credentials</a>
+    <a href="?page=calendly-bookings-settings&tab=sync" class="nav-tab <?php echo $active_tab == 'sync' ? 'nav-tab-active' : ''; ?>">Sync</a>
+    <a href="?page=calendly-bookings-settings&tab=email" class="nav-tab <?php echo $active_tab == 'email' ? 'nav-tab-active' : ''; ?>">Email</a>
+    <a href="?page=calendly-bookings-settings&tab=reports" class="nav-tab <?php echo $active_tab == 'reports' ? 'nav-tab-active' : ''; ?>">Reports</a>
+  </h2>
 
-  <div id="cb-admin-notices"></div>
-
-  <form id="cb-settings-form" method="post" autocomplete="off">
-    <?php wp_nonce_field('cb_settings_save', 'cb_settings_nonce'); ?>
-
-    <!-- Dummy hidden fields to trap browser autofill -->
-    <input type="text" style="display:none" autocomplete="username" />
-    <input type="password" style="display:none" autocomplete="new-password" />
-
-    <!-- Credentials Section -->
-    <?php echo \Calendly_Bookings\Modules\CB_Admin::view('settings/credentials'); ?>
-
-    <!-- Actions Section -->
-    <?php echo \Calendly_Bookings\Modules\CB_Admin::view('settings/actions'); ?>
-  </form>
+  <div class="tab-content">
+    <?php
+      switch ($active_tab) {
+        case 'sync': include_once __DIR__ . '/sync.php'; break;
+        case 'email': include_once __DIR__ . '/email.php'; break;
+        case 'reports': include_once __DIR__ . '/reports.php'; break;
+        default: include_once __DIR__ . '/credentials.php'; break;
+      }
+    ?>
+  </div>
 </div>

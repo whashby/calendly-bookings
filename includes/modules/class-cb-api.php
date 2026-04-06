@@ -17,7 +17,7 @@ final class CB_API {
     private static $instance = null;
 
     /** API base URL */
-    private const API_BASE = 'https://api.calendly.com';
+    private const API_BASE = CB_Constants::CB_API_BASE_URL;
 
     /** Instance properties */
     private string $token;
@@ -145,8 +145,7 @@ final class CB_API {
 		}
 		return $data;
 	}
-	
-        
+
     public function sync(string $min_start_date = '', bool $force = false): array {
         CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
 
@@ -992,6 +991,7 @@ final class CB_API {
         ];
     }
 
+
     public function query_locations(): array {
         CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
         try {
@@ -1423,19 +1423,82 @@ final class CB_API {
         return $missing_in_wp;
     }
 
-    public function manual_connection_test(): array {
-        if ($this->token === '') {
-            return ['success' => false, 'message' => __('No API token found.', 'calendly-bookings')];
+    /**
+     * Test the connection to the Calendly API with the provided credentials.
+     *
+     * @param string|null $api_key The API key for authentication.
+     * @param string|null $user_uuid The UUID of the user to test the connection for.
+     *
+     * @return bool True if the connection is successful, false otherwise.
+     */
+    public static function manual_connection_test(?string $api_key = null, ?string $user_uuid = null): array {
+        if (empty($api_key) || empty($user_uuid)) {
+            CB_Audit_Log::log('manual_connection_test', 'api', __METHOD__, ['error' => 'API key or User UUID missing'], 'error');
+            return false;
         }
-        $res = $this->get('/users/me', [], true, 0);
-        if (!empty($res['error'])) {
-            return ['success' => false, 'message' => $res['error']];
+
+        $endpoint = SELF::API_BASE . "/users/{$user_uuid}";
+        $response = wp_remote_get($endpoint, [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type'  => 'application/json',
+            ],
+            'timeout' => 15,
+        ]);
+
+        if (is_wp_error($response)) {
+            CB_Audit_Log::log('manual_connection_test', 'api', __METHOD__, ['error' => $response->get_error_message()], 'error');
+            return false;
         }
-        return !empty($res['resource'])
-            ? ['success' => true, 'message' => __('Calendly API connection successful.', 'calendly-bookings')]
-            : ['success' => false, 'message' => __('Unexpected API response.', 'calendly-bookings')];
+
+        $code = wp_remote_retrieve_response_code($response);
+        CB_Audit_Log::log('manual_connection_test', 'api', __METHOD__, ['code' => $code], 'info');
+        return ($code === 200);
     }
 
+    /**
+     * Validate plugin license key.
+     *
+     * @param string $license_key
+     * @return bool
+     */
+    public static function validate_license($license_key) {
+        if (empty($license_key)) {
+            CB_Audit_Log::log('validate_license', 'api', __METHOD__, ['error' => 'License key missing'], 'error');
+            return false;
+        }
+
+        // Example endpoint — replace with your license server URL
+        $endpoint = CB_Constants::CB_WORKER_ENDPOINT;
+
+        $response = wp_remote_post($endpoint, [
+            'body' => [
+                'license_key' => $license_key,
+                'plugin_slug' => 'calendly-bookings',
+            ],
+            'timeout' => 15,
+        ]);
+
+        if (is_wp_error($response)) {
+            CB_Audit_Log::log('validate_license', 'api', __METHOD__, ['error' => $response->get_error_message()], 'error');
+            return false;
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+
+        if ($code !== 200) {
+            CB_Audit_Log::log('validate_license', 'api', __METHOD__, ['code' => $code, 'body' => $body], 'error');
+            return false;
+        }
+
+        $data = json_decode($body, true);
+        CB_Audit_Log::log('validate_license', 'api', __METHOD__, ['data' => $data], 'info');
+        return !empty($data['valid']) && $data['valid'] === true;
+    }
+
+    
+    
     public function get_event_type_availability(string $event_type_uri, string $start_iso): array {
         try { $dt = new \DateTimeImmutable($start_iso); } catch (\Exception $e) { $dt = new \DateTimeImmutable('now'); }
         $utc = $dt->setTimezone(new \DateTimeZone('UTC'));

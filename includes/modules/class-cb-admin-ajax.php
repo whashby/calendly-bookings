@@ -20,33 +20,20 @@ final class CB_Admin_Ajax {
      */
     public static function init(): void {
 
-        // Inline edit: single row update
-        add_action(
-            'wp_ajax_calendly_bookings_update_scheduled_event',
-            [__CLASS__, 'update_scheduled_event']
-        );
-
-        // Bulk update: multiple rows
-        add_action(
-            'wp_ajax_calendly_bookings_bulk_update_scheduled_events',
-            [__CLASS__, 'bulk_update_scheduled_events']
-        );
-        
-        add_action(
-            'wp_ajax_calendly_bookings_add_admin_notes',
-            [__CLASS__, 'add_admin_notes']
-        );
-        
-        add_action(
-            'wp_ajax_cb_maintenance_action',
-            [__CLASS__, 'maintenance_action']
-        );
-        
-        add_action(
-            'wp_ajax_cb_create_walkin',
-            [__CLASS__, 'create_walkin']
-        );
-    
+        add_action('wp_ajax_calendly_bookings_update_scheduled_event',[__CLASS__, 'update_scheduled_event']);
+        add_action('wp_ajax_calendly_bookings_bulk_update_scheduled_events',[__CLASS__, 'bulk_update_scheduled_events']);
+        add_action('wp_ajax_calendly_bookings_add_admin_notes',[__CLASS__, 'add_admin_notes']);
+        // Maintenance actions
+        add_action('wp_ajax_cb_maintenance_action',[__CLASS__, 'maintenance_action']);
+        add_action('wp_ajax_cb_create_walk_in',[__CLASS__, 'create_walk_in']);
+        add_action('wp_ajax_cb_test_connection',[__CLASS__, 'test_connection']);
+        add_action('wp_ajax_cb_test_email', [__CLASS__, 'test_email']);
+        add_action('wp_ajax_cb_preview_email', [__CLASS__, 'preview_email']);
+/*        add_action('wp_ajax_cb_sync_all', [__CLASS__, 'sync_all']);
+        add_action('wp_ajax_cb_sync_events', [__CLASS__, 'sync_events']);
+        add_action('wp_ajax_cb_sync_invitees', [__CLASS__, 'sync_invitees']);
+        add_action('wp_ajax_cb_sync_event_types', [__CLASS__, 'sync_event_types']);
+        add_action('wp_ajax_cb_sync_locations', [__CLASS__, 'sync_locations']);*/
     }
 
     /**
@@ -192,7 +179,7 @@ final class CB_Admin_Ajax {
     /**
      * Handle walk-in creation from admin interface
      */
-    public static function create_walkin(): void {
+    public static function create_walk_in(): void {
         // Decode JSON payload into array of name/value pairs
         $decoded = json_decode(stripslashes($_POST['data']), true);
 
@@ -427,4 +414,57 @@ final class CB_Admin_Ajax {
 
     }
 
+    public static function test_connection(): void {
+        $api_key = sanitize_text_field($_POST['api_key']);
+        $uuid    = sanitize_text_field($_POST['user_uuid']);
+        $license = sanitize_text_field($_POST['license_key']);
+
+        // Load existing options if fields are empty
+        $stored_api = get_option(CB_Constants::OPT_API_TOKEN);
+        $stored_uuid = get_option(CB_Constants::OPT_USER_UUID);
+        $stored_license = get_option(CB_Constants::OPT_LICENSE_KEY);
+
+        $test_api = $api_key ?: $stored_api;
+        $test_uuid = $uuid ?: $stored_uuid;
+        $test_license = $license ?: $stored_license;
+
+        // Connection test logic
+        $connection_ok = CB_API::instance()->manual_connection_test($test_api, $test_uuid);
+        CB_Audit_Log::log('manual_connection_test', 'api', __METHOD__, ['success' => $connection_ok, 'api_key_provided' => !empty($api_key), 'uuid_provided' => !empty($uuid)], $connection_ok ? 'info' : 'error');
+
+        // License validation
+        $license_valid = CB_API::instance()->validate_license($test_license);
+        CB_Audit_Log::log('validate_license', 'api', __METHOD__, ['success' => $license_valid], $license_valid ? 'info' : 'error');
+
+        CB_Audit_Log::log('test_connection_attempt', 'api', __METHOD__, [
+            'api_key_provided' => !empty($api_key),
+            'uuid_provided' => !empty($uuid),
+            'license_provided' => !empty($license),
+        ], 'info');
+        wp_send_json([
+            'success' => $connection_ok && $license_valid,
+            'message' => $connection_ok
+                ? ($license_valid ? 'Connection and license valid.' : 'Connection OK, license invalid.')
+                : 'Connection failed.'
+        ]);
+    }
+
+    public static function test_email(): void {
+        $to = get_option(CB_Constants::OPT_EMAIL_TO);
+        $subject = 'Calendly Bookings Test Email';
+        $headers = [
+            'From: ' . get_option(CB_Constants::OPT_EMAIL_FROM),
+            'Reply-To: ' . get_option(CB_Constants::OPT_EMAIL_REPLY_TO),
+            'Bcc: ' . get_option(CB_Constants::OPT_EMAIL_BCC),
+        ];
+        $message = CB_Email::build_email_content();
+        wp_mail($to, $subject, $message, $headers);
+        wp_send_json(['success' => true, 'message' => 'Test email sent.']);
+    }
+
+    public static function preview_email(): void {
+        $content = CB_Email::build_email_content();
+        wp_send_json(['success' => true, 'html' => $content]);
+    }
 }
+

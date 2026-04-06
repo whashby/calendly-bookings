@@ -15,9 +15,9 @@ final class CB_GitHub_Updater
 {
     private static $instance = null;
 
-    private const GITHUB_API_URL = CB_Constants::GITHUB_API_URL;
     private const WORKER = CB_Constants::CB_WORKER_ENDPOINT;
-    private const REPO = 'https://github.com/' . CB_Constants::GITHUB_REPO;
+    private const REPO = CB_Constants::GITHUB_REPO_URL;
+    private const API_REPO_URL = CB_Constants::API_REPO_URL;
     private const API_USER_AGENT = CB_Constants::API_USER_AGENT;
     private const TOKEN_OPTION = CB_Constants::GITHUB_TOKEN_OPTION;
     private const LICENSE_OPTION = CB_Constants::OPT_LICENSE_KEY;
@@ -171,7 +171,7 @@ final class CB_GitHub_Updater
 
     /** Retrieve latest release info from GitHub */
     private function api_request($endpoint) {
-        $url = rtrim(self::GITHUB_API_URL, '/') . '/' . ltrim($endpoint, '/');
+        $url = rtrim(self::API_REPO_URL, '/') . '/' . ltrim($endpoint, '/');
         CB_Audit_Log::log(
             'request', 'api', $url, ['message' => 'Starting API request'], 'info'
         );
