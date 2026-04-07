@@ -66,14 +66,6 @@ add_filter('cron_schedules', function ($schedules) {
         ];
     }
 
-    // Every hour
-    if (!isset($schedules['hourly'])) {
-        $schedules['hourly'] = [
-            'interval' => 3600,
-            'display'  => __('Every Hour', 'calendly-bookings'),
-        ];
-    }
-
     // Every 6 hours
     if (!isset($schedules['every_6_hours'])) {
         $schedules['every_6_hours'] = [
@@ -82,21 +74,6 @@ add_filter('cron_schedules', function ($schedules) {
         ];
     }
 
-    // Every 12 hours
-    if (!isset($schedules['every_12_hours'])) {
-        $schedules['every_12_hours'] = [
-            'interval' => 43200,
-            'display'  => __('Every 12 Hours', 'calendly-bookings'),
-        ];
-    }
-
-    // Every 24 hours
-    if (!isset($schedules['daily'])) {
-        $schedules['daily'] = [
-            'interval' => 86400,
-            'display'  => __('Every 24 Hours', 'calendly-bookings'),
-        ];
-    }
 
     return $schedules;
 });
