@@ -39,6 +39,7 @@ jQuery(document).ready(function($) {
   function runSync(action, params = {}) {
     $.post(ajaxurl, { action, ...params }, function(response) {
       alert(response.message);
+      refreshCronList();
     });
   }
 
@@ -63,6 +64,46 @@ jQuery(document).ready(function($) {
     });
   });
 
+  // --- Refresh Active Cron Jobs Panel ---
+  function refreshCronList() {
+    $.post(ajaxurl, { action: 'cb_get_active_crons' }, function(response) {
+      if (response.success) {
+        const crons = response.data;
+
+        // Master sync
+        if (crons.master && crons.master.enabled) {
+          $('#cb_master_sync').prop('checked', true);
+          $('#cb_master_frequency').val(crons.master.frequency).prop('disabled', false);
+          $('#cb-individual-section').css('opacity', 0.5)
+            .find('input, select').prop('disabled', true);
+        } else {
+          $('#cb_master_sync').prop('checked', false);
+        }
+
+        // Individual syncs
+        ['events','invitees','event_types','locations'].forEach(type => {
+          if (crons[type] && crons[type].enabled) {
+            $(`#cb_sync_${type}`).prop('checked', true);
+            $(`#cb_sync_${type}_frequency`).val(crons[type].frequency).prop('disabled', false);
+          } else {
+            $(`#cb_sync_${type}`).prop('checked', false);
+            $(`#cb_sync_${type}_frequency`).prop('disabled', true);
+          }
+        });
+
+        // Populate Active Cron Jobs panel
+        let listHtml = '';
+        Object.keys(crons).forEach(type => {
+          const job = crons[type];
+          const freq = job.frequency || '—';
+          const nextRun = job.next_run ? new Date(job.next_run*1000).toLocaleString() : '—';
+          listHtml += `<li>${type} → ${freq}, next run: ${nextRun}</li>`;
+        });
+        $('#cb-cron-list').html(listHtml);
+      }
+    });
+  }
+
   // --- Sync Toggles ---
   function toggleMasterSync() {
     const masterEnabled = $('#cb_master_sync').is(':checked');
@@ -71,7 +112,7 @@ jQuery(document).ready(function($) {
     if (masterEnabled) {
       $('#cb-individual-section').css('opacity', 0.5);
       $('#cb-individual-section input, #cb-individual-section select').prop('disabled', true);
-      $.post(ajaxurl, { action: 'cb_clear_individual_crons' });
+      $.post(ajaxurl, { action: 'cb_clear_individual_crons' }, refreshCronList);
     } else {
       $('#cb-individual-section').css('opacity', 1);
       $('.cb-individual-sync').each(function() {
@@ -90,12 +131,12 @@ jQuery(document).ready(function($) {
         action: 'cb_schedule_individual_sync',
         sync_type: syncId,
         frequency: $(`#${syncId}_frequency`).val()
-      });
+      }, refreshCronList);
     } else {
       $.post(ajaxurl, {
         action: 'cb_clear_individual_sync',
         sync_type: syncId
-      });
+      }, refreshCronList);
     }
   }
 
@@ -104,36 +145,44 @@ jQuery(document).ready(function($) {
     toggleIndividualSync(this.id);
   });
 
-  toggleMasterSync();
-
-  
-  $.post(ajaxurl, { action: 'cb_get_active_crons' }, function(response) {
-    if (response.success) {
-      const crons = response.data;
-
-      // Master sync
-      if (crons.master && crons.master.enabled) {
-        $('#cb_master_sync').prop('checked', true);
-        $('#cb_master_frequency').val(crons.master.frequency).prop('disabled', false);
-        $('#cb-individual-section').css('opacity', 0.5)
-          .find('input, select').prop('disabled', true);
-      }
-
-      // Individual syncs
-      ['events','invitees','event_types','locations'].forEach(type => {
-        if (crons[type] && crons[type].enabled) {
-          $(`#cb_sync_${type}`).prop('checked', true);
-          $(`#cb_sync_${type}_frequency`).val(crons[type].frequency).prop('disabled', false);
+  // --- Frequency Change Handlers ---
+  $('#cb_master_frequency').on('change', function() {
+    const frequency = $(this).val();
+    if ($('#cb_master_sync').is(':checked')) {
+      $.post(ajaxurl, {
+        action: 'cb_schedule_master_sync',
+        frequency: frequency
+      }, function(response) {
+        if (response.success) {
+          alert('Master sync rescheduled to ' + frequency);
+          refreshCronList();
         }
       });
-
-      // Populate Active Cron Jobs panel
-      let listHtml = '';
-      Object.keys(crons).forEach(type => {
-        const job = crons[type];
-        listHtml += `<li>${type} → ${job.frequency}, next run: ${new Date(job.next_run*1000).toLocaleString()}</li>`;
-      });
-      $('#cb-cron-list').html(listHtml);
     }
   });
+
+  $('.cb-individual-frequency').on('change', function() {
+    const syncId   = $(this).attr('id').replace('_frequency', '');
+    const frequency = $(this).val();
+    if ($(`#${syncId}`).is(':checked')) {
+      $.post(ajaxurl, {
+        action: 'cb_schedule_individual_sync',
+        sync_type: syncId,
+        frequency: frequency
+      }, function(response) {
+        if (response.success) {
+          alert(syncId.replace('cb_sync_', '') + ' sync rescheduled to ' + frequency);
+          refreshCronList();
+        }
+      });
+    }
+  });
+
+  // --- Initialize ---
+  toggleMasterSync();
+  refreshCronList();
+
+  // Optional: manual refresh button
+  $('#cb-refresh-crons').on('click', refreshCronList);
+
 });
