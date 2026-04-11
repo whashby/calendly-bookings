@@ -16,53 +16,57 @@ use Calendly_Bookings\CB_Constants;
         <?php checked(get_option('cb_master_sync'), 1); ?> />
       <span class="cb-slider"></span>
     </label>
-        <?php
-        $schedules = wp_get_schedules(); // returns all intervals registered via cron_schedules
-        $freq = get_option('cb_master_frequency', 'daily');
-        ?>
+    <?php
+    // Get all schedules and filter for Calendly Bookings only
+    $schedules = wp_get_schedules();
+    $current   = get_option('cb_master_frequency', 'cb_daily');
 
-        <select id="cb_master_frequency" name="cb_master_frequency"
-        <?php disabled(!get_option('cb_master_sync')); ?>>
-        <?php foreach ($schedules as $key => $schedule): ?>
-            <option value="<?php echo esc_attr($key); ?>"
-            <?php selected($freq, $key); ?>>
-            <?php echo esc_html($schedule['display']); ?>
-            </option>
-        <?php endforeach; ?>
+    echo '<select id="cb_master_frequency" name="cb_master_frequency">';
+    foreach ($schedules as $key => $schedule) {
+        if (strpos($key, 'cb_') !== 0) continue; // only Calendly schedules
+        echo '<option value="' . esc_attr($key) . '" ' . selected($current, $key, false) . '>';
+        echo esc_html($schedule['display']);
+        echo '</option>';
+    }
+    echo '</select>';
+    ?>
+  </div>
+
+  <h2>Individual Syncs</h2>
+  <div id="cb-individual-section">
+    <?php
+    $syncs = [
+      'events'      => 'Scheduled Events',
+      'invitees'    => 'Event Invitees',
+      'event_types' => 'Event Types',
+      'locations'   => 'Locations'
+    ];
+    foreach ($syncs as $key => $label): 
+      $enabled = get_option("cb_sync_{$key}", 0);
+      $freq    = get_option("cb_sync_{$key}_frequency", 'cb_daily');
+    ?>
+      <div class="cb-sync-item">
+        <label class="cb-switch">
+          <input type="checkbox" class="cb-individual-sync" id="cb_sync_<?php echo $key; ?>"
+            name="cb_sync_<?php echo $key; ?>" value="1"
+            <?php checked($enabled, 1); ?>
+            <?php disabled(get_option('cb_master_sync')); ?> />
+          <span class="cb-slider"></span>
+        </label>
+        <span><?php echo esc_html($label); ?></span>
+        <select id="<?php echo "cb_sync_{$key}_frequency"; ?>" name="<?php echo "cb_sync_{$key}_frequency"; ?>"
+          <?php disabled(get_option('cb_master_sync')); ?>>
+          <?php
+          foreach ($schedules as $sched_key => $schedule) {
+            if (strpos($sched_key, 'cb_') !== 0) continue; // only Calendly schedules
+            echo '<option value="' . esc_attr($sched_key) . '" ' . selected($freq, $sched_key, false) . '>';
+            echo esc_html($schedule['display']);
+            echo '</option>';
+          }
+          ?>
         </select>
-    </div>
-    <h2>Individual Syncs</h2>
-    <div id="cb-individual-section">
-      <?php
-      $syncs = [
-        'events'    => 'Scheduled Events',
-        'invitees'  => 'Event Invitees',
-        'event_types' => 'Event Types',
-        'locations' => 'Locations'
-      ];
-      foreach ($syncs as $key => $label): 
-        $enabled = get_option("cb_sync_{$key}", 0);
-        $freq    = get_option("cb_sync_{$key}_frequency", 'daily');
-      ?>
-        <div class="cb-sync-item">
-          <label class="cb-switch">
-            <input type="checkbox" class="cb-individual-sync" id="cb_sync_<?php echo $key; ?>"
-              name="cb_sync_<?php echo $key; ?>" value="1"
-              <?php checked($enabled, 1); ?>
-              <?php disabled(get_option('cb_master_sync')); ?> />
-            <span class="cb-slider"></span>
-          </label>
-          <span><?php echo esc_html($label); ?></span>
-          <select id="cb_sync_<?php echo $key; ?>_frequency" name="cb_sync_<?php echo $key; ?>_frequency"
-            <?php disabled(!$enabled || get_option('cb_master_sync')); ?>>
-            <option value="hourly" <?php selected($freq, 'hourly'); ?>>Hourly</option>
-            <option value="twicedaily" <?php selected($freq, 'twicedaily'); ?>>Twice Daily</option>
-            <option value="daily" <?php selected($freq, 'daily'); ?>>Daily</option>
-            <option value="weekly" <?php selected($freq, 'weekly'); ?>>Weekly</option>
-          </select>
-        </div>
-      <?php endforeach; ?>
-    </div>
+      </div>
+    <?php endforeach; ?>
   </div>
 
   <div class="cb-sync-crons">
@@ -72,7 +76,8 @@ use Calendly_Bookings\CB_Constants;
       $crons = _get_cron_array();
       foreach ($crons as $timestamp => $jobs) {
         foreach ($jobs as $hook => $details) {
-          if (strpos($hook, 'cb_run_') === 0) {
+          // Only show Calendly Bookings jobs
+          if (strpos($hook, 'cb_') === 0) {
             echo "<li>{$hook} → next run: " . date('Y-m-d H:i:s', $timestamp) . "</li>";
           }
         }
