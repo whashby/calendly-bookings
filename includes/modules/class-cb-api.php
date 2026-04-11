@@ -458,7 +458,7 @@ final class CB_API {
         }
 
         $start_utc_iso = $rounded->format('Y-m-d\TH:i:s\Z');
-        $end_utc_iso   = $rounded->modify('+7 days')->format('Y-m-d\TH:i:s\Z');
+        $end_utc_iso   = $rounded->modify('+30 days')->format('Y-m-d\TH:i:s\Z');
 
             // Step 3: Query available times within this hour
             $rows = $wpdb->get_results(
