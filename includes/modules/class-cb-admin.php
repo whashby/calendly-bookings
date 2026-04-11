@@ -171,7 +171,10 @@ final class CB_Admin {
                             true
                         );
                     }
-
+                    wp_localize_script("cb-admin-{$page}", 'cb_admin', [
+                        'nonce'   => wp_create_nonce('cb_admin_nonce'),
+                        'ajaxurl' => admin_url('admin-ajax.php'),
+                    ]);
     				wp_enqueue_script('thickbox');
     				wp_enqueue_style('thickbox');
 
