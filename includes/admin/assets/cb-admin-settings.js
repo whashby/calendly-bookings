@@ -64,9 +64,10 @@ jQuery(document).ready(function($) {
     });
   });
 
+
   // --- Refresh Active Cron Jobs Panel ---
   function refreshCronList() {
-    $.post(ajaxurl, { action: 'cb_get_active_crons' }, function(response) {
+    $.post(cb_admin.ajaxurl, { action: 'cb_get_active_crons', nonce: cb_admin.nonce }, function(response) {
       if (response.success) {
         const crons = response.data;
 
@@ -78,6 +79,8 @@ jQuery(document).ready(function($) {
             .find('input, select').prop('disabled', true);
         } else {
           $('#cb_master_sync').prop('checked', false);
+          $('#cb-individual-section').css('opacity', 1)
+            .find('input, select').prop('disabled', false);
         }
 
         // Individual syncs
@@ -104,85 +107,86 @@ jQuery(document).ready(function($) {
     });
   }
 
-  // --- Sync Toggles ---
-  function toggleMasterSync() {
-    const masterEnabled = $('#cb_master_sync').is(':checked');
-    $('#cb_master_frequency').prop('disabled', !masterEnabled);
-
-    if (masterEnabled) {
-      $('#cb-individual-section').css('opacity', 0.5);
-      $('#cb-individual-section input, #cb-individual-section select').prop('disabled', true);
-      $.post(ajaxurl, { action: 'cb_clear_individual_crons' }, refreshCronList);
-    } else {
-      $('#cb-individual-section').css('opacity', 1);
-      $('.cb-individual-sync').each(function() {
-        const enabled = $(this).is(':checked');
-        $(`#${this.id}_frequency`).prop('disabled', !enabled);
-      });
-    }
-  }
-
-  function toggleIndividualSync(syncId) {
-    const enabled = $(`#${syncId}`).is(':checked');
-    $(`#${syncId}_frequency`).prop('disabled', !enabled);
-
-    if (enabled) {
-      $.post(ajaxurl, {
-        action: 'cb_schedule_individual_sync',
-        sync_type: syncId,
-        frequency: $(`#${syncId}_frequency`).val()
-      }, refreshCronList);
-    } else {
-      $.post(ajaxurl, {
-        action: 'cb_clear_individual_sync',
-        sync_type: syncId
-      }, refreshCronList);
-    }
-  }
-
-  $('#cb_master_sync').on('change', toggleMasterSync);
-  $('.cb-individual-sync').on('change', function() {
-    toggleIndividualSync(this.id);
-  });
-
-  // --- Frequency Change Handlers ---
-  $('#cb_master_frequency').on('change', function() {
-    const frequency = $(this).val();
-    if ($('#cb_master_sync').is(':checked')) {
-      $.post(ajaxurl, {
+  // --- Master toggle ---
+  $('#cb_master_sync').on('change', function() {
+    if ($(this).is(':checked')) {
+      $.post(cb_admin.ajaxurl, {
         action: 'cb_schedule_master_sync',
-        frequency: frequency
+        frequency: $('#cb_master_frequency').val(),
+        nonce: cb_admin.nonce
       }, function(response) {
         if (response.success) {
-          alert('Master sync rescheduled to ' + frequency);
-          refreshCronList();
+          alert(response.data.message);
+        } else {
+          alert(response.data.message);
+          $('#cb_master_sync').prop('checked', false);
         }
+        refreshCronList();
+      });
+    } else {
+      $.post(cb_admin.ajaxurl, {
+        action: 'cb_clear_master_sync',
+        nonce: cb_admin.nonce
+      }, refreshCronList);
+    }
+  });
+
+  // --- Individual toggle ---
+  $('.cb-individual-sync').on('change', function() {
+    const syncId = this.id;
+    if ($(this).is(':checked')) {
+      $.post(cb_admin.ajaxurl, {
+        action: 'cb_schedule_individual_sync',
+        sync_type: syncId,
+        frequency: $(`#${syncId}_frequency`).val(),
+        nonce: cb_admin.nonce
+      }, function(response) {
+        if (response.success) {
+          alert(response.data.message);
+        } else {
+          alert(response.data.message);
+          $(`#${syncId}`).prop('checked', false);
+        }
+        refreshCronList();
+      });
+    } else {
+      $.post(cb_admin.ajaxurl, {
+        action: 'cb_clear_individual_sync',
+        sync_type: syncId,
+        nonce: cb_admin.nonce
+      }, refreshCronList);
+    }
+  });
+
+  // --- Frequency change handlers ---
+  $('#cb_master_frequency').on('change', function() {
+    if ($('#cb_master_sync').is(':checked')) {
+      $.post(cb_admin.ajaxurl, {
+        action: 'cb_schedule_master_sync',
+        frequency: $(this).val(),
+        nonce: cb_admin.nonce
+      }, function(response) {
+        alert(response.data.message);
+        refreshCronList();
       });
     }
   });
 
   $('.cb-individual-frequency').on('change', function() {
-    const syncId   = $(this).attr('id').replace('_frequency', '');
-    const frequency = $(this).val();
+    const syncId = $(this).attr('id').replace('_frequency', '');
     if ($(`#${syncId}`).is(':checked')) {
-      $.post(ajaxurl, {
+      $.post(cb_admin.ajaxurl, {
         action: 'cb_schedule_individual_sync',
         sync_type: syncId,
-        frequency: frequency
+        frequency: $(this).val(),
+        nonce: cb_admin.nonce
       }, function(response) {
-        if (response.success) {
-          alert(syncId.replace('cb_sync_', '') + ' sync rescheduled to ' + frequency);
-          refreshCronList();
-        }
+        alert(response.data.message);
+        refreshCronList();
       });
     }
   });
 
   // --- Initialize ---
-  toggleMasterSync();
   refreshCronList();
-
-  // Optional: manual refresh button
-  $('#cb-refresh-crons').on('click', refreshCronList);
-
 });
