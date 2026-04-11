@@ -8,6 +8,7 @@ if (!defined('ABSPATH')) {
 
 use Calendly_Bookings\CB_Constants;
 use Calendly_Bookings\Modules\CB_API;
+use Calendly_Bookings\Modules\CB_Audit_Log;
 
 final class CB_Dashboard_REST {
     public static function init(): void {
@@ -324,12 +325,12 @@ final class CB_Dashboard_REST {
 
 	public static function sync_health(\WP_REST_Request $r): array {
 		try {
-			$result = CB_API::instance()->sync(get_option(CB_Constants::OPT_MIN_START_DATE), true);
+			$result = CB_API::instance()->sync(get_option(CB_Constants::OPT_LAST_SYNC), true);
 			// Get site timezone (fallback to UTC if not set)
-			$tz = new DateTimeZone(get_option('timezone_string') ?: 'UTC');
+			$tz = new \DateTimeZone(get_option('timezone_string') ?: 'UTC');
 
 			// Create DateTime in site timezone
-			$now = new DateTime('now', $tz);
+			$now = new \DateTime('now', $tz);
 
 			// Save formatted local time (12H format)
 			update_option(CB_Constants::OPT_LAST_SYNC, $now->format('Y-m-d h:i:s'));
