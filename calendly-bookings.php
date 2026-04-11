@@ -8,7 +8,7 @@
  * Requires PHP: 8.3
  * Author:      Wafiq Harris-Ashby
  * Author URI:  https://whashby.github.io
- * Icon URI: assets/cb-icon.svg
+ * Icon URI: https://github.com/whashby/calendly-bookings/assets/cb-icon.svg
  * License:     GPL-2.0+
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: calendly-bookings
