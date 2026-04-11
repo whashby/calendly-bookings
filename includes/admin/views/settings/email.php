@@ -16,15 +16,57 @@ use Calendly_Bookings\CB_Constants;
   <table class="form-table">
     <tr>
       <th scope="row"><label for="cb_email_header">Email Header HTML</label></th>
-      <td><textarea id="cb_email_header" name="cb_email_header" rows="4" cols="60"><?php echo esc_textarea(get_option('cb_email_header')); ?></textarea></td>
+      <td>
+        <?php
+        wp_editor(
+          get_option('cb_email_header'),
+          'cb_email_header',
+          [
+            'textarea_name' => 'cb_email_header',
+            'textarea_rows' => 6,
+            'media_buttons' => true,
+            'tinymce'       => true,
+            'quicktags'     => true,
+          ]
+        );
+        ?>
+      </td>
     </tr>
     <tr>
       <th scope="row"><label for="cb_email_body">Email Body HTML</label></th>
-      <td><textarea id="cb_email_body" name="cb_email_body" rows="8" cols="60"><?php echo esc_textarea(get_option('cb_email_body')); ?></textarea></td>
+      <td>
+        <?php
+        wp_editor(
+          get_option('cb_email_body'),
+          'cb_email_body',
+          [
+            'textarea_name' => 'cb_email_body',
+            'textarea_rows' => 12,
+            'media_buttons' => true,
+            'tinymce'       => true,
+            'quicktags'     => true,
+          ]
+        );
+        ?>
+      </td>
     </tr>
     <tr>
       <th scope="row"><label for="cb_email_footer">Email Footer HTML</label></th>
-      <td><textarea id="cb_email_footer" name="cb_email_footer" rows="4" cols="60"><?php echo esc_textarea(get_option('cb_email_footer')); ?></textarea></td>
+      <td>
+        <?php
+        wp_editor(
+          get_option('cb_email_footer'),
+          'cb_email_footer',
+          [
+            'textarea_name' => 'cb_email_footer',
+            'textarea_rows' => 6,
+            'media_buttons' => true,
+            'tinymce'       => true,
+            'quicktags'     => true,
+          ]
+        );
+        ?>
+      </td>
     </tr>
     <tr>
       <th scope="row">Recipients</th>
