@@ -37,7 +37,7 @@ final class CB_Admin_Ajax {
         add_action('wp_ajax_cb_schedule_individual_sync', [__CLASS__, 'schedule_individual_sync']);
         add_action('wp_ajax_cb_clear_individual_sync', [__CLASS__, 'clear_individual_sync']);
         add_action('wp_ajax_cb_clear_individual_crons', [__CLASS__, 'clear_individual_crons']);
-        add_action('wp_ajax_cb_sync_all', [__CLASS__, 'sync_all']);
+        add_action('wp_ajax_cb_schedule_master_sync', [__CLASS__, 'schedule_master_sync']);
 
         add_action('wp_ajax_cb_get_active_crons', [__CLASS__, 'get_active_crons']);
 
@@ -387,13 +387,13 @@ final class CB_Admin_Ajax {
         $followup_url = add_query_arg(['token' => rawurlencode($encrypted)], $product_url);
 
         // Convert ISO date and time to 12H format in site timezone
-        $tz = new DateTimeZone(get_option('timezone_string') ?: 'America/Barbados');
+        $tz = new \DateTimeZone(get_option('timezone_string') ?: 'America/Barbados');
 
-        $dateObj = new DateTime($followup_date, new DateTimeZone('UTC'));
+        $dateObj = new \DateTime($followup_date, new \DateTimeZone('UTC'));
         $dateObj->setTimezone($tz);
         $formattedDate = $dateObj->format('F j, Y'); // e.g., April 3, 2026
 
-        $timeObj = new DateTime($followup_time, new DateTimeZone('UTC'));
+        $timeObj = new \DateTime($followup_time, new \DateTimeZone('UTC'));
         $timeObj->setTimezone($tz);
         $formattedTime = $timeObj->format('g:i A'); // e.g., 10:30 AM
 
@@ -535,38 +535,38 @@ public static function save_credentials(): void {
     }
 
     public static function schedule_individual_sync(): void {
-        //check_ajax_referer('cb_admin_nonce', 'nonce');
-
+        check_ajax_referer('cb_admin_nonce', 'nonce');
         $sync_type = sanitize_text_field($_POST['sync_type'] ?? '');
-        $frequency = sanitize_text_field($_POST['frequency'] ?? 'daily');
-
+        $frequency = sanitize_text_field($_POST['frequency'] ?? 'cb_daily');
+    
         $map = [
-            'cb_sync_events'      => 'cb_sync_scheduled_events_cron',
-            'cb_sync_invitees'    => 'cb_sync_invitees_cron',
-            'cb_sync_event_types' => 'cb_sync_event_types_cron',
-            'cb_sync_locations'   => 'cb_sync_locations_cron',
+            'cb_sync_events'      => 'cb_run_events',
+            'cb_sync_invitees'    => 'cb_run_invitees',
+            'cb_sync_event_types' => 'cb_run_event_types',
+            'cb_sync_locations'   => 'cb_run_locations',
         ];
-
+    
         if (!isset($map[$sync_type])) {
             wp_send_json_error(['message' => 'Invalid sync type']);
         }
-
+    
         $hook = $map[$sync_type];
-
-        // Clear any existing job before rescheduling
         wp_clear_scheduled_hook($hook);
-
-        // Schedule new job
-        wp_schedule_event(time(), $frequency, $hook);
-
-        wp_send_json_success(['message' => ucfirst(str_replace('cb_sync_', '', $sync_type)) . ' sync scheduled (' . $frequency . ').']);
+        $result = wp_schedule_event(time(), $frequency, $hook);
+    
+        if ($result === false) {
+            wp_send_json_error(['message' => "Failed to schedule $sync_type. Frequency '$frequency' not registered."]);
+        }
+    
+        update_option($sync_type . '_frequency', $frequency);
+        wp_send_json_success(['message' => ucfirst(str_replace('cb_sync_', '', $sync_type)) . " sync scheduled ($frequency)."]);
     }
 
     /**
      * Clear an individual sync cron job.
      */
     public static function clear_individual_sync(): void {
-        //check_ajax_referer('cb_admin_nonce', 'nonce');
+        check_ajax_referer('cb_admin_nonce', 'nonce');
 
         $sync_type = sanitize_text_field($_POST['sync_type'] ?? '');
 
@@ -587,7 +587,7 @@ public static function save_credentials(): void {
     }
 
     public static function clear_individual_crons(): void {
-        //check_ajax_referer('cb_admin_nonce', 'nonce');
+        check_ajax_referer('cb_admin_nonce', 'nonce');
 
         $hooks = [
             'cb_sync_scheduled_events_cron',
@@ -604,7 +604,7 @@ public static function save_credentials(): void {
     }
 
     public static function get_active_crons(): void {
-        //check_ajax_referer('cb_admin_nonce', 'nonce');
+        check_ajax_referer('cb_admin_nonce', 'nonce');
 
         $crons = _get_cron_array();
         $active = [];
@@ -640,22 +640,27 @@ public static function save_credentials(): void {
         }
 
         wp_send_json_success($active);
-}
+    }
     
-    public static function sync_all(): void {
+    public static function schedule_master_sync(): void {
         // Verify request
         check_ajax_referer('cb_admin_nonce', 'nonce');
 
-        // Schedule all syncs immediately
-        $sync_types = ['events', 'invitees', 'event_types', 'locations'];
-        foreach ($sync_types as $type) {
-            $hook = "cb_run_{$type}_sync";
-            if (!wp_next_scheduled($hook)) {
-                wp_schedule_single_event(time(), $hook);
-            }
+        $frequency = sanitize_text_field($_POST['frequency'] ?? 'daily');
+
+        // Clear existing job
+        wp_clear_scheduled_hook('cb_sync_master_cron');
+
+        // Try to schedule with whatever frequency was posted
+        $result = wp_schedule_event(time(), $frequency, 'cb_sync_master_cron');
+
+        if ($result === false) {
+            wp_send_json_error(['message' => "Failed to schedule master sync. Frequency '$frequency' not registered."]);
         }
 
-        wp_send_json_success(['message' => 'All syncs scheduled successfully.']);
+        update_option('cb_master_frequency', $frequency);
+
+        wp_send_json_success(['message' => "Master sync scheduled ($frequency)."]);
     }
 
 
