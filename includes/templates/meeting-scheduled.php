@@ -56,7 +56,7 @@ $location  = $payload['location'] ?? [];
 $invitee   = $payload['invitee'] ?? [];
 $host      = $payload['event_memberships'][0] ?? [];
 
-$start_utc = new DateTimeImmutable($row['start_time'], new DateTimeZone('UTC'));
+$start_utc = new \DateTimeImmutable($row['start_time'], new \DateTimeZone('UTC'));
 $converter = new CB_Timezone_Converter();
 $start_local = $converter->to_site_time($start_utc->format('Y-m-d H:i:s'));
 
