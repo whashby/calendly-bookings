@@ -42,38 +42,31 @@ require_once __DIR__ . '/modules/class-cb-debug.php';
  * Register 5-minute cron schedule.
  */
 add_filter('cron_schedules', function ($schedules) {
-    // Every 5 minutes
-    if (!isset($schedules['every_5_minutes'])) {
-        $schedules['every_5_minutes'] = [
-            'interval' => 300,
-            'display'  => __('Every 5 Minutes', 'calendly-bookings'),
-        ];
-    }
-
-    // Every 15 minutes
-    if (!isset($schedules['every_15_minutes'])) {
-        $schedules['every_15_minutes'] = [
-            'interval' => 900,
-            'display'  => __('Every 15 Minutes', 'calendly-bookings'),
-        ];
-    }
-
-    // Every 30 minutes
-    if (!isset($schedules['every_30_minutes'])) {
-        $schedules['every_30_minutes'] = [
-            'interval' => 1800,
-            'display'  => __('Every 30 Minutes', 'calendly-bookings'),
-        ];
-    }
-
-    // Every 6 hours
-    if (!isset($schedules['every_6_hours'])) {
-        $schedules['every_6_hours'] = [
-            'interval' => 21600,
-            'display'  => __('Every 6 Hours', 'calendly-bookings'),
-        ];
-    }
-
+    // Calendly Bookings custom intervals (≤ 24h)
+    $schedules['cb_every_5_minutes'] = [
+        'interval' => 300,
+        'display'  => __('Every 5 Minutes', 'calendly-bookings'),
+    ];
+    $schedules['cb_every_15_minutes'] = [
+        'interval' => 900,
+        'display'  => __('Every 15 Minutes', 'calendly-bookings'),
+    ];
+    $schedules['cb_every_30_minutes'] = [
+        'interval' => 1800,
+        'display'  => __('Every 30 Minutes', 'calendly-bookings'),
+    ];
+    $schedules['cb_hourly'] = [
+        'interval' => 3600,
+        'display'  => __('Hourly', 'calendly-bookings'),
+    ];
+    $schedules['cb_twicedaily'] = [
+        'interval' => 43200,
+        'display'  => __('Twice Daily', 'calendly-bookings'),
+    ];
+    $schedules['cb_daily'] = [
+        'interval' => 86400,
+        'display'  => __('Daily', 'calendly-bookings'),
+    ];
 
     return $schedules;
 });
