@@ -3,6 +3,61 @@
 
   const uuid = CB_REST.uuid;
   const siteTimezone = CB_REST.site_timezone || 'America/Barbados';
+  const $emailField = $('#cb_email');
+
+  let availabilityByDate = {};
+
+  function isValidEmail(email) {
+    return /^[^\s@]+@[^\s]+\.[^\s]+$/.test(email);
+  }
+
+  // Initialize datepicker
+  const datePicker = flatpickr("#cb_meeting_date", {
+    dateFormat: "Y-m-d",
+    minDate: "today",
+    disable: [], // will be filled dynamically
+    onChange: function(selectedDates, dateStr) {
+      if (availabilityByDate[dateStr]) {
+        // Populate timepicker with available times for that date
+        timePicker.set('enable', availabilityByDate[dateStr].map(slot => slot.time));
+      } else {
+        timePicker.set('enable', []);
+      }
+    }
+  });
+
+  // Initialize timepicker
+  const timePicker = flatpickr("#cb_meeting_time", {
+    enableTime: true,
+    noCalendar: true,
+    dateFormat: "H:i",
+    time_24hr: true,
+    enable: [] // will be filled when a date is chosen
+  });
+
+  // Example: after fetching availability from API
+  function loadAvailability(slots) {
+    // slots = [{date:"2026-04-12", time:"09:00"}, {date:"2026-04-12", time:"10:00"}, ...]
+    availabilityByDate = {};
+
+    slots.forEach(slot => {
+      if (!availabilityByDate[slot.date]) {
+        availabilityByDate[slot.date] = [];
+      }
+      availabilityByDate[slot.date].push(slot);
+    });
+
+    // Enable only available dates in datepicker
+    datePicker.set('enable', Object.keys(availabilityByDate));
+  }
+
+})(jQuery);
+
+/*(function ($) {
+  'use strict';
+
+  const uuid = CB_REST.uuid;
+  const siteTimezone = CB_REST.site_timezone || 'America/Barbados';
   const $dateSelect = $('#cb_meeting_date');
   const $timeSelect = $('#cb_meeting_time');
   const $locationSelect = $('#cb_meeting_location');
@@ -199,3 +254,4 @@ function formatDateLabel(iso) {
   });
 
 })(jQuery);
+*/
