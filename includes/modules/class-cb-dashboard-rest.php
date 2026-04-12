@@ -313,7 +313,7 @@ final class CB_Dashboard_REST {
 		$errors24h = (int) $wpdb->get_var($wpdb->prepare(
 			"SELECT COUNT(*) FROM {$wpdb->prefix}cb_audit_log
 			 WHERE level = 'error' AND timestamp >= %s",
-			gmdate('Y-m-d H:i:s', strtotime('-24 hours'))
+			gmdate('Y-m-d H:i:s a', strtotime('-24 hours'))
 		));
 
 		return [
