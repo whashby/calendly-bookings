@@ -309,7 +309,7 @@ final class CB_API {
     }
 
 
-    public function query_event_type_available_times(string $event_type_uuid, \DateTimeImmutable $start_time = null): array {
+    public function query_event_type_available_times(string $event_type_uuid, \DateTimeImmutable $start_time): array {
         CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['event_type_uuid' => $event_type_uuid], 'info');
         try {
             if (!$start_time) {
@@ -545,7 +545,7 @@ final class CB_API {
                         break;
                     }
 
-                    $start_time = $start_time->modify('+7 days')->format('Y-m-d\TH:i:s\Z');
+                    $start_time = $start_time->modify('+7 days');
                 }
             }
 
