@@ -126,7 +126,6 @@ final class CB_Frontend {
             'cb-frontend',
             'CB_REST',
             [
-                'uuid' => $uuid,
                 'site_timezone' => get_option('timezone_string'),
                 'api_base' => esc_url_raw( rest_url('calendly-bookings/v1') )
             ]
