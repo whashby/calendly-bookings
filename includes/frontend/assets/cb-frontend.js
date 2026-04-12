@@ -5,7 +5,6 @@
   const siteTimezone = CB_REST.site_timezone || 'America/Barbados';
   const $emailField = $('#cb_email');
 
-  // Store availability keyed by date
   let availabilityByDate = {};
 
   // --- Email validation helper ---
@@ -20,7 +19,6 @@
     enable: [], // will be filled dynamically
     onChange: function(selectedDates, dateStr) {
       if (availabilityByDate[dateStr]) {
-        // Only allow valid times for that date
         const times = availabilityByDate[dateStr].map(slot => slot.time);
         timePicker.set('enable', times);
       } else {
@@ -54,25 +52,37 @@
     datePicker.set('enable', Object.keys(availabilityByDate));
   }
 
-  // --- Example: Fetch availability from API ---
-  function fetchAvailability() {
+  // --- Fetch availability from REST API ---
+  function fetchAvailability(startIso) {
     $.ajax({
-      url: CB_REST.api_base + '/availability/' + uuid,
+      url: `${CB_REST.api_base}/event-availability?uuid=${uuid}&start_iso=${startIso}`,
       method: 'GET',
       dataType: 'json',
       success: function(response) {
-        if (response.success && response.slots) {
-          loadAvailability(response.slots);
+        if (response && response.success && Array.isArray(response.data)) {
+          // Transform API response into slots [{date, time}]
+          const slots = response.data.map(item => {
+            const dt = new Date(item.start_time);
+            return {
+              date: dt.toISOString().split('T')[0],
+              time: dt.toISOString().split('T')[1].substring(0,5) // HH:mm
+            };
+          });
+          loadAvailability(slots);
+        } else {
+          loadAvailability([]);
         }
       },
       error: function(xhr) {
         console.error("Failed to fetch availability", xhr);
+        loadAvailability([]);
       }
     });
   }
 
   // --- Initialize ---
-  fetchAvailability();
+  const startIso = new Date().toISOString(); // today as starting point
+  fetchAvailability(startIso);
 
 })(jQuery);
 
