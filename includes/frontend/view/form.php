@@ -39,7 +39,19 @@ $email        = esc_attr($current_user->user_email ?? '');
   </div>
 
   <!-- Date & Time -->
-  <div class="cb-field-row">
+<div class="cb-field-row">
+  <div class="cb-field half">
+    <label for="cb_meeting_date"><?php esc_html_e('Meeting Date', 'calendly-bookings'); ?></label>
+    <input type="text" id="cb_meeting_date" name="cb_meeting_date" required />
+  </div>
+
+  <div class="cb-field half">
+    <label for="cb_meeting_time"><?php esc_html_e('Meeting Time', 'calendly-bookings'); ?></label>
+    <input type="text" id="cb_meeting_time" name="cb_meeting_time" required />
+  </div>
+</div>
+
+  <!--div class="cb-field-row">
     <div class="cb-field half">
       <label for="cb_meeting_date"><?php esc_html_e('Meeting Date', 'calendly-bookings'); ?></label>
       <select id="cb_meeting_date" name="cb_meeting_date" required>
@@ -53,7 +65,7 @@ $email        = esc_attr($current_user->user_email ?? '');
         <option value=""><?php esc_html_e('Select a time', 'calendly-bookings'); ?></option>
       </select>
     </div>
-  </div>
+  </div-->
 
   <!-- Intro -->
   <div class="cb-field">
