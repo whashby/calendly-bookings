@@ -64,15 +64,6 @@ final class CB_Frontend {
             '4.6.13',
             true
         );
-
-        // Your custom script that initializes the pickers
-        wp_enqueue_script(
-            'cb-meeting-pickers',
-            plugin_dir_url(__FILE__) . 'assets/js/cb-meeting-pickers.js',
-            ['jquery', 'flatpickr-js'],
-            '1.0.0',
-            true
-        );
     }
 
     public static function enqueue_assets(): void {
@@ -120,15 +111,6 @@ final class CB_Frontend {
                 CB_Constants::url('includes/frontend/assets/cb-frontend.css'),
                 [],
                 CB_Constants::VERSION
-            );
-
-            wp_localize_script(
-            'cb-frontend',
-            'CB_REST',
-            [
-                'site_timezone' => get_option('timezone_string'),
-                'api_base' => esc_url_raw( rest_url('calendly-bookings/v1') )
-            ]
             );
 
 
