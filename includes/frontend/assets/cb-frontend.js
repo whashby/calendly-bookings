@@ -5,37 +5,40 @@
   const siteTimezone = CB_REST.site_timezone || 'America/Barbados';
   const $emailField = $('#cb_email');
 
+  // Store availability keyed by date
   let availabilityByDate = {};
 
+  // --- Email validation helper ---
   function isValidEmail(email) {
     return /^[^\s@]+@[^\s]+\.[^\s]+$/.test(email);
   }
 
-  // Initialize datepicker
+  // --- Initialize Date Picker ---
   const datePicker = flatpickr("#cb_meeting_date", {
     dateFormat: "Y-m-d",
     minDate: "today",
-    disable: [], // will be filled dynamically
+    enable: [], // will be filled dynamically
     onChange: function(selectedDates, dateStr) {
       if (availabilityByDate[dateStr]) {
-        // Populate timepicker with available times for that date
-        timePicker.set('enable', availabilityByDate[dateStr].map(slot => slot.time));
+        // Only allow valid times for that date
+        const times = availabilityByDate[dateStr].map(slot => slot.time);
+        timePicker.set('enable', times);
       } else {
         timePicker.set('enable', []);
       }
     }
   });
 
-  // Initialize timepicker
+  // --- Initialize Time Picker ---
   const timePicker = flatpickr("#cb_meeting_time", {
     enableTime: true,
     noCalendar: true,
     dateFormat: "H:i",
     time_24hr: true,
-    enable: [] // will be filled when a date is chosen
+    enable: [] // filled when a date is chosen
   });
 
-  // Example: after fetching availability from API
+  // --- Load availability into pickers ---
   function loadAvailability(slots) {
     // slots = [{date:"2026-04-12", time:"09:00"}, {date:"2026-04-12", time:"10:00"}, ...]
     availabilityByDate = {};
@@ -51,7 +54,28 @@
     datePicker.set('enable', Object.keys(availabilityByDate));
   }
 
+  // --- Example: Fetch availability from API ---
+  function fetchAvailability() {
+    $.ajax({
+      url: CB_REST.api_base + '/availability/' + uuid,
+      method: 'GET',
+      dataType: 'json',
+      success: function(response) {
+        if (response.success && response.slots) {
+          loadAvailability(response.slots);
+        }
+      },
+      error: function(xhr) {
+        console.error("Failed to fetch availability", xhr);
+      }
+    });
+  }
+
+  // --- Initialize ---
+  fetchAvailability();
+
 })(jQuery);
+
 
 /*(function ($) {
   'use strict';
