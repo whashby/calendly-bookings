@@ -309,28 +309,29 @@ final class CB_API {
     }
 
 
-    public function query_event_type_available_times(string $event_type_uuid): array {
+    public function query_event_type_available_times(string $event_type_uuid, \DateTimeImmutable $start_time = null): array {
         CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['event_type_uuid' => $event_type_uuid], 'info');
         try {
-            // Current UTC time
-            $nowObj = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            if (!$start_time) {
+                // Current UTC time
+                $nowObj = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
 
-            // Round to next half-hour slot
-            $minutes = (int) $nowObj->format('i');
-            $seconds = (int) $nowObj->format('s');
+                // Round to next half-hour slot
+                $minutes = (int) $nowObj->format('i');
+                $seconds = (int) $nowObj->format('s');
 
-            // Total minutes past the hour
-            $totalMinutes = $minutes + ($seconds > 0 ? 1 : 0);
+                // Total minutes past the hour
+                $totalMinutes = $minutes + ($seconds > 0 ? 1 : 0);
 
-            // Compute next slot: either :30 or next hour
-            $roundedMinutes = $totalMinutes <= 30 ? 30 : 0;
-            $roundedHour    = $totalMinutes <= 30 ? (int) $nowObj->format('H') : (int) $nowObj->format('H') + 1;
+                // Compute next slot: either :30 or next hour
+                $roundedMinutes = $totalMinutes <= 30 ? 30 : 0;
+                $roundedHour    = $totalMinutes <= 30 ? (int) $nowObj->format('H') : (int) $nowObj->format('H') + 1;
 
-            $rounded = $nowObj->setTime($roundedHour % 24, $roundedMinutes, 0);
-
-            // ISO‑8601 UTC window
-            $start_utc_iso = $rounded->format('Y-m-d\TH:i:s\Z');
-            $end_utc_iso   = $rounded->modify('+7 days')->format('Y-m-d\TH:i:s\Z');
+                $start_time = $nowObj->setTime($roundedHour % 24, $roundedMinutes, 0);
+            }
+            
+            $start_utc_iso = $start_time->format('Y-m-d\TH:i:s\Z');
+            $end_utc_iso   = $start_time->modify('+7 days')->format('Y-m-d\TH:i:s\Z');
 
             // Build event_type URI
             $event_type = self::API_BASE . '/event_types/' . $event_type_uuid;
@@ -500,23 +501,52 @@ final class CB_API {
             $event_types = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_event_types WHERE product_id>0 AND active=1");
 
             foreach ($event_types as $uuid) {
-                $slots = $this->query_event_type_available_times($uuid);
+                $iterations = 0;
+                $nowObj = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
 
-                if (empty($slots)) {
-                    $results['errors'][] = "No available times for event_type {$uuid}";
-                    CB_Audit_Log::log('warning', 'sync_event_type_available_times', $uuid, [
-                        'message' => 'No slots returned'
+                // Round to next half-hour slot
+                $minutes = (int) $nowObj->format('i');
+                $seconds = (int) $nowObj->format('s');
+
+                // Total minutes past the hour
+                $totalMinutes = $minutes + ($seconds > 0 ? 1 : 0);
+
+                // Compute next slot: either :30 or next hour
+                $roundedMinutes = $totalMinutes <= 30 ? 30 : 0;
+                $roundedHour    = $totalMinutes <= 30 ? (int) $nowObj->format('H') : (int) $nowObj->format('H') + 1;
+
+                $start_time = $nowObj->setTime($roundedHour % 24, $roundedMinutes, 0)->format('Y-m-d\TH:i:s\Z');
+
+                while (true) {
+                    $slots = $this->query_event_type_available_times($uuid, $start_time);
+
+                    if (empty($slots)) {
+                        $results['errors'][] = "No available times for event_type {$uuid}";
+                        CB_Audit_Log::log('warning', 'sync_event_type_available_times', $uuid, [
+                            'message' => 'No slots returned'
+                        ]);
+                        break;
+                    }
+
+                    $count = $this->set_event_type_available_times($uuid, $slots);
+                    $results['upserted'] += $count;
+
+                    CB_Audit_Log::log('info', 'sync_event_type_available_times', $uuid, [
+                        'upserted' => $count,
+                        'total_upserted' => $results['upserted']
                     ]);
-                    continue;
+
+                    $iterations++;
+                    if ($iterations >= 100) {
+                        CB_Audit_Log::log('warning', 'sync_event_type_available_times', $uuid, [
+                            'message' => 'Max iterations reached, stopping loop',
+                            'iterations' => $iterations
+                        ]);
+                        break;
+                    }
+
+                    $start_time = $start_time->modify('+7 days')->format('Y-m-d\TH:i:s\Z');
                 }
-
-                $count = $this->set_event_type_available_times($uuid, $slots);
-                $results['upserted'] += $count;
-
-                CB_Audit_Log::log('info', 'sync_event_type_available_times', $uuid, [
-                    'upserted' => $count,
-                    'total_upserted' => $results['upserted']
-                ]);
             }
 
             update_option(CB_Constants::OPT_LAST_SYNC_EVENT_TYPE_AVAILABLE_TIMES, current_time('timestamp'));
