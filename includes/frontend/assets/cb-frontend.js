@@ -53,32 +53,38 @@
   }
 
   // --- Fetch availability from REST API ---
-  function fetchAvailability(startIso) {
-    $.ajax({
-      url: `${CB_REST.api_base}/event-availability?uuid=${uuid}&start_iso=${startIso}`,
-      method: 'GET',
-      dataType: 'json',
-      success: function(response) {
-        if (response && response.success && Array.isArray(response.data)) {
-          // Transform API response into slots [{date, time}]
-          const slots = response.data.map(item => {
-            const dt = new Date(item.start_time);
-            return {
-              date: dt.toISOString().split('T')[0],
-              time: dt.toISOString().split('T')[1].substring(0,5) // HH:mm
-            };
-          });
-          loadAvailability(slots);
-        } else {
-          loadAvailability([]);
-        }
-      },
-      error: function(xhr) {
-        console.error("Failed to fetch availability", xhr);
+function fetchAvailability(startIso) {
+  $.ajax({
+    url: cb_ajax_object.ajaxurl, // always points to /wp-admin/admin-ajax.php
+    method: 'POST',
+    dataType: 'json',
+    data: {
+      action: 'cb_get_event_availability', // must match PHP handler
+      uuid: CB_REST.uuid,
+      start_iso: startIso,
+      _ajax_nonce: CB_REST.nonce // optional if you want nonce check
+    },
+    success: function(response) {
+      if (response && response.success && Array.isArray(response.data)) {
+        const slots = response.data.map(item => {
+          const dt = new Date(item.start_time);
+          return {
+            date: dt.toISOString().split('T')[0],
+            time: dt.toISOString().split('T')[1].substring(0,5)
+          };
+        });
+        loadAvailability(slots);
+      } else {
         loadAvailability([]);
       }
-    });
-  }
+    },
+    error: function(xhr) {
+      console.error("Failed to fetch availability", xhr);
+      loadAvailability([]);
+    }
+  });
+}
+
 
   // --- Initialize ---
   const startIso = new Date().toISOString(); // today as starting point
