@@ -81,9 +81,9 @@ final class CB_Dashboard {
 	public static function render_availability(): void { echo '<div id="cb-widget-availability" class="cb-widget cb-widget-list"></div>'; }
     public static function render_data_integrity(): void { echo '<div id="cb-widget-integrity" class="cb-widget cb-widget-list"></div>'; }
 	public static function render_revenue(): void { echo '<div id="cb-widget-revenue" class="cb-widget"></div>'; }
-	public static function render_api_health(): void { echo '<div id="cb-widget-health" class="cb-widget"></div>';	}     
+	public static function render_api_health(): void { echo '<div id="cb-widget-health" class="cb-widget"></div>';	}
 	public static function render_recent_bookings(): void { echo '<div id="cb-widget-recent" class="cb-widget"></div>'; }
-	public static function render_booking_trends(): void { 
+	public static function render_booking_trends(): void {
 		echo '<div id="cb-widget-trends" class="cb-widget">
 			<div class="cb-trends-controls">
 				<button id="cb-trends-1m" class="button">1M</button>
@@ -94,7 +94,7 @@ final class CB_Dashboard {
 			<canvas id="cb-widget-trends-chart"></canvas>
 		</div>';
 	}
-    public static function render_performance(): void { 
+    public static function render_performance(): void {
 		echo '<div id="cb-widget-performance" class="cb-widget">
 			<div class="cb-performance-controls">
 			<button id="cb-perf-1m" class="button">1M</button>
@@ -102,7 +102,7 @@ final class CB_Dashboard {
 			<button id="cb-perf-6m" class="button">6M</button>
 			<button id="cb-perf-12m" class="button">12M</button>
 			</div>
-		</div>'; 
+		</div>';
 	}
 
 }
