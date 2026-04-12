@@ -59,7 +59,7 @@ function fetchAvailability(startIso) {
     method: 'POST',
     dataType: 'json',
     data: {
-      action: 'cb_get_event_availability', // must match PHP handler
+      action: 'event-availability', // must match PHP handler
       uuid: CB_REST.uuid,
       start_iso: startIso,
       _ajax_nonce: CB_REST.nonce // optional if you want nonce check
