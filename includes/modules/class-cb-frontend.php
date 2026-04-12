@@ -16,6 +16,7 @@ final class CB_Frontend {
             add_shortcode('calendly_booking_form', [__CLASS__, 'render_calendly_form']);
             add_action('woocommerce_single_product_summary', [__CLASS__, 'cb_insert_after_title' ], 4);
             add_action('woocommerce_before_add_to_cart_button', [__CLASS__, 'output_before_cart']);
+            add_action('wp_enqueue_scripts', [__CLASS__, 'cb_enqueue_flatpickr_assets']);
             add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
             add_action('wp_ajax_cb_login', [__CLASS__, 'cb_ajax_login']);
             add_action('wp_ajax_nopriv_cb_login', [__CLASS__, 'cb_ajax_login']);
@@ -46,7 +47,35 @@ final class CB_Frontend {
         }
     }
 
-    public static function enqueue_assets() {
+    public static function cb_enqueue_flatpickr_assets(): void {
+        // Flatpickr CSS
+        wp_enqueue_style(
+            'flatpickr-css',
+            'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css',
+            [],
+            '4.6.13'
+        );
+
+        // Flatpickr JS
+        wp_enqueue_script(
+            'flatpickr-js',
+            'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js',
+            ['jquery'],
+            '4.6.13',
+            true
+        );
+
+        // Your custom script that initializes the pickers
+        wp_enqueue_script(
+            'cb-meeting-pickers',
+            plugin_dir_url(__FILE__) . 'assets/js/cb-meeting-pickers.js',
+            ['jquery', 'flatpickr-js'],
+            '1.0.0',
+            true
+        );
+    }
+
+    public static function enqueue_assets(): void {
         CB_Audit_Log::log('method_entry', 'frontend', __METHOD__, [], 'info');
         try {
     		global $product;
@@ -116,7 +145,7 @@ final class CB_Frontend {
         }
     */
     
-    public static function output_before_cart() {
+    public static function output_before_cart(): void {
         CB_Audit_Log::log('method_entry', 'frontend', __METHOD__, [], 'info');
         try {
             echo self::render_calendly_form();
@@ -129,7 +158,7 @@ final class CB_Frontend {
 
 
 
-    public static function render_calendly_form($atts = []) {
+    public static function render_calendly_form($atts = []): string {
         CB_Audit_Log::log('method_entry', 'frontend', __METHOD__, ['atts' => $atts], 'info');
         try {
             $context = [
@@ -164,7 +193,7 @@ final class CB_Frontend {
         }
     }
 
-    public static function cb_insert_after_title() {
+    public static function cb_insert_after_title(): void {
         CB_Audit_Log::log('method_entry', 'frontend', __METHOD__, [], 'info');
         try {
             if ( isset($_GET['ref']) && ! empty($_GET['ref'])):
