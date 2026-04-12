@@ -545,7 +545,7 @@ final class CB_API {
                         break;
                     }
 
-                    $start_time = $start_time->modify('+7 days');
+                    $start_time = new \DateTimeImmutable($start_time->modify('+7 days')->format('Y-m-d H:i:s'), new \DateTimeZone('UTC'));
                 }
             }
 
