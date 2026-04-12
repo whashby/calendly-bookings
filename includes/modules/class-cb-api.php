@@ -515,7 +515,7 @@ final class CB_API {
                 $roundedMinutes = $totalMinutes <= 30 ? 30 : 0;
                 $roundedHour    = $totalMinutes <= 30 ? (int) $nowObj->format('H') : (int) $nowObj->format('H') + 1;
 
-                $start_time = $nowObj->setTime($roundedHour % 24, $roundedMinutes, 0)->format('Y-m-d\TH:i:s\Z');
+                $start_time = new \DateTimeImmutable($nowObj->setTime($roundedHour % 24, $roundedMinutes, 0)->format('Y-m-d H:i:s'), new \DateTimeZone('UTC'));
 
                 while (true) {
                     $slots = $this->query_event_type_available_times($uuid, $start_time);
