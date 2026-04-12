@@ -56,7 +56,7 @@
 function fetchAvailability(startIso) {
   $.ajax({
     url: cb_ajax_object.ajaxurl, // always points to /wp-admin/admin-ajax.php
-    method: 'POST',
+    method: 'GET',
     dataType: 'json',
     data: {
       action: 'event-availability', // must match PHP handler
