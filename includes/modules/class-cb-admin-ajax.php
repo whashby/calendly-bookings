@@ -40,6 +40,8 @@ final class CB_Admin_Ajax {
         add_action('wp_ajax_cb_schedule_master_sync', [__CLASS__, 'schedule_master_sync']);
 
         add_action('wp_ajax_cb_get_active_crons', [__CLASS__, 'get_active_crons']);
+        add_action('wp_ajax_cb_get_event_availability', [__CLASS__, 'get_event_availability']);
+        add_action('wp_ajax_nopriv_cb_get_event_availability', [__CLASS__, 'get_event_availability']);
 
 
     }
@@ -664,4 +666,19 @@ public static function save_credentials(): void {
     }
 
 
+public static function cb_get_event_availability(): void {
+    check_ajax_referer('wp_rest', '_ajax_nonce');
+
+    $uuid = sanitize_text_field($_POST['uuid'] ?? '');
+    $start_iso = sanitize_text_field($_POST['start_iso'] ?? '');
+
+    try {
+        // Call your existing availability logic
+        $slots = CB_API::instance()->get_event_type_available_times($uuid, $start_iso);
+
+        wp_send_json_success(['data' => $slots]);
+    } catch (\Throwable $e) {
+        wp_send_json_error(['message' => $e->getMessage()]);
+    }
+}
 }
