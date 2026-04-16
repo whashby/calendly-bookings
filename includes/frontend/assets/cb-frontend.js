@@ -2,95 +2,104 @@
   'use strict';
 
   const uuid = CB_REST.uuid;
-  const siteTimezone = CB_REST.site_timezone || 'America/Barbados';
-  const $emailField = $('#cb_email');
-
   let availabilityByDate = {};
 
-  // --- Email validation helper ---
-  function isValidEmail(email) {
-    return /^[^\s@]+@[^\s]+\.[^\s]+$/.test(email);
-  }
+  const $timeContainer = $('#cb_meeting_time'); // tile container
+  const $timeHidden = $('#cb_meeting_time_value'); // hidden input
 
   // --- Initialize Date Picker ---
   const datePicker = flatpickr("#cb_meeting_date", {
     dateFormat: "Y-m-d",
     minDate: "today",
-    enable: [], // will be filled dynamically
+    enable: [],
     onChange: function(selectedDates, dateStr) {
-      if (availabilityByDate[dateStr]) {
-        const times = availabilityByDate[dateStr].map(slot => slot.time);
-        timePicker.set('enable', times);
-      } else {
-        timePicker.set('enable', []);
-      }
+      populateTimes(dateStr);
     }
   });
 
-  // --- Initialize Time Picker ---
-  const timePicker = flatpickr("#cb_meeting_time", {
-    enableTime: true,
-    noCalendar: true,
-    dateFormat: "H:i",
-    time_24hr: true,
-    enable: [] // filled when a date is chosen
-  });
+  // --- Populate times as tiles ---
+  function populateTimes(dateStr) {
+    $timeContainer.empty();
+    $timeHidden.val('');
+
+    if (availabilityByDate[dateStr]) {
+      availabilityByDate[dateStr].forEach(slot => {
+        const $tile = $('<div>', {
+          class: 'cb-time-tile',
+          text: slot.time
+        }).data('slot', slot);
+
+        $tile.on('click', function() {
+          // Clear previous selection
+          $timeContainer.find('.cb-time-tile').removeClass('selected');
+          // Mark this one
+          $(this).addClass('selected');
+          // Store value in hidden input
+          $timeHidden.val(slot.time);
+          $timeHidden.attr('data-url', slot.scheduling_url);
+        });
+
+        $timeContainer.append($tile);
+      });
+    }
+  }
 
   // --- Load availability into pickers ---
-  function loadAvailability(slots) {
-    // slots = [{date:"2026-04-12", time:"09:00"}, {date:"2026-04-12", time:"10:00"}, ...]
+  function loadAvailability(apiData) {
     availabilityByDate = {};
 
-    slots.forEach(slot => {
-      if (!availabilityByDate[slot.date]) {
-        availabilityByDate[slot.date] = [];
+    apiData.forEach(item => {
+      if (item.status !== 'available') return;
+
+      const dt = new Date(item.start_time);
+      const date = dt.toISOString().split('T')[0];
+      const time = dt.toISOString().split('T')[1].substring(0,5); // HH:mm
+
+      if (!availabilityByDate[date]) {
+        availabilityByDate[date] = [];
       }
-      availabilityByDate[slot.date].push(slot);
+      availabilityByDate[date].push({
+        time,
+        scheduling_url: item.scheduling_url
+      });
     });
 
     // Enable only available dates in datepicker
     datePicker.set('enable', Object.keys(availabilityByDate));
   }
 
-  // --- Fetch availability from REST API ---
-function fetchAvailability(startIso) {
-  $.ajax({
-    url: cb_ajax_object.ajaxurl, // always points to /wp-admin/admin-ajax.php
-    method: 'GET',
-    dataType: 'json',
-    data: {
-      action: 'cb_get_event_availability', // must match PHP handler
-      uuid: CB_REST.uuid,
-      start_iso: startIso,
-      _ajax_nonce: CB_REST.nonce // optional if you want nonce check
-    },
-    success: function(response) {
-      if (response && response.success && Array.isArray(response.data)) {
-        const slots = response.data.map(item => {
-          const dt = new Date(item.start_time);
-          return {
-            date: dt.toISOString().split('T')[0],
-            time: dt.toISOString().split('T')[1].substring(0,5)
-          };
-        });
-        loadAvailability(slots);
-      } else {
+  // --- Fetch availability via admin-ajax ---
+  function fetchAvailability(startIso) {
+    $.ajax({
+      url: cb_ajax_object.ajaxurl,
+      method: 'POST',
+      dataType: 'json',
+      data: {
+        action: 'cb_get_event_availability',
+        uuid: CB_REST.uuid,
+        start_iso: startIso,
+        _ajax_nonce: CB_REST.nonce
+      },
+      success: function(response) {
+        if (response && response.success && Array.isArray(response.data)) {
+          loadAvailability(response.data);
+        } else {
+          loadAvailability([]);
+        }
+      },
+      error: function(xhr) {
+        console.error("Failed to fetch availability", xhr);
         loadAvailability([]);
       }
-    },
-    error: function(xhr) {
-      console.error("Failed to fetch availability", xhr);
-      loadAvailability([]);
-    }
-  });
-}
-
+    });
+  }
 
   // --- Initialize ---
-  const startIso = new Date().toISOString(); // today as starting point
+  const startIso = new Date().toISOString();
   fetchAvailability(startIso);
 
 })(jQuery);
+
 
 
 /*(function ($) {
