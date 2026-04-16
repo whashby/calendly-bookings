@@ -29,7 +29,6 @@ final class CB_Webhooks {
 
 		$sig = $headers['calendly-webhook-signature'][0] ?? ($headers['x-calendly-signature'][0] ?? '');
 		if (!$secret || !self::verify_signature($body, $sig, $secret)) {
-			CB_Audit_Log::log('reject', 'webhook', '', ['error' => 'invalid_signature'], 'warning');
 			return new \WP_REST_Response(['ok' => false], 401);
 		}
 
@@ -37,12 +36,10 @@ final class CB_Webhooks {
 		$event = (string) ($json['event'] ?? '');
 		$payload = $json['payload'] ?? [];
 
-		CB_Audit_Log::log('received', 'webhook', $event, $payload, 'info');
 
 		switch ($event) {
 			case 'invitee.created':
 				$email = $payload['invitee']['email'] ?? ''; 
-				CB_Audit_Log::log('invitee_created', 'webhook', $email, $payload, 'info'); 
 				
 				// --- Custom: trace order number from answer_1 --- 
 				global $wpdb; if (function_exists('get_upcoming_events')) { 
@@ -62,32 +59,26 @@ final class CB_Webhooks {
 						['%s'] 
 					); 
 					
-					CB_Audit_Log::log('order_linked', 'webhook', $start_time, ['order_id' => $order_number], 'info'); 
 				}
 				break;
 
 			case 'invitee.canceled':
 				$email = $payload['invitee']['email'] ?? '';
-				CB_Audit_Log::log('invitee_canceled', 'webhook', $email, $payload, 'info');
 				break;
 
 			case 'event_type.created':
 				$uuid = $payload['event_type']['uuid'] ?? '';
-				CB_Audit_Log::log('event_type_created', 'webhook', $uuid, $payload, 'info');
 				break;
 
 			case 'event_type.updated':
 				$uuid = $payload['event_type']['uuid'] ?? '';
-				CB_Audit_Log::log('event_type_updated', 'webhook', $uuid, $payload, 'info');
 				break;
 
 			case 'event_type.deleted':
 				$uuid = $payload['event_type']['uuid'] ?? '';
-				CB_Audit_Log::log('event_type_deleted', 'webhook', $uuid, $payload, 'info');
 				break;
 
 			default:
-				CB_Audit_Log::log('unhandled', 'webhook', $event, $payload, 'warning');
 				break;
 		}
 
@@ -136,7 +127,6 @@ final class CB_Webhooks {
         ]);
 
 		if (is_wp_error($res)) {
-			CB_Audit_Log::log('register_failed', 'webhook', $url, ['error' => $res->get_error_message()], 'error');
 			return ['success' => false, 'message' => $res->get_error_message()];
 		}
 
@@ -144,10 +134,8 @@ final class CB_Webhooks {
 		$body = json_decode(wp_remote_retrieve_body($res), true);
 
 		if ($code >= 200 && $code < 300) {
-			CB_Audit_Log::log('register_success', 'webhook', $url, ['events' => $events], 'info');
 			return ['success' => true, 'data' => $body];
 		} else {
-			CB_Audit_Log::log('register_failed', 'webhook', $url, ['response' => $body], 'error');
 			return ['success' => false, 'message' => $body['message'] ?? 'Unknown error'];
 		}
 
