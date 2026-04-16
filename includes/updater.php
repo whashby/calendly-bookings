@@ -289,4 +289,41 @@ final class CB_GitHub_Updater
         return ltrim($api->tag_name, 'v');
     }
 
+    private function plugin_info($res, $action, $args) {
+        if ($action !== 'plugin_information' || $args->slug !== $this->basename) {
+            return $res;
+        }
+
+        $api = $this->api_request('releases/latest');
+        if (!$api || empty($api->tag_name)) {
+            return false;
+        }
+
+        $res = new \stdClass();
+        $res->name = $api->name ?? 'Calendly Bookings';
+        $res->version = ltrim($api->tag_name, 'v');
+        $res->author = '<a href="https://whashby.github.io">Wafiq Harris-Ashby</a>';
+        $res->homepage = self::REPO;
+        $res->requires = '5.0';
+        $res->tested = '6.4';
+        $res->download_link = '';
+        if (!empty($api->assets) && is_array($api->assets)) {
+            foreach ($api->assets as $asset) {
+                if (!empty($asset->id) && $asset->name === 'calendly-bookings.zip') {
+                    $res->download_link = "https://api.github.com/repos/whashby/calendly-bookings/releases/assets/{$asset->id}";
+                    break;
+                }
+            }
+        }
+        if (empty($res->download_link)) {
+            $res->download_link = $api->zipball_url ?? '';
+        }
+        $res->sections = [
+            'description' => wp_kses_post($api->body ?? ''),
+            'changelog'   => wp_kses_post($api->body ?? ''),
+        ];
+
+        return $res;
+    }
+
 }
