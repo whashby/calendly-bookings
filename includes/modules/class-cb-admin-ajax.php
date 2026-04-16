@@ -432,17 +432,10 @@ final class CB_Admin_Ajax {
 
         // Connection test logic
         $connection_ok = CB_API::instance()->manual_connection_test($test_api, $test_uuid);
-        CB_Audit_Log::log('manual_connection_test', 'api', __METHOD__, ['success' => $connection_ok, 'api_key_provided' => !empty($api_key), 'uuid_provided' => !empty($uuid)], $connection_ok ? 'info' : 'error');
 
         // License validation
         $license_valid = CB_API::instance()->validate_license($test_license);
-        CB_Audit_Log::log('validate_license', 'api', __METHOD__, ['success' => $license_valid], $license_valid ? 'info' : 'error');
 
-        CB_Audit_Log::log('test_connection_attempt', 'api', __METHOD__, [
-            'api_key_provided' => !empty($api_key),
-            'uuid_provided' => !empty($uuid),
-            'license_provided' => !empty($license),
-        ], 'info');
         wp_send_json([
             'success' => $connection_ok && $license_valid,
             'message' => $connection_ok
