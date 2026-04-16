@@ -171,6 +171,7 @@ final class CB_API {
             $result = $res['collection'] ?? [];
             return $result;
         } catch (\Throwable $e) {
+            error_log('Error occurred while querying event types: ' . $e->getMessage());
             return [];
         }
     }
@@ -209,6 +210,7 @@ final class CB_API {
             }
             return $count;
         } catch (\Throwable $e) {
+            error_log('Error occurred while setting event types: ' . $e->getMessage());
             return 0;
         }
     }
@@ -232,6 +234,7 @@ final class CB_API {
             );
             return $result;
         } catch (\Throwable $e) {
+            error_log('Error occurred while retrieving event types: ' . $e->getMessage());
             return [];
         }
     }
@@ -248,6 +251,7 @@ final class CB_API {
             }
             update_option(CB_Constants::OPT_LAST_SYNC_EVENT_TYPES, current_time('timestamp'));
         } catch (\Throwable $e) {
+            error_log('Error occurred while syncing event types: ' . $e->getMessage());
             $results['errors'][] = $e->getMessage();
         }
 
@@ -297,6 +301,7 @@ final class CB_API {
             $result = $res['collection'] ?? [];
             return $result;
         } catch (\Throwable $e) {
+            error_log('Error occurred while querying event type available times: ' . $e->getMessage());
             return [];
         }
     }
@@ -343,7 +348,9 @@ final class CB_API {
 
             return $count;
         } catch (\Throwable $e) {
+            error_log('Error occurred while setting event type available times: ' . $e->getMessage());
             throw new \RuntimeException('Failed to set event type available times');
+            return 0;
         }
     }
 
@@ -369,7 +376,7 @@ final class CB_API {
             }
 
         // Step 2: Define current hour window
-        try { 
+        try {
             $dt = new \DateTimeImmutable($start_iso); 
         } catch (\Exception $e) { 
             $dt = new \DateTimeImmutable('now'); 
@@ -414,6 +421,7 @@ final class CB_API {
 
             return $available_times;
         } catch (\Throwable $e) {
+            error_log('Error occurred while retrieving event type available times: ' . $e->getMessage());
             return [];
         }
     }
@@ -464,6 +472,7 @@ final class CB_API {
 
             update_option(CB_Constants::OPT_LAST_SYNC_EVENT_TYPE_AVAILABLE_TIMES, current_time('timestamp'));
         } catch (\Throwable $e) {
+            error_log('Error occurred while syncing event type available times: ' . $e->getMessage());
             $results['errors'][] = $e->getMessage();
         }
 
@@ -762,6 +771,7 @@ final class CB_API {
             $this->update_sync_state_success();
             update_option(CB_Constants::OPT_LAST_SYNC_SCHEDULED_EVENTS, current_time('timestamp'));
         } catch (\Throwable $e) {
+            error_log('Error occurred while syncing scheduled events: ' . $e->getMessage());
             $results['errors'][] = $e->getMessage();
             $this->update_sync_state_error($e->getMessage());
         }
@@ -779,10 +789,11 @@ final class CB_API {
         try {
             $res = $this->get('/scheduled_events/' . $scheduled_event_uuid . '/invitees', [], false, 60);
             $result = $res['collection'] ?? [];
-            return $result;
         } catch (\Throwable $e) {
+            error_log('Error occurred while querying scheduled event invitees: ' . $e->getMessage());
             throw new \RuntimeException('Failed to query scheduled event invitees');
         }
+            return $result;
     }
 
     public function set_scheduled_event_invitees(string $scheduled_event_uuid, array $invitees): int {
@@ -823,7 +834,9 @@ final class CB_API {
             }
             return $count;
         } catch (\Throwable $e) {
+            error_log('Error occurred while setting scheduled event invitees: ' . $e->getMessage());
             throw new \RuntimeException('Failed to set scheduled event invitees');
+            return 0;
         }
     }
 
@@ -849,6 +862,7 @@ final class CB_API {
 
             update_option(CB_Constants::OPT_LAST_SYNC_SCHEDULED_EVENT_INVITEES, current_time('timestamp'));
         } catch (\Throwable $e) {
+            error_log('Error occurred while syncing scheduled event invitees: ' . $e->getMessage());
             $results['errors'][] = $e->getMessage();
         }
 
@@ -867,7 +881,9 @@ final class CB_API {
             $result = $res['collection'] ?? [];
             return $result;
         } catch (\Throwable $e) {
+            error_log('Error occurred while querying locations: ' . $e->getMessage());
             throw new \RuntimeException('Failed to query locations');
+            return [];
         }
     }
 
@@ -918,7 +934,9 @@ final class CB_API {
 
             return $count;
         } catch (\Throwable $e) {
+            error_log('Error occurred while setting locations: ' . $e->getMessage());
             throw new \RuntimeException('Failed to set locations');
+            return 0;
         }
     }
 
@@ -950,6 +968,7 @@ final class CB_API {
 
             update_option(CB_Constants::OPT_LAST_SYNC_LOCATIONS, current_time('timestamp'));
         } catch (\Throwable $e) {
+            error_log('Error occurred while syncing locations: ' . $e->getMessage());
             $results['errors'][] = $e->getMessage();
         }
 
