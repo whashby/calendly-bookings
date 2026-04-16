@@ -25,10 +25,8 @@ final class CB_Installer
     {
         self::create_roles();
         self::run(true);
-        CB_Audit_Log::log('Plugin activated and installer run', 'installer', 'activate');
         require_once plugin_dir_path(__FILE__) . '/utils/class-cb-encryption.php';
         CB_Encryption::init();
-        CB_Audit_Log::log('Encryption keys initialized', 'installer', 'activate');
     }
 
     /**
