@@ -59,8 +59,6 @@ class CB_Checkout {
                 $cart_item_data[$key] = call_user_func($callback, $raw_value);
             }
         }
-    
-        CB_Audit_Log::log('capture_form_data', 'checkout', (string) $product_id, $cart_item_data, 'info');
         return $cart_item_data;
     }
 
@@ -122,15 +120,6 @@ class CB_Checkout {
 		if ($notes !== 'Nil') {
 			$order->set_customer_note($notes);
 		}
-		
-		CB_Audit_Log::log('save_order_meta', 'checkout', (string)$order->get_id(), [
-			'location' => $_POST['cb_meeting_location'] ?? '',
-			'date'     => $_POST['cb_meeting_date'] ?? '',
-			'time'     => $_POST['cb_meeting_time'] ?? '',
-			'intro'    => $_POST['cb_hier_intro'] ?? '',
-			'notes'    => $notes,
-		], 'info');
-
 	}
 	
 	/**
@@ -325,14 +314,6 @@ class CB_Checkout {
 			}
 			echo '</ul>';
 		}
-		
-		CB_Audit_Log::log('add_to_emails', 'checkout', (string)$order->get_id(), [
-			'date' => $date,
-			'time' => $time,
-			'location' => $location,
-			'introduction' => $intro,
-		], 'info');
-
 	}
 
     public static function add_to_my_account($order) {
@@ -353,14 +334,6 @@ class CB_Checkout {
 		if ($intro) echo '<tr><th>' . esc_html__('Initial introduction:', 'calendly-bookings') . '</th><td>' . esc_html($intro) . '</td></tr>';
         if ($notes) echo '<tr><th>' . esc_html__('Notes', 'calendly-bookings') . '</th><td>' . nl2br(esc_html($notes)) . '</td></tr>';
         echo '</tbody></table></section>';
-		
-		CB_Audit_Log::log('add_to_my_account', 'checkout', (string)$order->get_id(), [
-			'date' => $date,
-			'time' => $time,
-			'location' => $location,
-			'introduction' => $intro,
-		], 'info');
-
     }
 
     public static function add_admin_column($columns) {
@@ -377,10 +350,6 @@ class CB_Checkout {
             echo $date || $time ? esc_html(trim("$date $time")) : '—';
         }
 		
-		CB_Audit_Log::log('render_admin_column', 'checkout', (string)$post_id, [
-			'date' => $date,
-			'time' => $time,
-		], 'info');
 
     }
 
@@ -396,11 +365,8 @@ class CB_Checkout {
 		if($total > 0){
 			$approval_code = (string) $order->get_meta('approval_code'); 
 			if (stripos($approval_code, 'DECLINED') !== false) {
-				CB_Audit_Log::log('thankyou_skipped', 'checkout', (string)$order_id, [ 
-					'approval_code' => $approval_code 
-				], 'warning'); 
-				return; 
-			}		
+				return;
+			}
 		}
 		
         if (self::order_has_meeting($order)) {
@@ -409,14 +375,17 @@ class CB_Checkout {
 			remove_all_actions('woocommerce_order_details_after_order_table');
 			
 			#add_action('woocommerce_thankyou', [__CLASS__, 'render_meeting_thankyou'], 10, 1);
-			add_action('woocommerce_thankyou', [__CLASS__, 'create_calendly_invitee'], 10, 1);
-
-			CB_Audit_Log::log('create_invitee', 'checkout', (string)$order_id, [], 'info');
-        }	
+			self::render_meeting_thankyou($order_id);
+			//add_action('woocommerce_thankyou', [__CLASS__, 'create_calendly_invitee'], 10, 1);
+		}
     }
     
     public static function run_after_payment_processes($order_id) {
-        
+		$order = wc_get_order($order_id);
+		if (!$order) return;
+		if (self::order_has_meeting($order)) {
+			self::create_calendly_invitee();
+		}
     }
 
 	public static function render_meeting_thankyou($order_id) {
@@ -497,12 +466,11 @@ class CB_Checkout {
 					}
 				},
 				utm:{},
-				resize: true,									
+				resize: true,
 			});
 		});
 		</script>
 		<?php
-		CB_Audit_Log::log('render_meeting_thankyou', 'checkout', (string)$order_id, $params, 'info');
 	}
 	
 	public static function enqueue_calendly_embed() {
@@ -518,7 +486,6 @@ class CB_Checkout {
 	public static function order_has_meeting($order): bool {
 		if (!$order) {
 			error_log('[CB_Checkout] No order object passed to order_has_meeting().');
-			CB_Audit_Log::log('order_check_failed', 'checkout', '', ['reason' => 'no_order_object'], 'error');
 			return false;
 		}
 
@@ -526,7 +493,6 @@ class CB_Checkout {
 			$product = $item->get_product();
 			if (!$product) {
 				error_log("[CB_Checkout] Item {$item_id} has no product.");
-				CB_Audit_Log::log('order_item_missing_product', 'checkout', (string)$item_id, [], 'warning');
 				continue;
 			}
 
@@ -537,26 +503,14 @@ class CB_Checkout {
 			$parent_uuid = $parent_id ? get_post_meta($parent_id, '_cb_event_uuid', true) : '';
 
 			error_log("[CB_Checkout] Checking product {$product_id} (parent {$parent_id}) — UUID: {$uuid} | Parent UUID: {$parent_uuid}");
-			CB_Audit_Log::log('order_item_checked', 'checkout', (string)$product_id, [
-				'parent_id'   => $parent_id,
-				'uuid'        => $uuid,
-				'parent_uuid' => $parent_uuid,
-			], 'info');
 
 			if (!empty($uuid) || !empty($parent_uuid)) {
 				error_log("[CB_Checkout] Meeting product detected for order " . $order->get_id());
-				CB_Audit_Log::log('meeting_product_detected', 'checkout', (string)$order->get_id(), [
-					'product_id'   => $product_id,
-					'parent_id'    => $parent_id,
-					'uuid'         => $uuid,
-					'parent_uuid'  => $parent_uuid,
-				], 'info');
 				return true;
 			}
 		}
 
 		error_log("[CB_Checkout] No meeting products found for order " . $order->get_id());
-		CB_Audit_Log::log('no_meeting_product', 'checkout', (string)$order->get_id(), [], 'info');
 		return false;
 	}
 }
