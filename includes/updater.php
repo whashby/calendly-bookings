@@ -289,7 +289,7 @@ final class CB_GitHub_Updater
         return ltrim($api->tag_name, 'v');
     }
 
-    private function plugin_info($res, $action, $args) {
+    public function plugin_info($res, $action, $args) {
         if ($action !== 'plugin_information' || $args->slug !== $this->basename) {
             return $res;
         }
