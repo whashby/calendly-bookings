@@ -263,20 +263,6 @@ final class CB_Admin_Rest {
         $meta['linked_product_id'] = $product_id;
         $wpdb->update( $table, [ 'meta' => wp_json_encode( $meta ) ], [ 'uuid' => $uuid ] );
 
-        if ( class_exists( 'CB_Audit_Log' ) ) {
-            CB_Audit_Log::log(
-                'create_product',
-                'event',
-                $uuid,
-                [
-                    'product_id'   => $product_id,
-                    'event_name'   => $event->name,
-                    'description'  => $event->description ?? '',
-                    'category'     => 'Meeting'
-                ]
-            );
-        }
-
         return new \WP_REST_Response( [
             'success'    => true,
             'product_id' => $product_id,
