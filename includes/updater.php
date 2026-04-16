@@ -30,20 +30,14 @@ final class CB_GitHub_Updater
 
 
     public static function init(): void {
-        CB_Audit_Log::log('init', 'updater', '', [], 'info');
-        try {
-            self::instance(CB_Constants::plugin_file());
-            add_action('admin_init', [self::instance(), 'request_and_store_token']);
-            add_action('admin_init', [self::instance(), 'check_for_updates']);
-            add_action('admin_post_cb_refresh_github_token', [self::instance(), 'handle_token_refresh']);
-            add_action('admin_notices', [self::instance(), 'show_admin_notices']);
-            add_filter('pre_set_site_transient_update_plugins', [self::instance(), 'check_for_updates']);
-            add_filter('plugins_api', [self::instance(), 'plugin_info'], 10, 3);
-            add_filter('http_request_args', [self::instance(), 'inject_github_auth_header'], 10, 2);
-            CB_Audit_Log::log('init_success', 'updater', '', [], 'info');
-        } catch (\Exception $e) {
-            CB_Audit_Log::log('init_error', 'updater', '', ['error' => $e->getMessage()], 'error');
-        }
+        self::instance(CB_Constants::plugin_file());
+        add_action('admin_init', [self::instance(), 'request_and_store_token']);
+        add_action('admin_init', [self::instance(), 'check_for_updates']);
+        add_action('admin_post_cb_refresh_github_token', [self::instance(), 'handle_token_refresh']);
+        add_action('admin_notices', [self::instance(), 'show_admin_notices']);
+        add_filter('pre_set_site_transient_update_plugins', [self::instance(), 'check_for_updates']);
+        add_filter('plugins_api', [self::instance(), 'plugin_info'], 10, 3);
+        add_filter('http_request_args', [self::instance(), 'inject_github_auth_header'], 10, 2);
     }
 
     /** Singleton accessor */
@@ -61,7 +55,6 @@ final class CB_GitHub_Updater
         $this->basename = dirname($this->plugin);
         $this->license = get_option(self::LICENSE_OPTION) ?? '';
         $this->token   = get_option(self::TOKEN_OPTION) ?? '';
-        CB_Audit_Log::log('constructor', 'updater', $this->plugin, ['license_set' => !empty($this->license)], 'info');
 
         add_filter('pre_set_site_transient_update_plugins', [$this, 'check_for_updates']);
         add_filter('plugins_api', [$this, 'plugin_info'], 10, 3);
@@ -71,18 +64,15 @@ final class CB_GitHub_Updater
         add_action('admin_init', [$this, 'check_for_updates']);
         add_action('admin_post_cb_refresh_github_token', [$this, 'handle_token_refresh']);
         add_action('admin_notices', [$this, 'show_admin_notices']);
-        CB_Audit_Log::log('constructor_complete', 'updater', $this->plugin, ['license_set' => !empty($this->license)], 'info');
     }
 
     /** Request token from Worker and store securely */
     public function request_and_store_token(): void {
         $this->license = get_option(self::LICENSE_OPTION, '');
         if (empty($this->license)) {
-            CB_Audit_Log::log('missing_license', 'worker', '', [], 'error');
             return;
         }
 
-        CB_Audit_Log::log('request', 'worker', $this->license, ['endpoint' => self::WORKER], 'info');
         $response = wp_remote_post(self::WORKER, [
             'headers' => ['Content-Type' => 'application/json'],
             'body'    => wp_json_encode(['license' => $this->license]),
@@ -90,23 +80,19 @@ final class CB_GitHub_Updater
         ]);
 
         if (is_wp_error($response)) {
-            CB_Audit_Log::log('error', 'worker', $this->license, ['error' => $response->get_error_message()], 'error');
             return;
         }
 
         $status = wp_remote_retrieve_response_code($response);
         $body   = wp_remote_retrieve_body($response);
         $data   = json_decode($body, true);
-        CB_Audit_Log::log('response', 'worker', $this->license, ['status' => $status, 'body' => $data], $status === 200 ? 'info' : 'warning');
 
         if (empty($data['valid']) || empty($data['token'])) {
-            CB_Audit_Log::log('invalid', 'worker', $this->license, ['data' => $data], 'error');
             set_transient('cb_token_error', __('Failed to retrieve GitHub token.', 'calendly-bookings'), 3600);
             return;
         }
 
         $this->token = $data['token'];
-        CB_Audit_Log::log('store_token', 'worker', $this->license, ['decrypted' => !empty($this->token)], $this->token ? 'info' : 'warning');
         update_option(self::TOKEN_OPTION, $this->token, false);
     }
 
@@ -114,17 +100,14 @@ final class CB_GitHub_Updater
     public function check_for_updates($transient) {
         // Return #1: invalid transient or plugin
         if (empty($transient->checked) || empty($this->plugin)) {
-            CB_Audit_Log::log('check_for_updates', 'updater', $this->plugin, ['message' => 'Invalid transient or plugin'], 'warning');
             return $transient;
         }
 
-        CB_Audit_Log::log('check_for_updates', 'updater', $this->plugin, ['message' => 'Checking for updates'], 'info');
         $this->request_and_store_token(); // always refresh
         $this->get_token();
 
         $api = $this->api_request('releases/latest');
         if (!$api || empty($api->tag_name)) {
-            CB_Audit_Log::log('check_for_updates', 'updater', $this->plugin, ['message' => 'Failed to retrieve API data'], 'warning');
             return $transient; // Return #2: API failure
         }
 
@@ -150,7 +133,6 @@ final class CB_GitHub_Updater
         $update_available = ($current_version && version_compare($new_version, $current_version, '>') && !empty($package));
 
         if ($update_available) {
-            CB_Audit_Log::log('update_available', 'updater', $this->plugin, ['new_version' => $new_version], 'info');
             $transient->response[$this->plugin] = (object)[
                 'slug'        => $this->basename,
                 'plugin'      => $this->plugin,
@@ -159,11 +141,7 @@ final class CB_GitHub_Updater
                 'package'     => $package,
             ];
         } else {
-            CB_Audit_Log::log('update_not_available', 'updater', $this->plugin, [
-                'new_version'     => $new_version,
-                'current_version' => $current_version,
-                'package'         => $package
-            ], 'info');
+            unset($transient->response[$this->plugin]);
         }
 
         return $transient; // Return #3: final return
@@ -172,9 +150,6 @@ final class CB_GitHub_Updater
     /** Retrieve latest release info from GitHub */
     private function api_request($endpoint) {
         $url = rtrim(self::GITHUB_API_REPO_URL, '/') . '/' . ltrim($endpoint, '/');
-        CB_Audit_Log::log(
-            'request', 'api', $url, ['message' => 'Starting API request'], 'info'
-        );
 
         $response = wp_remote_get($url, [
             'headers' => [
@@ -185,28 +160,16 @@ final class CB_GitHub_Updater
         ]);
 
         if (is_wp_error($response)) {
-            CB_Audit_Log::log(
-                'error', 'api', $url, ['error' => $response->get_error_message()], 'error'
-            );
             return false;
         }
 
         $status = wp_remote_retrieve_response_code($response);
-        CB_Audit_Log::log(
-            'response', 'api', $url, ['status' => $status], $status === 200 ? 'info' : 'warning'
-        );
 
         if ($status !== 200) {
-            CB_Audit_Log::log(
-                'failure', 'api', $url, ['body' => wp_remote_retrieve_body($response)], 'error'
-            );
             return false;
         }
 
         $body = wp_remote_retrieve_body($response);
-        CB_Audit_Log::log(
-            'success', 'api', $url, ['body' => $body], 'info'
-        );
 
         return json_decode($body);
     }
@@ -219,11 +182,9 @@ final class CB_GitHub_Updater
 
         $token = get_option(self::TOKEN_OPTION, '');
         if (empty($token)) {
-            CB_Audit_Log::log('auth_header', 'github', $url, ['error' => 'No token available'], 'error');
             return $args;
         }
 
-        CB_Audit_Log::log('auth_header', 'github', $url, ['message' => 'Injecting token'], 'info');
 
         $args['headers']['Authorization'] = 'token ' . $token;
 
@@ -233,26 +194,19 @@ final class CB_GitHub_Updater
             $args['headers']['Accept'] = 'application/vnd.github+json';
         }
 
-        // NEW: log the exact URL WordPress is about to request
-        CB_Audit_Log::log('http_request', 'github', $url, ['headers' => $args['headers']], 'info');
-
         return $args;
     }
 
     /** Manual refresh handler */
     public function handle_token_refresh() {
         if (!current_user_can('manage_options')) wp_die(__('Unauthorized', 'calendly-bookings'));
-        CB_Audit_Log::log('manual_refresh', 'github', '', ['message' => 'Manual token refresh initiated'], 'info');
 
         if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'cb_refresh_github_token')) {
             wp_die(__('Invalid nonce', 'calendly-bookings'));
-            CB_Audit_Log::log('manual_refresh', 'github', '', ['error' => 'Invalid nonce'], 'error');
         }
 
-        CB_Audit_Log::log('manual_refresh', 'github', '', ['message' => 'Nonce verified, refreshing token'], 'info');
         $this->request_and_store_token();
         set_transient('cb_token_success', __('GitHub token refreshed successfully.', 'calendly-bookings'), 30);
-        CB_Audit_Log::log('manual_refresh', 'github', '', ['message' => 'Token refresh complete'], 'info');
 
         wp_safe_redirect(add_query_arg('page', 'calendly-bookings', admin_url('options-general.php')));
         exit;
@@ -313,12 +267,10 @@ final class CB_GitHub_Updater
     private function get_token() {
         $this->token = get_option(self::TOKEN_OPTION, '');
         if(!empty($this->token)) {
-            CB_Audit_Log::log('get_token', 'github', '', ['token_exists' => true], 'info');
             return $this->token;
         }
 
         $this->request_and_store_token();
-        CB_Audit_Log::log('get_token', 'github', '', ['token_exists' => !empty($this->token)], !empty($this->token) ? 'info' : 'warning');
         return get_option(self::TOKEN_OPTION, '');
     }
 
