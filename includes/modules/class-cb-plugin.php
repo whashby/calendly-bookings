@@ -10,18 +10,10 @@ use Calendly_Bookings\CB_Constants;
 
 final class CB_Plugin{
     public static function init():void{
-        CB_Audit_Log::log('method_entry', 'plugin', __METHOD__, [], 'info');
-        try {
-            add_action('admin_init',[__CLASS__,'register_settings']);
-            CB_Audit_Log::log('method_exit', 'plugin', __METHOD__, [], 'info');
-        } catch (\Throwable $e) {
-            CB_Audit_Log::log('error', 'plugin', __METHOD__, ['error' => $e->getMessage()], 'error');
-        }
+        add_action('admin_init',[__CLASS__,'register_settings']);
     }
 
-public static function register_settings(): void {
-    CB_Audit_Log::log('method_entry', 'plugin', __METHOD__, [], 'info');
-    try {
+    public static function register_settings(): void {
         register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_API_TOKEN, ['sanitize_callback' => 'sanitize_text_field']);
         register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_USER_UUID, ['sanitize_callback' => 'sanitize_text_field']);
         register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_LICENSE_KEY, ['sanitize_callback' => 'sanitize_text_field']);
@@ -48,10 +40,5 @@ public static function register_settings(): void {
         register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_REPORT_TEMPLATE);
         register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_REPORT_FILETYPE);
         register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_REPORT_SCHEDULE);
-
-        CB_Audit_Log::log('method_exit', 'plugin', __METHOD__, [], 'info');
-    } catch (\Throwable $e) {
-        CB_Audit_Log::log('error', 'plugin', __METHOD__, ['error' => $e->getMessage()], 'error');
     }
-}
 }
