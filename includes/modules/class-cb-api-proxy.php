@@ -103,18 +103,12 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
     $res = CB_API::instance()->sync(get_option(CB_Constants::OPT_MIN_START_DATE), true);
 
     if (empty($res['success'])) {
-        CB_Audit_Log::log('sync_failed', 'scheduled_events', '', ['errors' => $res['errors']], 'error');
         return new \WP_Error('sync_failed', wp_json_encode($res['errors']), ['status' => 500]);
     }
 
     // Fetch scheduled events explicitly to return them
     $events = CB_API::instance()->get_scheduled_events([],'admin', absint($r->get_param('count') ?: 50));
 
-    CB_Audit_Log::log('sync_complete', 'scheduled_events', '', [
-        'event_types_upserted' => $res['event_types_upserted'] ?? 0,
-        'events_upserted'      => $res['events_upserted'] ?? 0,
-        'events_count'         => count($events),
-    ], 'info');
 
     return new \WP_REST_Response([
         'success'               => true,
@@ -155,17 +149,11 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
 
 	public static function rest_scheduled_events(\WP_REST_Request $r): \WP_REST_Response {
 		if (!is_user_logged_in() || !current_user_can('manage_options')) {
-			CB_Audit_Log::log('unauthorized', 'scheduled_events', '', [], 'warning');
 			return new \WP_REST_Response(['success' => false, 'message' => 'Unauthorized'], 401);
 		}
 
 		$count = absint($r->get_param('count') ?: 50);
 		$events = CB_API::instance()->get_scheduled_events([], 'admin', $count);
-
-		CB_Audit_Log::log('rest_fetch', 'scheduled_events', '', [
-			'context' => 'admin',
-			'count'   => count($events)
-		], 'info');
 
 		set_transient('cb_last_sync', [
 			'time'   => current_time('mysql'),
@@ -208,7 +196,6 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
             if (preg_match('/([0-9a-fA-F-]{36})$/', $uuid, $m)) {
                 $uuid = $m[1];
             } else {
-                CB_Audit_Log::log('invalid_uuid', 'settings', '', ['uuid' => $uuid], 'error');
                 return new \WP_REST_Response([
                     'success' => false,
                     'message' => __('Invalid UUID format.', 'calendly-bookings')
@@ -222,7 +209,6 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
         //$test = $api->get_scheduled_events('admin', 1);
         $test = CB_API::instance()->manual_connection_test();
         if (empty($test)) {
-            CB_Audit_Log::log('connection_failed', 'scheduled_events', '', ['reason' => 'no events'], 'error');
             return new \WP_REST_Response([
                 'success' => false,
                 'message' => __('Connection test failed: no events returned.', 'calendly-bookings')
@@ -239,12 +225,6 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
         // Sync upcoming events
         //$sync = $api->get_scheduled_events('admin', 100);
         $sync = CB_API::instance()->sync_scheduled_events(100, '', false);
-
-        CB_Audit_Log::log('settings_saved', 'scheduled_events', '', [
-            'token_set' => !empty($token),
-            'uuid_set'  => !empty($uuid),
-            'synced'    => count($sync)
-        ], 'info');
 
         $message = sprintf(
             __('Settings saved and connection successful. Synced %d upcoming events.', 'calendly-bookings'),
@@ -263,11 +243,6 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
 
         // Fetch without persisting, so you see raw API data
         $result = CB_API::instance()->get_event_types(false);
-
-        CB_Audit_Log::log('debug_event_types', 'event', $uuid ?: 'ALL', [
-            'success' => empty($result['error']),
-            'error'   => $result['error'] ?? null
-        ], empty($result['error']) ? 'info' : 'warning');
 
         return new \WP_REST_Response([
             'success' => empty($result['error']),
