@@ -101,10 +101,6 @@ add_action('cb_sync_master_cron', function () {
     $min_start = get_option(CB_Constants::OPT_MIN_START_DATE);
 
     $api->sync($min_start, true);
-    $api->sync_invitees($min_start, true);
-    $api->sync_event_types($min_start, true);
-    $api->sync_locations($min_start, true);
-
     update_option('cb_last_sync_all', current_time('mysql'));
 });
 
