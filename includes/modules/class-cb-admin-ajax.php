@@ -659,19 +659,19 @@ public static function save_credentials(): void {
     }
 
 
-public static function cb_get_event_availability(): void {
-    check_ajax_referer('wp_rest', '_ajax_nonce');
+    public static function get_event_availability(): void {
+        check_ajax_referer('wp_rest', '_ajax_nonce');
 
-    $uuid = sanitize_text_field($_POST['uuid'] ?? '');
-    $start_iso = sanitize_text_field($_POST['start_iso'] ?? '');
+        $uuid = sanitize_text_field($_POST['uuid'] ?? '');
+        $start_iso = sanitize_text_field($_POST['start_iso'] ?? '');
 
-    try {
-        // Call your existing availability logic
-        $slots = CB_API::instance()->get_event_type_available_times($uuid, $start_iso);
-
-        wp_send_json_success(['data' => $slots]);
-    } catch (\Throwable $e) {
-        wp_send_json_error(['message' => $e->getMessage()]);
+        try {
+            // Call your existing availability logic
+            $results = CB_API::instance()->get_event_type_available_times($uuid, $start_iso);
+            $slots = $results['collection'] ?? [];
+            wp_send_json_success($slots);
+        } catch (\Throwable $e) {
+            wp_send_json_error(['message' => $e->getMessage()]);
+        }
     }
-}
 }
