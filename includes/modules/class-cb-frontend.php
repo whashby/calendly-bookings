@@ -11,7 +11,6 @@ use Calendly_Bookings\CB_Constants;
 final class CB_Frontend {
 
     public static function init() {
-        CB_Audit_Log::log('method_entry', 'frontend', __METHOD__, [], 'info');
         try {
             add_shortcode('calendly_booking_form', [__CLASS__, 'render_calendly_form']);
             add_action('woocommerce_single_product_summary', [__CLASS__, 'cb_insert_after_title' ], 4);
@@ -20,14 +19,12 @@ final class CB_Frontend {
             add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
             add_action('wp_ajax_cb_login', [__CLASS__, 'cb_ajax_login']);
             add_action('wp_ajax_nopriv_cb_login', [__CLASS__, 'cb_ajax_login']);
-            CB_Audit_Log::log('method_exit', 'frontend', __METHOD__, [], 'info');
         } catch (\Throwable $e) {
-            CB_Audit_Log::log('error', 'frontend', __METHOD__, ['error' => $e->getMessage()], 'error');
+            throw $e;
         }
     }
 
     public static function cb_ajax_login() {
-        CB_Audit_Log::log('method_entry', 'frontend', __METHOD__, [], 'info');
         try {
             $creds = [
                 'user_login'    => sanitize_text_field($_POST['log']),
@@ -41,9 +38,8 @@ final class CB_Frontend {
             } else {
                 wp_send_json_success(['redirect' => $_POST['redirect_to'] ?? home_url()]);
             }
-            CB_Audit_Log::log('method_exit', 'frontend', __METHOD__, [], 'info');
         } catch (\Throwable $e) {
-            CB_Audit_Log::log('error', 'frontend', __METHOD__, ['error' => $e->getMessage()], 'error');
+            throw $e;
         }
     }
 
@@ -67,7 +63,6 @@ final class CB_Frontend {
     }
 
     public static function enqueue_assets(): void {
-        CB_Audit_Log::log('method_entry', 'frontend', __METHOD__, [], 'info');
         try {
     		global $product;
 
@@ -121,11 +116,8 @@ final class CB_Frontend {
                 )
             );
 
-
-
-            CB_Audit_Log::log('method_exit', 'frontend', __METHOD__, [], 'info');
         } catch (\Throwable $e) {
-            CB_Audit_Log::log('error', 'frontend', __METHOD__, ['error' => $e->getMessage()], 'error');
+            throw $e;
         }
     }
 
@@ -136,12 +128,10 @@ final class CB_Frontend {
     */
     
     public static function output_before_cart(): void {
-        CB_Audit_Log::log('method_entry', 'frontend', __METHOD__, [], 'info');
         try {
             echo self::render_calendly_form();
-            CB_Audit_Log::log('method_exit', 'frontend', __METHOD__, [], 'info');
         } catch (\Throwable $e) {
-            CB_Audit_Log::log('error', 'frontend', __METHOD__, ['error' => $e->getMessage()], 'error');
+            throw
         }
     }
 
@@ -149,7 +139,6 @@ final class CB_Frontend {
 
 
     public static function render_calendly_form($atts = []): string {
-        CB_Audit_Log::log('method_entry', 'frontend', __METHOD__, ['atts' => $atts], 'info');
         try {
             $context = [
                 'account_exists'   => false,
@@ -175,36 +164,28 @@ final class CB_Frontend {
             ob_start();
             include CB_Constants::path('includes/frontend/view/index.php');
             $output = ob_get_clean();
-            CB_Audit_Log::log('method_exit', 'frontend', __METHOD__, ['output_length' => strlen($output)], 'info');
             return $output;
         } catch (\Throwable $e) {
-            CB_Audit_Log::log('error', 'frontend', __METHOD__, ['error' => $e->getMessage(), 'atts' => $atts], 'error');
             throw $e;
         }
     }
 
     public static function cb_insert_after_title(): void {
-        CB_Audit_Log::log('method_entry', 'frontend', __METHOD__, [], 'info');
-        try {
-            if ( isset($_GET['ref']) && ! empty($_GET['ref'])):
-                $ref = ucwords(implode(' ', explode('-', base64_decode($_GET['ref']))));
-            ?>
-            <div class="cb-upsell">
-                <p><em>
-                  <?php printf(
-                    esc_html__('%ss are not available again. We recommend booking a Spiritual Companionship session instead.', 'calendly-bookings'),
-                    esc_html($ref)
-                  ); ?>
-                </em></p>
-                        </div>
-            <?php endif;
+        if ( isset($_GET['ref']) && ! empty($_GET['ref'])):
+            $ref = ucwords(implode(' ', explode('-', base64_decode($_GET['ref']))));
+        ?>
+        <div class="cb-upsell">
+            <p><em>
+                <?php printf(
+                esc_html__('%ss are not available again. We recommend booking a Spiritual Companionship session instead.', 'calendly-bookings'),
+                esc_html($ref)
+                ); ?>
+            </em></p>
+                    </div>
+        <?php endif;
 
-            if ( ! is_user_logged_in() ) {
-                include CB_Constants::path('includes/frontend/view/login-modal.php');
-            }
-            CB_Audit_Log::log('method_exit', 'frontend', __METHOD__, [], 'info');
-        } catch (\Throwable $e) {
-            CB_Audit_Log::log('error', 'frontend', __METHOD__, ['error' => $e->getMessage()], 'error');
+        if ( ! is_user_logged_in() ) {
+            include CB_Constants::path('includes/frontend/view/login-modal.php');
         }
     }
 
