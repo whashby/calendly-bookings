@@ -121,17 +121,13 @@ final class CB_Frontend {
         }
     }
 
-    /*
-        public static function output_before_cart() {
-            echo self::render_calendly_form();
-        }
-    */
+
     
     public static function output_before_cart(): void {
         try {
             echo self::render_calendly_form();
         } catch (\Throwable $e) {
-            throw
+            throw $e;
         }
     }
 
