@@ -47,8 +47,10 @@ $email        = esc_attr($current_user->user_email ?? '');
 
   <div class="cb-field half">
     <label for="cb_meeting_time"><?php esc_html_e('Meeting Time', 'calendly-bookings'); ?></label>
-    <input type="text" id="cb_meeting_time" name="cb_meeting_time" required />
+    <div id="cb_meeting_time" class="cb-time-tiles"></div>
+    <input type="hidden" name="cb_meeting_time" id="cb_meeting_time_value" required />
   </div>
+
 </div>
 
   <!--div class="cb-field-row">
