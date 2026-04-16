@@ -477,285 +477,273 @@ final class CB_API {
 
 
     public function query_scheduled_events(?int $count = null, ?string $min_start_date = null): array {
-        try {
-            $params = [];
-            if ($count !== null) {
-                $params['count'] = $count;
-            }
-            if ($min_start_date) {
-                $params['min_start_time'] = gmdate('Y-m-d\TH:i:s\Z', strtotime($min_start_date));
-            }
-
-            $allEvents = [];
-            $cursor = null;
-
-            do {
-                if ($cursor) {
-                    $params['cursor'] = $cursor;
-                }
-
-                $res = $this->get('/scheduled_events', $params, false, 120);
-                $batch = $res['collection'] ?? [];
-                $allEvents = array_merge($allEvents, $batch);
-
-                $cursor = $res['pagination']['next_page'] ?? null;
-            } while ($count === null && $cursor);
-
-            return $allEvents;
-        } catch (\Throwable $e) {
-            throw $e;
+        $params = [];
+        if ($count !== null) {
+            $params['count'] = $count;
         }
+        if ($min_start_date) {
+            $params['min_start_time'] = gmdate('Y-m-d\TH:i:s\Z', strtotime($min_start_date));
+        }
+
+        $allEvents = [];
+        $cursor = null;
+
+        do {
+            if ($cursor) {
+                $params['cursor'] = $cursor;
+            }
+
+            $res = $this->get('/scheduled_events', $params, false, 120);
+            $batch = $res['collection'] ?? [];
+            $allEvents = array_merge($allEvents, $batch);
+
+            $cursor = $res['pagination']['next_page'] ?? null;
+        } while ($count === null && $cursor);
+
+        return $allEvents;
     }
 
     public function set_scheduled_events(array $events): int {
-        try {
-            global $wpdb;
-            $table_events   = $wpdb->prefix . 'cb_scheduled_events';
-            $table_types    = $wpdb->prefix . 'cb_event_types';
-            $table_invitees = $wpdb->prefix . 'cb_scheduled_event_invitees';
-            $table_locations= $wpdb->prefix . 'cb_meeting_locations';
+        global $wpdb;
+        $table_events   = $wpdb->prefix . 'cb_scheduled_events';
+        $table_types    = $wpdb->prefix . 'cb_event_types';
+        $table_invitees = $wpdb->prefix . 'cb_scheduled_event_invitees';
+        $table_locations= $wpdb->prefix . 'cb_meeting_locations';
 
-            $count = 0;
+        $count = 0;
 
-            foreach ($events as $se) {
-                $uuid = basename($se['uri'] ?? '');
-                if (!$uuid) {
-                    continue;
-                }
-
-                // Resolve event_type_id
-                $event_type_uuid = basename($se['event_type'] ?? '');
-                $event_type_id = $wpdb->get_var(
-                    $wpdb->prepare("SELECT id FROM {$table_types} WHERE uuid=%s", $event_type_uuid)
-                );
-
-                // Resolve location_id
-                $location_id = null;
-                $location_ids = $wpdb->get_results("SELECT id, type FROM {$table_locations}", ARRAY_A);
-
-                foreach ($location_ids as $key => $location) {
-                    $loc = $se['location'] ?? [];
-                    if ($loc && $loc['type'] === $location['type']) {
-                        $location_id = $location['id'];
-                    }
-                }
-
-                // Normalize status
-                $status = $se['status'] ?? 'active';
-                $raw_payload_status = null;
-
-                if (!empty($se['payload'])) {
-                    $payload = is_array($se['payload']) ? $se['payload'] : json_decode($se['payload'], true);
-
-                    // Handle explicit status from payload
-                    if (!empty($payload['status'])) {
-                        $raw_payload_status = $payload['status'];
-                        $status = strtolower($payload['status']) === 'canceled'
-                            ? 'cancelled'
-                            : sanitize_text_field($payload['status']);
-                    }
-
-                    // NEW CONDITION: mark as completed if end_date is in the past and not cancelled
-                    if (!empty($payload['end_date']) && strtolower($status) !== 'cancelled') {
-                        $end_timestamp = strtotime($payload['end_date']);
-
-                        if ($end_timestamp !== false && $end_timestamp < time()) {
-                            $status = 'completed';
-                        }
-                    }
-                }
-
-
-                // Defaults
-                $reschedule_url = null;
-                $cancel_url     = null;
-                $order_id       = null;
-
-                // Upsert invitees and extract order_id + URLs
-                if (!empty($se['invitees']) && is_array($se['invitees'])) {
-                    foreach ($se['invitees'] as $inv) {
-                        $inv_payload = is_array($inv['payload'] ?? null)
-                            ? $inv['payload']
-                            : json_decode($inv['payload'] ?? '{}', true);
-
-                        // Extract order_id and URLs from invitee payload
-                        if (!empty($inv_payload['order_id'])) {
-                            $order_id = $inv_payload['order_id'];
-                        }
-                        $reschedule_url = $inv_payload['reschedule_url'] ?? $reschedule_url;
-                        $cancel_url     = $inv_payload['cancel_url'] ?? $cancel_url;
-
-                        // Upsert invitee record
-                        $wpdb->query($wpdb->prepare(
-                            "INSERT INTO $table_invitees (scheduled_event_uuid, name, email, payload, created_ts, updated_ts)
-                            VALUES (%s, %s, %s, %s, NOW(), NOW())
-                            ON DUPLICATE KEY UPDATE
-                            name=VALUES(name),
-                            email=VALUES(email),
-                            payload=VALUES(payload),
-                            updated_ts=NOW()",
-                            $uuid,
-                            sanitize_text_field($inv['name'] ?? ''),
-                            sanitize_email($inv['email'] ?? ''),
-                            wp_json_encode($inv_payload)
-                        ));
-                    }
-                }
-
-                // Upsert scheduled event with order_id from invitee payload
-                $wpdb->query($wpdb->prepare(
-                    "INSERT INTO $table_events (uuid, order_id, event_type_id, location_id, name, start_time, end_time, status, uri, reschedule_url, cancel_url, payload, created_ts, updated_ts)
-                    VALUES (%s, %s, %d, %d, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                    ON DUPLICATE KEY UPDATE
-                    order_id=VALUES(order_id),
-                    event_type_id=VALUES(event_type_id),
-                    location_id=VALUES(location_id),
-                    name=VALUES(name),
-                    start_time=VALUES(start_time),
-                    end_time=VALUES(end_time),
-                    status=VALUES(status),
-                    uri=VALUES(uri),
-                    reschedule_url=VALUES(reschedule_url),
-                    cancel_url=VALUES(cancel_url),
-                    payload=VALUES(payload),
-                    updated_ts=NOW()",
-                    $uuid,
-                    $order_id, // now sourced from invitee payload
-                    $event_type_id ?: 0,
-                    $location_id,
-                    sanitize_text_field(!$se['name'] == "Initial meeting"? $se['name'] : "Initial Consultation"),
-                    gmdate('Y-m-d H:i:s', strtotime($se['start_time'] ?? 'now')),
-                    gmdate('Y-m-d H:i:s', strtotime($se['end_time'] ?? 'now')),
-                    $status,
-                    esc_url_raw($se['uri'] ?? ''),
-                    esc_url_raw($reschedule_url ?? ''),
-                    esc_url_raw($cancel_url ?? ''),
-                    wp_json_encode($se)
-                ));
-
-                $count++;
-
+        foreach ($events as $se) {
+            $uuid = basename($se['uri'] ?? '');
+            if (!$uuid) {
+                continue;
             }
 
-            return $count;
-        } catch (\Throwable $e) {
-            throw $e;
+            // Resolve event_type_id
+            $event_type_uuid = basename($se['event_type'] ?? '');
+            $event_type_id = $wpdb->get_var(
+                $wpdb->prepare("SELECT id FROM {$table_types} WHERE uuid=%s", $event_type_uuid)
+            );
+
+            // Resolve location_id
+            $location_id = null;
+            $location_ids = $wpdb->get_results("SELECT id, type FROM {$table_locations}", ARRAY_A);
+
+            foreach ($location_ids as $key => $location) {
+                $loc = $se['location'] ?? [];
+                if ($loc && $loc['type'] === $location['type']) {
+                    $location_id = $location['id'];
+                }
+            }
+
+            // Normalize status
+            $status = $se['status'] ?? 'active';
+            $raw_payload_status = null;
+
+            if (!empty($se['payload'])) {
+                $payload = is_array($se['payload']) ? $se['payload'] : json_decode($se['payload'], true);
+
+                // Handle explicit status from payload
+                if (!empty($payload['status'])) {
+                    $raw_payload_status = $payload['status'];
+                    $status = strtolower($payload['status']) === 'canceled'
+                        ? 'cancelled'
+                        : sanitize_text_field($payload['status']);
+                }
+
+                // NEW CONDITION: mark as completed if end_date is in the past and not cancelled
+                if (!empty($payload['end_date']) && strtolower($status) !== 'cancelled') {
+                    $end_timestamp = strtotime($payload['end_date']);
+
+                    if ($end_timestamp !== false && $end_timestamp < time()) {
+                        $status = 'completed';
+                    }
+                }
+            }
+
+
+            // Defaults
+            $reschedule_url = null;
+            $cancel_url     = null;
+            $order_id       = null;
+
+            // Upsert invitees and extract order_id + URLs
+            if (!empty($se['invitees']) && is_array($se['invitees'])) {
+                foreach ($se['invitees'] as $inv) {
+                    $inv_payload = is_array($inv['payload'] ?? null)
+                        ? $inv['payload']
+                        : json_decode($inv['payload'] ?? '{}', true);
+
+                    // Extract order_id and URLs from invitee payload
+                    if (!empty($inv_payload['order_id'])) {
+                        $order_id = $inv_payload['order_id'];
+                    }
+                    $reschedule_url = $inv_payload['reschedule_url'] ?? $reschedule_url;
+                    $cancel_url     = $inv_payload['cancel_url'] ?? $cancel_url;
+
+                    // Upsert invitee record
+                    $wpdb->query($wpdb->prepare(
+                        "INSERT INTO $table_invitees (scheduled_event_uuid, name, email, payload, created_ts, updated_ts)
+                        VALUES (%s, %s, %s, %s, NOW(), NOW())
+                        ON DUPLICATE KEY UPDATE
+                        name=VALUES(name),
+                        email=VALUES(email),
+                        payload=VALUES(payload),
+                        updated_ts=NOW()",
+                        $uuid,
+                        sanitize_text_field($inv['name'] ?? ''),
+                        sanitize_email($inv['email'] ?? ''),
+                        wp_json_encode($inv_payload)
+                    ));
+                }
+            }
+
+            // Upsert scheduled event with order_id from invitee payload
+            $wpdb->query($wpdb->prepare(
+                "INSERT INTO $table_events (uuid, order_id, event_type_id, location_id, name, start_time, end_time, status, uri, reschedule_url, cancel_url, payload, created_ts, updated_ts)
+                VALUES (%s, %s, %d, %d, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                ON DUPLICATE KEY UPDATE
+                order_id=VALUES(order_id),
+                event_type_id=VALUES(event_type_id),
+                location_id=VALUES(location_id),
+                name=VALUES(name),
+                start_time=VALUES(start_time),
+                end_time=VALUES(end_time),
+                status=VALUES(status),
+                uri=VALUES(uri),
+                reschedule_url=VALUES(reschedule_url),
+                cancel_url=VALUES(cancel_url),
+                payload=VALUES(payload),
+                updated_ts=NOW()",
+                $uuid,
+                $order_id, // now sourced from invitee payload
+                $event_type_id ?: 0,
+                $location_id,
+                sanitize_text_field(!$se['name'] == "Initial meeting"? $se['name'] : "Initial Consultation"),
+                gmdate('Y-m-d H:i:s', strtotime($se['start_time'] ?? 'now')),
+                gmdate('Y-m-d H:i:s', strtotime($se['end_time'] ?? 'now')),
+                $status,
+                esc_url_raw($se['uri'] ?? ''),
+                esc_url_raw($reschedule_url ?? ''),
+                esc_url_raw($cancel_url ?? ''),
+                wp_json_encode($se)
+            ));
+
+            $count++;
+
         }
+
+        return $count;
     }
 
     public function get_scheduled_events(array $filters = [], string $context = 'admin', int $limit = 10): array {
-        try {
-            global $wpdb;
+        global $wpdb;
 
-            $table_event_types = $wpdb->prefix . 'cb_event_types';
-            $table_scheduled_events   = $wpdb->prefix . 'cb_scheduled_events';
-            $table_invitees = $wpdb->prefix . 'cb_scheduled_event_invitees';
-            $table_locations= $wpdb->prefix . 'cb_meeting_locations';
+        $table_event_types = $wpdb->prefix . 'cb_event_types';
+        $table_scheduled_events   = $wpdb->prefix . 'cb_scheduled_events';
+        $table_invitees = $wpdb->prefix . 'cb_scheduled_event_invitees';
+        $table_locations= $wpdb->prefix . 'cb_meeting_locations';
 
-            $where  = ["1=1"];
-            $params = [];
+        $where  = ["1=1"];
+        $params = [];
 
-            switch ($context) {
-                case 'today':
-                    // Only events starting today onwards
-                    $where[] = "se.start_time >= %s";
-                    $params[] = gmdate('Y-m-d 00:00:00');
-                    break;
+        switch ($context) {
+            case 'today':
+                // Only events starting today onwards
+                $where[] = "se.start_time >= %s";
+                $params[] = gmdate('Y-m-d 00:00:00');
+                break;
 
-                case 'admin':
-                    // Admin view: upcoming events, limited by $limit
+            case 'admin':
+                // Admin view: upcoming events, limited by $limit
+                $where[] = "se.start_time >= UTC_TIMESTAMP()";
+                break;
+
+            case 'my-account':
+                // Logged-in user’s events (based on contact email)
+                $user = wp_get_current_user();
+                if ($user && $user->user_email) {
                     $where[] = "se.start_time >= UTC_TIMESTAMP()";
-                    break;
-
-                case 'my-account':
-                    // Logged-in user’s events (based on contact email)
-                    $user = wp_get_current_user();
-                    if ($user && $user->user_email) {
-                        $where[] = "se.start_time >= UTC_TIMESTAMP()";
-                        $where[] = "inv.email = %s";
-                        $params[] = $user->user_email;
-                    } else {
-                        return []; // no user context
-                    }
-                    break;
-
-                case 'default':
-                default:
-                    // Apply custom filters
-                    if (!empty($filters['status'])) {
-                        $where[] = "se.status = %s";
-                        $params[] = $filters['status'];
-                    }
-                    if (!empty($filters['start_date'])) {
-                        $where[] = "se.start_time >= %s";
-                        $params[] = gmdate('Y-m-d H:i:s', strtotime($filters['start_date']));
-                    }
-                    if (!empty($filters['end_date'])) {
-                        $where[] = "se.start_time <= %s";
-                        $params[] = gmdate('Y-m-d H:i:s', strtotime($filters['end_date']));
-                    }
-                    break;
-            }
-
-            $sql = "
-                SELECT se.id, se.uuid, se.order_id, se.name AS event_name, se.start_time, se.end_time, se.status,
-                    se.reschedule_url, se.cancel_url, se.payload as event_payload, se.notes,
-                    et.name AS event_type,
-                    ml.name AS location_name,
-                    inv.name AS invitee_name, inv.payload AS invitee_payload
-                FROM {$table_scheduled_events} se
-                LEFT JOIN {$table_event_types} et ON se.event_type_id = et.id
-                LEFT JOIN {$table_locations} ml ON se.location_id = ml.id
-                LEFT JOIN {$table_invitees} inv ON inv.scheduled_event_uuid = se.uuid
-                WHERE " . implode(' AND ', $where) . "
-                ORDER BY se.start_time DESC
-                " . (($context === 'today' || $context === 'admin') ? "LIMIT %d" : "");
-
-            if ($context === 'today' || $context === 'admin') {
-                $params[] = $limit;
-            }
-
-            $rows = $wpdb->get_results($wpdb->prepare($sql, ...$params), ARRAY_A);
-
-            $events = [];
-            foreach ($rows as $row) {
-                $order_id = '-';
-                $invitee_payload = [];
-
-                if( !empty($row['invitee_payload']) ) {
-                    $invitee_payload = json_decode($row['invitee_payload'], true);
+                    $where[] = "inv.email = %s";
+                    $params[] = $user->user_email;
+                } else {
+                    return []; // no user context
                 }
+                break;
 
-                if(!empty($invitee_payload)) {
-                    $qna = $invitee_payload['questions_and_answers'];
-
-                        foreach($qna as $idx => $arr) {
-                            if($arr['question'] == 'Order ID') {
-                                $order_id = $arr['answer'];
-                            }
-                        }
+            case 'default':
+            default:
+                // Apply custom filters
+                if (!empty($filters['status'])) {
+                    $where[] = "se.status = %s";
+                    $params[] = $filters['status'];
                 }
-
-                $events[] = [
-                    'uuid'            => $row['uuid'],
-                    'order_id'        => $order_id,
-                    'event_name'      => $row['event_name'],
-                    'start_time'      => implode('T', explode(' ', $row['start_time'])) . 'Z',
-                    'end_time'        => implode('T', explode(' ', $row['end_time'])) . 'Z',
-                    'location'        => $row['location_name'] ?? '—',
-                    'status'          => $row['status'],
-                    'invitee_name'    => $row['invitee_name'] ?? '—',
-                    'invitee_payload' => $invitee_payload,
-                    'reschedule_url'  => $invitee_payload['reschedule_url'] ?? null,
-                    'cancel_url'      => $invitee_payload['cancel_url'] ?? null,
-                    'completed'       => ($row['status'] === 'completed'),
-                ];
-            }
-
-            return $events;
-        } catch (\Throwable $e) {
-            throw $e;
+                if (!empty($filters['start_date'])) {
+                    $where[] = "se.start_time >= %s";
+                    $params[] = gmdate('Y-m-d H:i:s', strtotime($filters['start_date']));
+                }
+                if (!empty($filters['end_date'])) {
+                    $where[] = "se.start_time <= %s";
+                    $params[] = gmdate('Y-m-d H:i:s', strtotime($filters['end_date']));
+                }
+                break;
         }
+
+        $sql = "
+            SELECT se.id, se.uuid, se.order_id, se.name AS event_name, se.start_time, se.end_time, se.status,
+                se.reschedule_url, se.cancel_url, se.payload as event_payload, se.notes,
+                et.name AS event_type,
+                ml.name AS location_name,
+                inv.name AS invitee_name, inv.payload AS invitee_payload
+            FROM {$table_scheduled_events} se
+            LEFT JOIN {$table_event_types} et ON se.event_type_id = et.id
+            LEFT JOIN {$table_locations} ml ON se.location_id = ml.id
+            LEFT JOIN {$table_invitees} inv ON inv.scheduled_event_uuid = se.uuid
+            WHERE " . implode(' AND ', $where) . "
+            ORDER BY se.start_time DESC
+            " . (($context === 'today' || $context === 'admin') ? "LIMIT %d" : "");
+
+        if ($context === 'today' || $context === 'admin') {
+            $params[] = $limit;
+        }
+
+        $rows = $wpdb->get_results($wpdb->prepare($sql, ...$params), ARRAY_A);
+
+        $events = [];
+        foreach ($rows as $row) {
+            $order_id = '-';
+            $invitee_payload = [];
+
+            if( !empty($row['invitee_payload']) ) {
+                $invitee_payload = json_decode($row['invitee_payload'], true);
+            }
+
+            if(!empty($invitee_payload)) {
+                $qna = $invitee_payload['questions_and_answers'];
+
+                    foreach($qna as $idx => $arr) {
+                        if($arr['question'] == 'Order ID') {
+                            $order_id = $arr['answer'];
+                        }
+                    }
+            }
+
+            $events[] = [
+                'uuid'            => $row['uuid'],
+                'order_id'        => $order_id,
+                'event_name'      => $row['event_name'],
+                'start_time'      => implode('T', explode(' ', $row['start_time'])) . 'Z',
+                'end_time'        => implode('T', explode(' ', $row['end_time'])) . 'Z',
+                'location'        => $row['location_name'] ?? '—',
+                'status'          => $row['status'],
+                'invitee_name'    => $row['invitee_name'] ?? '—',
+                'invitee_payload' => $invitee_payload,
+                'reschedule_url'  => $invitee_payload['reschedule_url'] ?? null,
+                'cancel_url'      => $invitee_payload['cancel_url'] ?? null,
+                'completed'       => ($row['status'] === 'completed'),
+            ];
+        }
+
+        return $events;
     }
 
     public function sync_scheduled_events(?string $min_start_date = null, ?bool $force = false): array {
@@ -935,22 +923,18 @@ final class CB_API {
     }
 
     public function get_locations(): array {
-        try {
-            global $wpdb;
-            $table = $wpdb->prefix . 'cb_meeting_locations';
-            $rows = $wpdb->get_results("SELECT uuid, name, type FROM {$table}", ARRAY_A);
-            $locations = [];
-            foreach ($rows as $row) {
-                $locations[] = [
-                    'uuid' => $row['uuid'],
-                    'name' => $row['name'],
-                    'type' => $row['type'],
-                ];
-            }
-            return $locations;
-        } catch (\Throwable $e) {
-            throw $e;
+        global $wpdb;
+        $table = $wpdb->prefix . 'cb_meeting_locations';
+        $rows = $wpdb->get_results("SELECT uuid, name, type FROM {$table}", ARRAY_A);
+        $locations = [];
+        foreach ($rows as $row) {
+            $locations[] = [
+                'uuid' => $row['uuid'],
+                'name' => $row['name'],
+                'type' => $row['type'],
+            ];
         }
+        return $locations;
     }
 
     public function sync_locations(): array {
