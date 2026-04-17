@@ -59,8 +59,7 @@ final class CB_Installer
         update_option(self::OPTION_KEY, self::SCHEMA_VERSION);
     }
 
-    private static function migrate_all_tables(): void
-    {
+    private static function migrate_all_tables(): void {
         self::migrate_table('cb_audit_log', [
             'columns' => [
                 "`id` BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT",
@@ -200,8 +199,7 @@ final class CB_Installer
         ]);
     }
 
-    private static function migrate_table(string $table_name, array $schema): void
-    {
+    private static function migrate_table(string $table_name, array $schema): void {
         global $wpdb;
 
         $full_table = $wpdb->prefix . $table_name;
@@ -293,8 +291,7 @@ final class CB_Installer
         }
     }
 
-    private static function ensure_foreign_keys(): void
-    {
+    private static function ensure_foreign_keys(): void {
         global $wpdb;
 
         $prefix = $wpdb->prefix;
@@ -354,8 +351,7 @@ final class CB_Installer
         }
     }
 
-    private static function table_supports_foreign_keys(string $table_name): bool
-    {
+    private static function table_supports_foreign_keys(string $table_name): bool {
         global $wpdb;
 
         $engine = $wpdb->get_var(
@@ -371,29 +367,36 @@ final class CB_Installer
         return strtoupper((string) $engine) === 'INNODB';
     }
 
-    private static function create_meeting_page(): void
-    {
-        $existing = get_option(self::PAGE_OPTION);
+private static function create_meeting_page(): void {
+    $existing_id = get_option(self::PAGE_OPTION);
 
-        if ($existing && get_post($existing)) {
-            return;
-        }
-
-        $page_id = wp_insert_post([
-            'post_title'   => 'Meeting Scheduled',
-            'post_name'    => self::PAGE_SLUG,
-            'post_status'  => 'publish',
-            'post_type'    => 'page',
-            'post_content' => '',
-        ]);
-
-        if (!is_wp_error($page_id)) {
-            update_option(self::PAGE_OPTION, $page_id);
-        }
+    // If option points to a valid page, stop
+    if ($existing_id && get_post($existing_id)) {
+        return;
     }
 
-    public static function get_page_option()
-    {
+    // Try to find a page with the same slug
+    $existing_page = get_page_by_path(self::PAGE_SLUG, OBJECT, 'page');
+    if ($existing_page) {
+        update_option(self::PAGE_OPTION, $existing_page->ID);
+        return;
+    }
+
+    // Otherwise, create a new page
+    $page_id = wp_insert_post([
+        'post_title'   => 'Meeting Scheduled',
+        'post_name'    => self::PAGE_SLUG,
+        'post_status'  => 'publish',
+        'post_type'    => 'page',
+        'post_content' => '',
+    ]);
+
+    if (!is_wp_error($page_id)) {
+        update_option(self::PAGE_OPTION, $page_id);
+    }
+}
+
+    public static function get_page_option(): string {
         return self::PAGE_OPTION;
     }
 
