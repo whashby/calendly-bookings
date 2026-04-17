@@ -24,17 +24,24 @@
 
     if (availabilityByDate[dateStr]) {
       availabilityByDate[dateStr].forEach(slot => {
+        // Parse the ISO time string into a Date
+        const dt = new Date(`${dateStr}T${slot.time}:00`);
+
+        // Format as 12‑hour with AM/PM
+        const formatted = dt.toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        });
+
         const $tile = $('<div>', {
           class: 'cb-time-tile',
-          text: slot.time
+          text: formatted
         }).data('slot', slot);
 
         $tile.on('click', function() {
-          // Clear previous selection
           $timeContainer.find('.cb-time-tile').removeClass('selected');
-          // Mark this one
           $(this).addClass('selected');
-          // Store value in hidden input
           $timeHidden.val(slot.time);
           $timeHidden.attr('data-url', slot.scheduling_url);
         });
@@ -43,6 +50,7 @@
       });
     }
   }
+
 
   // --- Load availability into pickers ---
   function loadAvailability(apiData) {
