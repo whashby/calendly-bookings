@@ -25,7 +25,7 @@ if($has_cb_admin_role || $has_cb_support_role || $is_admin) :
 
     <div class="cb-dashboard-cards">
       <div class="cb-card">
-<?php   if($has_cb_admin_role || $has_cb_support_role) :
+<?php   if($has_cb_admin_role || $has_cb_support_role || $is_admin) :
           if($has_cb_admin_role) : ?>
         <h3><?php esc_html_e('Scheduled Events', 'calendly-bookings'); ?></h3>
         <p><?php esc_html_e('View and manage upcoming and past scheduled events synced from Calendly.', 'calendly-bookings'); ?></p>
