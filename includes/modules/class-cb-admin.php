@@ -43,7 +43,7 @@ final class CB_Admin {
                 2
             );
 
-            if ($has_cb_admin_role) {
+            if ($has_cb_admin_role || $is_admin) {
                 add_submenu_page(
                     'calendly-bookings',
                     __('Scheduled Events', 'calendly-bookings'),
@@ -75,7 +75,7 @@ final class CB_Admin {
                 );
             }
 
-            if($has_cb_admin_role || $has_cb_support_role) {
+            if($has_cb_admin_role || $has_cb_support_role || $is_admin) {
                 add_submenu_page(
                     'calendly-bookings',
                     __('Settings', 'calendly-bookings'),
