@@ -357,6 +357,7 @@ class CB_Checkout {
         if (!is_order_received_page()) return;
 
         $order_id = absint(get_query_var('order-received'));
+		print_r("Order ID on thank you page: $order_id");
         $order    = wc_get_order($order_id);
 		$status = $order->get_status();
 		if (!$order) return;
@@ -374,8 +375,8 @@ class CB_Checkout {
 			remove_action('woocommerce_thankyou', 'woocommerce_thankyou_order_received_text', 10);
 			remove_all_actions('woocommerce_order_details_after_order_table');
 			
-			#add_action('woocommerce_thankyou', [__CLASS__, 'render_meeting_thankyou'], 10, 1);
-			self::render_meeting_thankyou($order_id);
+			add_action('woocommerce_thankyou', [__CLASS__, 'render_meeting_thankyou'], 10, 1);
+			//self::render_meeting_thankyou($order_id);
 			//add_action('woocommerce_thankyou', [__CLASS__, 'create_calendly_invitee'], 10, 1);
 		}
     }
