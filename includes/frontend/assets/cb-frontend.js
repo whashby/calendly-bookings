@@ -24,12 +24,11 @@ function populateTimes(dateStr) {
 
   if (availabilityByDate[dateStr]) {
     availabilityByDate[dateStr].forEach(slot => {
-      // Parse UTC start_time into Date
-      const dtUtc = new Date(slot.start_time).toISOString();
+      // Parse the ISO time string into a Date
+      const dt = new Date(`${dateStr}T${slot.time}:00`);
 
-      // Convert to site timezone (from CB_REST.site_timezone)
-      const formatted = dtUtc.toLocaleTimeString([], {
-        timeZone: CB_REST.site_timezone || 'UTC',
+      // Format as 12‑hour with AM/PM
+      const formatted = dt.toLocaleTimeString([], {
         hour: '2-digit',
         minute: '2-digit',
         hour12: true
@@ -43,7 +42,7 @@ function populateTimes(dateStr) {
       $tile.on('click', function() {
         $timeContainer.find('.cb-time-tile').removeClass('selected');
         $(this).addClass('selected');
-        $timeHidden.val(slot.start_time); // keep raw UTC for backend
+        $timeHidden.val(slot.time);
         $timeHidden.attr('data-url', slot.scheduling_url);
       });
 
