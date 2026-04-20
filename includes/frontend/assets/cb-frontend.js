@@ -18,39 +18,39 @@
   });
 
   // --- Populate times as tiles ---
-  function populateTimes(dateStr) {
-    $timeContainer.empty();
-    $timeHidden.val('');
+function populateTimes(dateStr) {
+  $timeContainer.empty();
+  $timeHidden.val('');
 
-    if (availabilityByDate[dateStr]) {
-      availabilityByDate[dateStr].forEach(slot => {
-        // Parse UTC start_time into Date
-        const dtUtc = new Date(slot.start_time);
+  if (availabilityByDate[dateStr]) {
+    availabilityByDate[dateStr].forEach(slot => {
+      // Parse UTC start_time into Date
+      const dtUtc = new Date(slot.start_time).toISOString();
 
-        // Convert to site timezone (from CB_REST.site_timezone)
-        const formatted = dtUtc.toLocaleTimeString('en-US', {
-          timeZone: CB_REST.site_timezone || 'UTC',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true
-        });
-
-        const $tile = $('<div>', {
-          class: 'cb-time-tile',
-          text: formatted
-        }).data('slot', slot);
-
-        $tile.on('click', function() {
-          $timeContainer.find('.cb-time-tile').removeClass('selected');
-          $(this).addClass('selected');
-          $timeHidden.val(slot.start_time); // keep raw UTC for backend
-          $timeHidden.attr('data-url', slot.scheduling_url);
-        });
-
-        $timeContainer.append($tile);
+      // Convert to site timezone (from CB_REST.site_timezone)
+      const formatted = dtUtc.toLocaleTimeString([], {
+        timeZone: CB_REST.site_timezone || 'UTC',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
       });
-    }
+
+      const $tile = $('<div>', {
+        class: 'cb-time-tile',
+        text: formatted
+      }).data('slot', slot);
+
+      $tile.on('click', function() {
+        $timeContainer.find('.cb-time-tile').removeClass('selected');
+        $(this).addClass('selected');
+        $timeHidden.val(slot.start_time); // keep raw UTC for backend
+        $timeHidden.attr('data-url', slot.scheduling_url);
+      });
+
+      $timeContainer.append($tile);
+    });
   }
+}
 
 
   // --- Load availability into pickers ---
