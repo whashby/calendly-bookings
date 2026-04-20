@@ -25,7 +25,7 @@ function populateTimes(dateStr) {
   if (availabilityByDate[dateStr]) {
     availabilityByDate[dateStr].forEach(slot => {
       // Parse the ISO time string into a Date
-      const dt = new Date(`${dateStr}T${slot.time}:00`);
+      const dt = new Date(`${dateStr}T${slot.time}:00Z`);
 
       // Format as 12‑hour with AM/PM
       const formatted = dt.toLocaleTimeString([], {
