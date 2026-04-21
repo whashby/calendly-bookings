@@ -383,7 +383,7 @@ class CB_Checkout {
 			remove_action('woocommerce_thankyou', 'woocommerce_thankyou_order_received_text', 10);
 			remove_all_actions('woocommerce_order_details_after_order_table');
 			
-			//add_action('woocommerce_thankyou', [__CLASS__, 'render_meeting_thankyou'], 10, 1);
+			add_action('woocommerce_thankyou', [__CLASS__, 'render_meeting_thankyou'], 10, 1);
 		}
     }
     
@@ -392,10 +392,10 @@ class CB_Checkout {
 		if (!$order) return;
 
 		self::attach_order_to_account();
-		if (self::order_has_meeting($order)) {
+		/*if (self::order_has_meeting($order)) {
 			self::render_meeting_thankyou($order_id);
 			#self::create_calendly_invitee($order_id);
-		}
+		}*/
     }
 
 	public static function render_meeting_thankyou($order_id): void {
