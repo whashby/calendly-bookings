@@ -393,7 +393,8 @@ class CB_Checkout {
 
 		self::attach_order_to_account();
 		if (self::order_has_meeting($order)) {
-			self::create_calendly_invitee($order_id);
+			self::render_meeting_thankyou($order_id);
+			#self::create_calendly_invitee($order_id);
 		}
     }
 
