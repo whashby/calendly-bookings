@@ -8,12 +8,13 @@ global $wpdb;
 
 // List of custom tables
 $tables = [
+    "{$wpdb->prefix}cb_sync_state",
+    "{$wpdb->prefix}cb_scheduled_event_invitees",
     "{$wpdb->prefix}cb_scheduled_events",
+    "{$wpdb->prefix}cb_meeting_locations",
+    "{$wpdb->prefix}cb_event_type_available_times",
     "{$wpdb->prefix}cb_event_types",
     "{$wpdb->prefix}cb_audit_log",
-    "{$wpdb->prefix}cb_invitees",
-    "{$wpdb->prefix}cb_contacts",
-    "{$wpdb->prefix}cb_meeting_locations",
 ];
 
 // Loop through and drop safely
