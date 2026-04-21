@@ -61,14 +61,16 @@ final class CB_Frontend {
         $product_id = 0;
         $event_uuid = '';
 
-        if ($product instanceof \WC_Product) {
-            $product_id = $product->get_id();
-            $event_uuid = get_post_meta($product_id, '_cb_event_uuid', true);
-        } elseif (is_singular('product')) {
-            $product_id = get_the_ID();
-            $event_uuid = get_post_meta($product_id, '_cb_event_uuid', true);
-        }
+if (is_singular('product')) {
+    $product_id = get_the_ID();
+    $product    = wc_get_product($product_id);
 
+    // Only proceed if product exists and is in the right categories
+    if ($product && has_term(['meeting', 'meetings'], 'product_cat', $product_id)) {
+        // Retrieve UUID
+        $event_uuid = get_post_meta($product_id, '_cb_event_uuid', true);
+
+        // Enqueue scripts/styles
         wp_enqueue_script(
             'cb-frontend',
             CB_Constants::url('includes/frontend/assets/cb-frontend.js'),
@@ -76,6 +78,15 @@ final class CB_Frontend {
             CB_Constants::VERSION,
             true
         );
+
+        wp_enqueue_style(
+            'cb-frontend',
+            CB_Constants::url('includes/frontend/assets/cb-frontend.css'),
+            [],
+            CB_Constants::VERSION
+        );
+    }
+}
 
         $messages = include CB_Constants::path('includes/frontend/view/validation-messages.php');
 
@@ -91,14 +102,6 @@ final class CB_Frontend {
             'const CB_REST = ' . wp_json_encode($data) . '; const CB_MESSAGES = ' . wp_json_encode($messages) . ';',
             'before'
         );
-
-        wp_enqueue_style(
-            'cb-frontend',
-            CB_Constants::url('includes/frontend/assets/cb-frontend.css'),
-            [],
-            CB_Constants::VERSION
-        );
-
 
         wp_localize_script(
             'cb-frontend',
