@@ -357,7 +357,7 @@ final class CB_Dashboard_REST {
 
 	public static function refresh_data(\WP_REST_Request $r): array {
 		try {
-			$result = CB_API::instance()->sync('', true);
+			$result = CB_API::instance()->sync('1970-01-01', true);
 			// Get site timezone (fallback to UTC if not set)
 			$tz = new \DateTimeZone(get_option('timezone_string') ?: 'UTC');
 
