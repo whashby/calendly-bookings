@@ -202,26 +202,46 @@ function renderHealthWidget() {
     container.innerHTML += `<div>Calendly API: ${data.calendly_api}</div>`;
     container.innerHTML += `<div>Last Sync: ${formatLocalTime(data.last_sync)}</div>`;
     container.innerHTML += `<div>Errors (24h): ${data.errors24h}</div>`;
-    container.innerHTML += `<button id="cb-sync-btn" class="button">Sync Now</button>`; 
+    container.innerHTML += `<button id="cb-sync-btn" class="button">Update</button>`; 
+    container.innerHTML += `<button id="cb-refresh-btn" class="button">Refresh All Data</button>`; 
 
-    document.getElementById('cb-sync-btn').addEventListener('click', () => { 
+    document.getElementById('cb-sync-btn').addEventListener('click', () => {
       apiFetch('dashboard/sync', { method: 'POST' }) // use POST if that's how your route is registered
-        .then(syncData => { 
-          // show success popup instead of alert
-          wp.data.dispatch('core/notices').createNotice(
-          syncData.message, 
-          'Sync completed successfully',
+      .then(syncData => {
+        // show success popup instead of alert
+        wp.data.dispatch('core/notices').createNotice(
+        syncData.message,
+        'Sync completed successfully',
+        { type: 'snackbar' }
+      );
+        // Refresh widget after sync
+        renderHealthWidget();
+      }).catch(error => {
+        wp.data.dispatch('core/notices').createNotice(
+          'error', 'Failed to load data: ' + error.message,
           { type: 'snackbar' }
         );
-          // Refresh widget after sync
-          renderHealthWidget(); 
-        }).catch(error => { 
-          wp.data.dispatch('core/notices').createNotice(
-            'error', 'Failed to load data: ' + error.message, 
-            { type: 'snackbar' } 
-          );
-        }); 
-	});
+      });
+	  });
+    document.getElementById('cb-refresh-btn').addEventListener('click', () => {
+      apiFetch('dashboard/refresh', { method: 'POST' }) // use POST if that's how your route is registered
+      .then(refreshData => {
+        // show success popup instead of alert
+        wp.data.dispatch('core/notices').createNotice(
+        refreshData.message,
+        'Refresh completed successfully',
+        { type: 'snackbar' }
+      );
+        // Refresh widget after sync
+        renderHealthWidget();
+      }).catch(error => {
+        wp.data.dispatch('core/notices').createNotice(
+          'error', 'Failed to load data: ' + error.message,
+          { type: 'snackbar' }
+        );
+      });
+	  });
+
   });
 }
 
