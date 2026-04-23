@@ -136,11 +136,11 @@ final class CB_API {
 
         try {
             // Core syncs
+            $results['event_types']                = $this->sync_event_types();
+            $results['event_type_available_times'] = $this->sync_event_type_available_times();
             $results['locations']                  = $this->sync_locations();
             $results['scheduled_events']           = $this->sync_scheduled_events($min_start_date, $force);
             $results['scheduled_event_invitees']   = $this->sync_scheduled_event_invitees();
-            $results['event_types']                = $this->sync_event_types();
-            $results['event_type_available_times'] = $this->sync_event_type_available_times();
 
             // Collect errors from each sync
             foreach ($results as $key => $res) {
