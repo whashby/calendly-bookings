@@ -51,7 +51,13 @@ final class CB_Dashboard_REST {
 
 		register_rest_route($ns, '/dashboard/sync', [
 			'methods'  => 'GET',
-			'callback' => [__CLASS__, 'sync_health'],
+			'callback' => [__CLASS__, 'sync_data'],
+			'permission_callback' => fn() => current_user_can('manage_options'),
+		]);
+
+		register_rest_route($ns, '/dashboard/refresh', [
+			'methods'  => 'GET',
+			'callback' => [__CLASS__, 'refresh_data'],
 			'permission_callback' => fn() => current_user_can('manage_options'),
 		]);
 
@@ -323,9 +329,35 @@ final class CB_Dashboard_REST {
 		];
 	}
 
-	public static function sync_health(\WP_REST_Request $r): array {
+	public static function sync_data(\WP_REST_Request $r): array {
 		try {
 			$result = CB_API::instance()->sync(get_option(CB_Constants::OPT_LAST_SYNC), true);
+			// Get site timezone (fallback to UTC if not set)
+			$tz = new \DateTimeZone(get_option('timezone_string') ?: 'UTC');
+
+			// Create DateTime in site timezone
+			$now = new \DateTime('now', $tz);
+
+			// Save formatted local time (12H format)
+			update_option(CB_Constants::OPT_LAST_SYNC, $now->format('Y-m-d h:i:s'));
+
+			return [
+				'status' 	=> 'success',
+				'message'   => 'Sync completed',
+				'last_sync' => get_option(CB_Constants::OPT_LAST_SYNC),
+				'details'	=> $result,
+			];
+		} catch (\Exception $e) {
+			return [
+				'status' => 'error',
+				'message' => 'Sync failed: ' . $e->getMessage(),
+			];
+		}
+	}
+
+	public static function refresh_data(\WP_REST_Request $r): array {
+		try {
+			$result = CB_API::instance()->sync('', true);
 			// Get site timezone (fallback to UTC if not set)
 			$tz = new \DateTimeZone(get_option('timezone_string') ?: 'UTC');
 
