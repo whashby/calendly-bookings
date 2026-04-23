@@ -206,7 +206,7 @@ function renderHealthWidget() {
     container.innerHTML += `<button id="cb-refresh-btn" class="button">Refresh All Data</button>`; 
 
     document.getElementById('cb-sync-btn').addEventListener('click', () => {
-      apiFetch('dashboard/sync', { method: 'POST' }) // use POST if that's how your route is registered
+      apiFetch('dashboard/sync', { method: 'GET' }) // use POST if that's how your route is registered
       .then(syncData => {
         // show success popup instead of alert
         wp.data.dispatch('core/notices').createNotice(
@@ -224,7 +224,7 @@ function renderHealthWidget() {
       });
 	  });
     document.getElementById('cb-refresh-btn').addEventListener('click', () => {
-      apiFetch('dashboard/refresh', { method: 'POST' }) // use POST if that's how your route is registered
+      apiFetch('dashboard/refresh', { method: 'GET' }) // use POST if that's how your route is registered
       .then(refreshData => {
         // show success popup instead of alert
         wp.data.dispatch('core/notices').createNotice(
