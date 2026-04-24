@@ -451,14 +451,14 @@ final class CB_API {
                 $start_time = new \DateTimeImmutable($nowObj->setTime($roundedHour % 24, $roundedMinutes, 0)->format('Y-m-d H:i:s'), new \DateTimeZone('UTC'));
 
                 while (true) {
-                    $slots = $this->query_event_type_available_times($uuid, $start_time);
+                    $slots = self::query_event_type_available_times($uuid, $start_time);
 
                     if (empty($slots)) {
                         $results['errors'][] = "No available times for event_type {$uuid}";
                         break;
                     }
 
-                    $count = $this->set_event_type_available_times($uuid, $slots);
+                    $count = self::set_event_type_available_times($uuid, $slots);
                     $results['upserted'] += $count;
 
                     $iterations++;
