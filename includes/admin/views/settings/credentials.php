@@ -30,6 +30,6 @@ use Calendly_Bookings\CB_Constants;
     </tr>
   </table>
 
-  <?php submit_button('Save Credentials'); ?>
+  <?php submit_button('Save Credentials', 'primary', 'cb-submit'); ?>
   <button type="button" class="button" id="cb-test-connection">Test Connection</button>
 </form>
