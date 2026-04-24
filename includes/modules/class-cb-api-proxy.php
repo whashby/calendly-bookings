@@ -94,9 +94,9 @@ final class CB_API_Proxy {
             'methods'=>'POST',
             'callback'=>[__CLASS__,'rest_save_settings'],
             'permission_callback'=>[__CLASS__,'can_manage'],
-            'args'=>['token'=>['required'=>false],'uuid'=>['required'=>false]],
+            'args'=>['token'=>['required'=>false],'uuid'=>['required'=>false],'license'=>['required'=>false]],
         ]);
-/**/
+
     }
 	
 public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Error {
@@ -191,6 +191,7 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
     public static function rest_save_settings(\WP_REST_Request $r): \WP_REST_Response {
         $token = trim(sanitize_text_field((string)($r->get_param('token') ?? '')));
         $uuid  = trim(sanitize_text_field((string)($r->get_param('uuid') ?? '')));
+        $license = trim(sanitize_text_field((string)($r->get_param('license') ?? '')));
 
         if ($uuid !== '' && !preg_match('/^[0-9a-fA-F-]{36}$/', $uuid)) {
             if (preg_match('/([0-9a-fA-F-]{36})$/', $uuid, $m)) {
@@ -203,7 +204,7 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
             }
         }
 
-        CB_API::instance()->set_credentials($token ?: null, $uuid ?: null);
+        CB_API::instance()->set_credentials($token ?: null, $uuid ?: null, $license ?: null);
 
         // Test scheduled events connectivity
         //$test = $api->get_scheduled_events('admin', 1);
@@ -237,7 +238,7 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
             'sync'    => $sync
         ], 200);
     }
-
+*/
     public static function rest_debug_event_types(\WP_REST_Request $req): \WP_REST_Response {
         $uuid = $req->get_param('uuid');
 
