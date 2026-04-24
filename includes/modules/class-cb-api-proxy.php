@@ -238,7 +238,7 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
             'sync'    => $sync
         ], 200);
     }
-*/
+
     public static function rest_debug_event_types(\WP_REST_Request $req): \WP_REST_Response {
         $uuid = $req->get_param('uuid');
 
