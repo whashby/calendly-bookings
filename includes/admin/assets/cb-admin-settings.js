@@ -16,7 +16,7 @@ jQuery(document).ready(function($) {
     });
   });
 
-  $('#submit').on('click', function(e) {
+  $('#cb-submit').on('click', function(e) {
     e.preventDefault(); // Prevent form submission
 
     if (this.value !== 'Save Credentials') {
