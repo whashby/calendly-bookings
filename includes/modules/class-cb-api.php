@@ -442,32 +442,31 @@ public function sync_event_type_available_times(): array {
         $event_types = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_event_types WHERE product_id>0 AND active=1");
 
         foreach ($event_types as $uuid) {
+            // Purge expired slots once before looping
+            $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$wpdb->prefix}cb_event_type_available_times
+                 WHERE event_type_id = (SELECT id FROM {$wpdb->prefix}cb_event_types WHERE uuid=%s)
+                 AND start_time < UTC_TIMESTAMP()",
+                $uuid
+            ));
+
             $start = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
             $end   = $start->modify('+7 days');
 
             do {
                 // Query Calendly for this window
-                $res = $this->get('/event_type_available_times', [
-                    'event_type' => self::API_BASE . '/event_types/' . $uuid,
-                    'start_time' => $start->format('Y-m-d\TH:i:s\Z'),
-                    'end_time'   => $end->format('Y-m-d\TH:i:s\Z'),
-                ], true, 60);
+                $collection = $this->query_event_type_available_times(
+                    $uuid,
+                    $start->format('Y-m-d\TH:i:s\Z'),
+                    $end->format('Y-m-d\TH:i:s\Z')
+                );
 
-                $collection = $res['collection'] ?? [];
-
+                // Only save if collection is non-empty
                 if (!empty($collection)) {
-                    // Purge expired slots before inserting
-                    $wpdb->query($wpdb->prepare(
-                        "DELETE FROM {$wpdb->prefix}cb_event_type_available_times
-                         WHERE event_type_id = (SELECT id FROM {$wpdb->prefix}cb_event_types WHERE uuid=%s)
-                         AND start_time < UTC_TIMESTAMP()",
-                        $uuid
-                    ));
-
                     $count = $this->set_event_type_available_times($uuid, $collection);
                     $results['upserted'] += $count;
 
-                    // Advance window: end+1 day becomes new start
+                    // Advance window
                     $start = $end->modify('+1 day');
                     $end   = $start->modify('+7 days');
                 } else {
