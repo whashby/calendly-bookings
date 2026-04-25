@@ -264,28 +264,27 @@ final class CB_API {
     }
 
 
-    public function query_event_type_available_times(string $event_type_uuid, \DateTimeImmutable $start_time): array {
+    public function query_event_type_available_times( string $event_type_uuid, ?string $start_iso = null, ?string $end_iso = null ): array {
         try {
-            if (!$start_time) {
-                // Current UTC time
+            // If no parameters passed, default to now → +7 days
+            if ($start_iso === null || $end_iso === null) {
                 $nowObj = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
 
                 // Round to next half-hour slot
                 $minutes = (int) $nowObj->format('i');
                 $seconds = (int) $nowObj->format('s');
-
-                // Total minutes past the hour
                 $totalMinutes = $minutes + ($seconds > 0 ? 1 : 0);
 
-                // Compute next slot: either :30 or next hour
                 $roundedMinutes = $totalMinutes <= 30 ? 30 : 0;
-                $roundedHour    = $totalMinutes <= 30 ? (int) $nowObj->format('H') : (int) $nowObj->format('H') + 1;
+                $roundedHour    = $totalMinutes <= 30
+                    ? (int) $nowObj->format('H')
+                    : (int) $nowObj->format('H') + 1;
 
-                $start_time = $nowObj->setTime($roundedHour % 24, $roundedMinutes, 0);
+                $rounded = $nowObj->setTime($roundedHour % 24, $roundedMinutes, 0);
+
+                $start_iso = $rounded->format('Y-m-d\TH:i:s\Z');
+                $end_iso   = $rounded->modify('+7 days')->format('Y-m-d\TH:i:s\Z');
             }
-            
-            $start_utc_iso = $start_time->format('Y-m-d\TH:i:s\Z');
-            $end_utc_iso   = $start_time->modify('+7 days')->format('Y-m-d\TH:i:s\Z');
 
             // Build event_type URI
             $event_type = self::API_BASE . '/event_types/' . $event_type_uuid;
@@ -293,13 +292,11 @@ final class CB_API {
             // Call Calendly API
             $res = $this->get('/event_type_available_times', [
                 'event_type' => $event_type,
-                'start_time' => $start_utc_iso,
-                'end_time'   => $end_utc_iso,
+                'start_time' => $start_iso,
+                'end_time'   => $end_iso,
             ], true, 60);
 
-
-            $result = $res['collection'] ?? [];
-            return $result;
+            return $res['collection'] ?? [];
         } catch (\Throwable $e) {
             error_log('Error occurred while querying event type available times: ' . $e->getMessage());
             return [];
@@ -316,7 +313,8 @@ final class CB_API {
                 $wpdb->prepare("SELECT id FROM {$wpdb->prefix}cb_event_types WHERE uuid=%s", $event_type_uuid)
             );
             if (!$event_type_id) {
-                throw new \InvalidArgumentException('Event type not found');
+                CB_Audit_Log::log('warning', 'api', __METHOD__, ['message' => 'Event type not found', 'event_type_uuid' => $event_type_uuid], 'warning');
+                return 0;
             }
 
             $count = 0;
@@ -344,12 +342,21 @@ final class CB_API {
                 ));
 
                 $count++;
+
+                // Audit log per slot
+                CB_Audit_Log::log('set_event_type_available_time', 'event_type_times', $event_type_uuid, [
+                    'event_type_id'      => $event_type_id,
+                    'status'             => $status,
+                    'invitees_remaining' => $invitees_remaining,
+                    'start_time'         => $start_time,
+                    'scheduling_url'     => $scheduling_url,
+                ], 'info');
             }
 
+            CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['inserted' => $count], 'info');
             return $count;
         } catch (\Throwable $e) {
-            error_log('Error occurred while setting event type available times: ' . $e->getMessage());
-            throw new \RuntimeException('Failed to set event type available times');
+            CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage(), 'event_type_uuid' => $event_type_uuid], 'error');
             return 0;
         }
     }
@@ -427,6 +434,7 @@ final class CB_API {
     }
 
     public function sync_event_type_available_times(): array {
+        CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
         $results = ['upserted' => 0, 'errors' => []];
 
         try {
@@ -434,46 +442,50 @@ final class CB_API {
             $event_types = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_event_types WHERE product_id>0 AND active=1");
 
             foreach ($event_types as $uuid) {
-                $iterations = 0;
-                $nowObj = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+                $start = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+                $end   = $start->modify('+7 days');
 
-                // Round to next half-hour slot
-                $minutes = (int) $nowObj->format('i');
-                $seconds = (int) $nowObj->format('s');
+                do {
+                    // Query Calendly for this window
+                    $res = $this->query_event_type_available_times(
+                                $uuid,
+                                $start->format('Y-m-d\TH:i:s\Z'),
+                                $end->format('Y-m-d\TH:i:s\Z')
+                            );
 
-                // Total minutes past the hour
-                $totalMinutes = $minutes + ($seconds > 0 ? 1 : 0);
+                    $collection = $res['collection'] ?? [];
 
-                // Compute next slot: either :30 or next hour
-                $roundedMinutes = $totalMinutes <= 30 ? 30 : 0;
-                $roundedHour    = $totalMinutes <= 30 ? (int) $nowObj->format('H') : (int) $nowObj->format('H') + 1;
+                    if (!empty($collection)) {
+                        // Purge expired slots before inserting
+                        $wpdb->query($wpdb->prepare(
+                            "DELETE FROM {$wpdb->prefix}cb_event_type_available_times
+                            WHERE event_type_id = (SELECT id FROM {$wpdb->prefix}cb_event_types WHERE uuid=%s)
+                            AND start_time < UTC_TIMESTAMP()",
+                            $uuid
+                        ));
 
-                $start_time = new \DateTimeImmutable($nowObj->setTime($roundedHour % 24, $roundedMinutes, 0)->format('Y-m-d H:i:s'), new \DateTimeZone('UTC'));
+                        $count = $this->set_event_type_available_times($uuid, $collection);
+                        $results['upserted'] += $count;
 
-                while (true) {
-                    $slots = self::query_event_type_available_times($uuid, $start_time);
-
-                    if (empty($slots)) {
-                        $results['errors'][] = "No available times for event_type {$uuid}";
-                        break;
+                        // Advance window: end+1 day becomes new start
+                        $start = $end->modify('+1 day');
+                        $end   = $start->modify('+7 days');
+                    } else {
+                        break; // stop when no more slots
                     }
+                } while (!empty($collection));
 
-                    $count = self::set_event_type_available_times($uuid, $slots);
-                    $results['upserted'] += $count;
-
-                    $iterations++;
-                    if ($iterations >= 100) {
-                        break;
-                    }
-
-                    $start_time = new \DateTimeImmutable($start_time->modify('+7 days')->format('Y-m-d H:i:s'), new \DateTimeZone('UTC'));
-                }
+                CB_Audit_Log::log('info', 'sync_event_type_available_times', $uuid, [
+                    'upserted' => $results['upserted']
+                ]);
             }
 
             update_option(CB_Constants::OPT_LAST_SYNC_EVENT_TYPE_AVAILABLE_TIMES, current_time('timestamp'));
         } catch (\Throwable $e) {
-            error_log('Error occurred while syncing event type available times: ' . $e->getMessage());
             $results['errors'][] = $e->getMessage();
+            CB_Audit_Log::log('error', 'sync_event_type_available_times', 'exception', [
+                'error' => $e->getMessage()
+            ]);
         }
 
         return [
@@ -483,7 +495,6 @@ final class CB_API {
             'errors'    => $results['errors'],
         ];
     }
-
 
     public function query_scheduled_events(?int $count = null, ?string $min_start_date = null): array {
         $params = [];
