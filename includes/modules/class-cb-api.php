@@ -433,67 +433,68 @@ final class CB_API {
         }
     }
 
-    public function sync_event_type_available_times(): array {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
-        $results = ['upserted' => 0, 'errors' => []];
+public function sync_event_type_available_times(): array {
+    CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
+    $results = ['upserted' => 0, 'errors' => []];
 
-        try {
-            global $wpdb;
-            $event_types = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_event_types WHERE product_id>0 AND active=1");
+    try {
+        global $wpdb;
+        $event_types = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_event_types WHERE product_id>0 AND active=1");
 
-            foreach ($event_types as $uuid) {
-                $start = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
-                $end   = $start->modify('+7 days');
+        foreach ($event_types as $uuid) {
+            $start = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            $end   = $start->modify('+7 days');
 
-                do {
-                    // Query using the flexible query method
-                    $collection = $this->query_event_type_available_times(
-                        $uuid,
-                        $start->format('Y-m-d\TH:i:s\Z'),
-                        $end->format('Y-m-d\TH:i:s\Z')
-                    );
+            do {
+                // Query Calendly for this window
+                $res = $this->get('/event_type_available_times', [
+                    'event_type' => self::API_BASE . '/event_types/' . $uuid,
+                    'start_time' => $start->format('Y-m-d\TH:i:s\Z'),
+                    'end_time'   => $end->format('Y-m-d\TH:i:s\Z'),
+                ], true, 60);
 
-                    if (!empty($collection)) {
-                        // Purge expired slots before inserting
-                        $wpdb->query($wpdb->prepare(
-                            "DELETE FROM {$wpdb->prefix}cb_event_type_available_times
-                            WHERE event_type_id = (SELECT id FROM {$wpdb->prefix}cb_event_types WHERE uuid=%s)
-                            AND start_time < UTC_TIMESTAMP()",
-                            $uuid
-                        ));
+                $collection = $res['collection'] ?? [];
 
-                        // Save this batch
-                        $count = $this->set_event_type_available_times($uuid, $collection);
-                        $results['upserted'] += $count;
+                if (!empty($collection)) {
+                    // Purge expired slots before inserting
+                    $wpdb->query($wpdb->prepare(
+                        "DELETE FROM {$wpdb->prefix}cb_event_type_available_times
+                         WHERE event_type_id = (SELECT id FROM {$wpdb->prefix}cb_event_types WHERE uuid=%s)
+                         AND start_time < UTC_TIMESTAMP()",
+                        $uuid
+                    ));
 
-                        // Advance window: end+1 day becomes new start
-                        $start = $end->modify('+1 day');
-                        $end   = $start->modify('+7 days');
-                    } else {
-                        break; // stop when no more slots
-                    }
-                } while (!empty($collection));
+                    $count = $this->set_event_type_available_times($uuid, $collection);
+                    $results['upserted'] += $count;
 
-                CB_Audit_Log::log('info', 'sync_event_type_available_times', $uuid, [
-                    'upserted' => $results['upserted']
-                ]);
-            }
+                    // Advance window: end+1 day becomes new start
+                    $start = $end->modify('+1 day');
+                    $end   = $start->modify('+7 days');
+                } else {
+                    break; // stop when no more slots
+                }
+            } while (!empty($collection));
 
-            update_option(CB_Constants::OPT_LAST_SYNC_EVENT_TYPE_AVAILABLE_TIMES, current_time('timestamp'));
-        } catch (\Throwable $e) {
-            $results['errors'][] = $e->getMessage();
-            CB_Audit_Log::log('error', 'sync_event_type_available_times', 'exception', [
-                'error' => $e->getMessage()
+            CB_Audit_Log::log('info', 'sync_event_type_available_times', $uuid, [
+                'upserted' => $results['upserted']
             ]);
         }
 
-        return [
-            'success'   => empty($results['errors']),
-            'last_sync' => current_time('mysql'),
-            'upserted'  => $results['upserted'],
-            'errors'    => $results['errors'],
-        ];
+        update_option(CB_Constants::OPT_LAST_SYNC_EVENT_TYPE_AVAILABLE_TIMES, current_time('timestamp'));
+    } catch (\Throwable $e) {
+        $results['errors'][] = $e->getMessage();
+        CB_Audit_Log::log('error', 'sync_event_type_available_times', 'exception', [
+            'error' => $e->getMessage()
+        ]);
     }
+
+    return [
+        'success'   => empty($results['errors']),
+        'last_sync' => current_time('mysql'),
+        'upserted'  => $results['upserted'],
+        'errors'    => $results['errors'],
+    ];
+}
 
     public function query_scheduled_events(?int $count = null, ?string $min_start_date = null): array {
         $params = [];
