@@ -136,11 +136,11 @@ final class CB_API {
 
         try {
             // Core syncs
-            $results['event_types']                = $this->sync_event_types();
-            $results['event_type_available_times'] = $this->sync_event_type_available_times();
             $results['locations']                  = $this->sync_locations();
             $results['scheduled_events']           = $this->sync_scheduled_events($min_start_date, $force);
             $results['scheduled_event_invitees']   = $this->sync_scheduled_event_invitees();
+            $results['event_types']                = $this->sync_event_types();
+            $results['event_type_available_times'] = $this->sync_event_type_available_times();
 
             // Collect errors from each sync
             foreach ($results as $key => $res) {
@@ -446,14 +446,12 @@ final class CB_API {
                 $end   = $start->modify('+7 days');
 
                 do {
-                    // Query Calendly for this window
-                    $res = $this->query_event_type_available_times(
-                                $uuid,
-                                $start->format('Y-m-d\TH:i:s\Z'),
-                                $end->format('Y-m-d\TH:i:s\Z')
-                            );
-
-                    $collection = $res['collection'] ?? [];
+                    // Query using the flexible query method
+                    $collection = $this->query_event_type_available_times(
+                        $uuid,
+                        $start->format('Y-m-d\TH:i:s\Z'),
+                        $end->format('Y-m-d\TH:i:s\Z')
+                    );
 
                     if (!empty($collection)) {
                         // Purge expired slots before inserting
@@ -464,6 +462,7 @@ final class CB_API {
                             $uuid
                         ));
 
+                        // Save this batch
                         $count = $this->set_event_type_available_times($uuid, $collection);
                         $results['upserted'] += $count;
 
