@@ -307,7 +307,6 @@ final class CB_API {
 
 
     public function query_event_type_available_times(string $event_type_uuid): array {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['event_type_uuid' => $event_type_uuid], 'info');
         try {
             // Current UTC time
             $nowObj = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
@@ -355,7 +354,6 @@ final class CB_API {
     }
 
     public function set_event_type_available_times(string $event_type_uuid, array $slots): int {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['event_type_uuid' => $event_type_uuid, 'slots_count' => count($slots)], 'info');
         try {
             global $wpdb;
             $table = $wpdb->prefix . 'cb_event_type_available_times';
@@ -414,7 +412,6 @@ final class CB_API {
     }
 
     public function get_event_type_available_times($event_identifier, $start_iso): array {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['event_identifier' => $event_identifier, 'start_iso' => $start_iso], 'info');
         try {
             global $wpdb;
 
@@ -489,12 +486,11 @@ final class CB_API {
     }
 
     public function sync_event_type_available_times(): array {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
         $results = ['upserted' => 0, 'errors' => []];
 
         try {
             global $wpdb;
-            $event_types = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_event_types WHERE product_id>0 AND active=1");
+            $event_types = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_event_types WHERE active=1");
 
             foreach ($event_types as $uuid) {
                 $slots = $this->query_event_type_available_times($uuid);
@@ -538,7 +534,6 @@ final class CB_API {
 
 
     public function query_scheduled_events(?int $count = null, ?string $min_start_date = null): array {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['count' => $count, 'min_start_date' => $min_start_date], 'info');
         try {
             $params = [];
             if ($count !== null) {
@@ -572,7 +567,6 @@ final class CB_API {
     }
 
     public function set_scheduled_events(array $events): int {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['events_count' => count($events)], 'info');
         try {
             global $wpdb;
             $table_events   = $wpdb->prefix . 'cb_scheduled_events';
@@ -723,7 +717,6 @@ final class CB_API {
     }
 
     public function get_scheduled_events(array $filters = [], string $context = 'admin', int $limit = 10): array {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['filters' => $filters, 'context' => $context, 'limit' => $limit], 'info');
         try {
             global $wpdb;
 
@@ -848,7 +841,6 @@ final class CB_API {
     }
 
     public function sync_scheduled_events(?int $count = null, ?string $min_start_date = null): array {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['count' => $count, 'min_start_date' => $min_start_date], 'info');
         $results = ['upserted' => 0, 'errors' => []];
 
         try {
@@ -882,7 +874,6 @@ final class CB_API {
 
 
     public function query_scheduled_event_invitees(string $scheduled_event_uuid): array {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['scheduled_event_uuid' => $scheduled_event_uuid], 'info');
         try {
             $res = $this->get('/scheduled_events/' . $scheduled_event_uuid . '/invitees', [], false, 60);
             $result = $res['collection'] ?? [];
@@ -941,7 +932,6 @@ final class CB_API {
     }
 
     public function sync_scheduled_event_invitees(): array {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
         $results = ['upserted' => 0, 'errors' => []];
 
         try {
@@ -989,7 +979,6 @@ final class CB_API {
     }
 
     public function query_locations(): array {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
         try {
             $res = $this->get('/locations', ['count' => 100], false, 120);
             $result = $res['collection'] ?? [];
