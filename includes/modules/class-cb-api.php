@@ -336,7 +336,6 @@ final class CB_API {
             $counter = 0;
 
             do {
-                echo "Querying available times for event type {$event_type_uuid} from {$start_utc_iso} to {$end_utc_iso}\r\n\r\n";
                 // Call Calendly API
                 $res = $this->get('/event_type_available_times', [
                     'event_type' => $event_type,
@@ -483,7 +482,7 @@ final class CB_API {
         }
 
         $start_utc_iso = $rounded->format('Y-m-d\TH:i:s\Z');
-        $end_utc_iso   = $rounded->modify('+7 days')->format('Y-m-d\TH:i:s\Z');
+        $end_utc_iso   = $rounded->modify('+30 days')->format('Y-m-d\TH:i:s\Z');
 
             // Step 3: Query available times within this hour
             $rows = $wpdb->get_results(
