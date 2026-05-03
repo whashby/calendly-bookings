@@ -1,10 +1,6 @@
 <?php
-
+//includes/modules/class-cb-checkout.php
 namespace Calendly_Bookings\Modules;
-
-if (!defined('ABSPATH')) {
-    exit;
-}
 
 use WC_Order;
 use Calendly_Bookings\CB_Constants;
@@ -21,7 +17,8 @@ class CB_Checkout {
         add_filter('woocommerce_checkout_get_value', [__CLASS__, 'prefill_checkout'], 10, 2);
         
         //create new Account
-        add_action('woocommerce_payment_complete', [__CLASS__, 'run_after_payment_processes']);
+        add_action('woocommerce_payment_complete', [__CLASS__, 'attach_order_to_account']);
+        #add_action('woocommerce_payment_complete', [__CLASS__, 'create_calendly_invitee']);
 
         // Display in emails, My Account, admin
         add_action('woocommerce_email_order_meta', [__CLASS__, 'add_to_emails'], 10, 4);
@@ -34,14 +31,14 @@ class CB_Checkout {
 		add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_calendly_embed']);
     }
 
-	public static function add_checkout_fields($checkout): void {
+	public static function add_checkout_fields($checkout) {
 		echo '<input type="hidden" name="cb_meeting_location" value="' . esc_attr($checkout->get_value('cb_meeting_location')) . '" />';
 		echo '<input type="hidden" name="cb_meeting_date" value="' . esc_attr($checkout->get_value('cb_meeting_date')) . '" />';
 		echo '<input type="hidden" name="cb_meeting_time" value="' . esc_attr($checkout->get_value('cb_meeting_time')) . '" />';
 		echo '<input type="hidden" name="cb_hier_intro" value="' . esc_attr($checkout->get_value('cb_hier_intro')) . '" />';
 	}
     
-    public static function capture_form_data($cart_item_data, $product_id, $variation_id): array {
+    public static function capture_form_data($cart_item_data, $product_id, $variation_id) {
         // Define expected fields and their sanitization callbacks
         $fields = [
             'cb_meeting_location' => 'sanitize_text_field',
@@ -58,10 +55,12 @@ class CB_Checkout {
                 $cart_item_data[$key] = call_user_func($callback, $raw_value);
             }
         }
+    
+        CB_Audit_Log::log('capture_form_data', 'checkout', (string) $product_id, $cart_item_data, 'info');
         return $cart_item_data;
     }
 
-    public static function prefill_checkout($value, $input): ?string {
+    public static function prefill_checkout($value, $input) {
         $cart = WC()->cart;
         if (!$cart) return $value;
         foreach ($cart->get_cart() as $item) {
@@ -72,7 +71,7 @@ class CB_Checkout {
         return $value;
     }
 
-	public static function save_order_meta(\WC_Order $order, $data): void {
+	public static function save_order_meta(\WC_Order $order, $data) {
         $token = wp_generate_uuid4();
         $order->update_meta_data('_cb_security_token', $token);
 		
@@ -119,6 +118,15 @@ class CB_Checkout {
 		if ($notes !== 'Nil') {
 			$order->set_customer_note($notes);
 		}
+		
+		CB_Audit_Log::log('save_order_meta', 'checkout', (string)$order->get_id(), [
+			'location' => $_POST['cb_meeting_location'] ?? '',
+			'date'     => $_POST['cb_meeting_date'] ?? '',
+			'time'     => $_POST['cb_meeting_time'] ?? '',
+			'intro'    => $_POST['cb_hier_intro'] ?? '',
+			'notes'    => $notes,
+		], 'info');
+
 	}
 	
 	/**
@@ -130,14 +138,14 @@ class CB_Checkout {
      * @param int    $order_id WooCommerce order ID.
      * @return int|WP_Error    User ID or error.
      */
-    public static function attach_order_to_account(): int {
+    public static function attach_order_to_account() {
         if( is_user_logged_in() ) {
-            return 0;
+            return;
         }
-        $order_id = absint(get_query_var('order-received'));
+        
         $order = wc_get_order( $order_id );
         if ( ! $order ) {
-            return 1;
+            return;
         }
 
         $name  = trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() );
@@ -162,8 +170,7 @@ class CB_Checkout {
             $password = wp_generate_password();
             $user_id  = wp_create_user( $username, $password, $email );
             if ( is_wp_error( $user_id ) ) {
-				wp_error_log("Error creating user for order $order_id: " . $user_id->get_error_message());
-                return $user_id; // Return the error
+                return $user_id;
             }
     
             // Update profile fields
@@ -193,10 +200,11 @@ class CB_Checkout {
     }
 
 
-    public static function create_calendly_invitee($order_id): void {
+    public static function create_calendly_invitee() {
+		$order_id = absint(get_query_var('order-received'));
 
-		$api_key    = (string) get_option(CB_Constants::OPT_API_TOKEN);
-        $user_uuid  = (string) get_option(CB_Constants::OPT_USER_UUID);
+        $api_key    = (string) get_option(CB_Constants::OPT_API_TOKEN, '');
+        $user_uuid  = (string) get_option(CB_Constants::OPT_USER_UUID, '');
         
         $order = wc_get_order( $order_id );
         if ( ! $order ) {
@@ -216,29 +224,29 @@ class CB_Checkout {
         // Build Calendly API payload
         $payload = [
             'event_type' => $event_type,
-            'start_time' => $order->get_meta('_cb_meeting_date') . 'T' . $order->get_meta('_cb_meeting_time') . ':00Z', // Assuming UTC, adjust as needed
+            'start_time' => $order->get_meta('_cb_meeting_time'),
             'invitee' => [
                 'name'  => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
                 'email' => $order->get_billing_email(),
                 'timezone' => 'UTC',
-			],
+            ],
             'location'   => [
                 'kind'     => $order->get_meta('_cb_meeting_location') === 1 ? 'zoom' : 'physical',
                 'location' => $order->get_meta('_cb_meeting_location') === 1 ? 'Zoom' : "HIER Life - Skeete's Road Jackmans, St. Michael",
-			],
+            ],
             'questions_and_answers' => [
                 [
                     'question' => 'Order ID (see payment)',
                     'answer'   => "{$order_id}",
                     'position' => 0,
-			],
+                ],
                 [
                     'question' => 'Please let me know how you became aware of HIER Life.',
                     'answer'   => "{$order->get_meta('_cb_hier_intro')}",
                     'position' => 1,
-				],
+                ],
             ],
-		];
+        ];
         
         $response = wp_remote_post('https://api.calendly.com/invitees', [
             'headers' => [
@@ -249,16 +257,9 @@ class CB_Checkout {
         ]);
 
         if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 201) {
-			// Destroy token
+            // Destroy token
             $order->delete_meta_data('_cb_security_token');
-			print_r("Invitee created successfully for order: $order_id");
-			print_r(wp_json_encode($payload));
         }
-		else {
-			$error_message = is_wp_error($response) ? $response->get_error_message() : wp_remote_retrieve_body($response);
-			error_log("Error creating Calendly invitee for order $order_id: " . $error_message);
-		}
-
     }
 
 
@@ -268,7 +269,7 @@ class CB_Checkout {
      * @param int $order_id WooCommerce order ID
      * @return string|null Event UUID or null if not found
      */
-    public static function get_event_uuid_from_order( $order_id ): ?string {
+    public static function get_event_uuid_from_order( $order_id ) {
         $order = wc_get_order( $order_id );
 
         if ( ! $order ) {
@@ -294,10 +295,7 @@ class CB_Checkout {
 
 
 
-    public static function add_to_emails($order, $sent_to_admin, $plain_text, $email): void {
-		if (!$order || !is_a($order, 'WC_Order')) return;
-
-
+    public static function add_to_emails($order, $sent_to_admin, $plain_text, $email) {
 		$date  = $order->get_meta('_cb_meeting_date');
 		$time  = $order->get_meta('_cb_meeting_time');
 		$location = $order->get_meta('_cb_meeting_location');
@@ -323,9 +321,17 @@ class CB_Checkout {
 			}
 			echo '</ul>';
 		}
+		
+		CB_Audit_Log::log('add_to_emails', 'checkout', (string)$order->get_id(), [
+			'date' => $date,
+			'time' => $time,
+			'location' => $location,
+			'introduction' => $intro,
+		], 'info');
+
 	}
 
-    public static function add_to_my_account($order): void {
+    public static function add_to_my_account($order) {
         $date  = $order->get_meta('_cb_meeting_date');
         $time  = $order->get_meta('_cb_meeting_time');
 		$location = $order->get_meta('_cb_meeting_location');
@@ -343,14 +349,22 @@ class CB_Checkout {
 		if ($intro) echo '<tr><th>' . esc_html__('Initial introduction:', 'calendly-bookings') . '</th><td>' . esc_html($intro) . '</td></tr>';
         if ($notes) echo '<tr><th>' . esc_html__('Notes', 'calendly-bookings') . '</th><td>' . nl2br(esc_html($notes)) . '</td></tr>';
         echo '</tbody></table></section>';
+		
+		CB_Audit_Log::log('add_to_my_account', 'checkout', (string)$order->get_id(), [
+			'date' => $date,
+			'time' => $time,
+			'location' => $location,
+			'introduction' => $intro,
+		], 'info');
+
     }
 
-    public static function add_admin_column($columns): array {
+    public static function add_admin_column($columns) {
         $columns['cb_meeting'] = __('Meeting', 'calendly-bookings');
         return $columns;
     }
 
-    public static function render_admin_column($column, $post_id): void {
+    public static function render_admin_column($column, $post_id) {
         if ($column === 'cb_meeting') {
             $order = wc_get_order($post_id);
             $date  = $order->get_meta('_cb_meeting_date');
@@ -359,6 +373,10 @@ class CB_Checkout {
             echo $date || $time ? esc_html(trim("$date $time")) : '—';
         }
 		
+		CB_Audit_Log::log('render_admin_column', 'checkout', (string)$post_id, [
+			'date' => $date,
+			'time' => $time,
+		], 'info');
 
     }
 
@@ -372,33 +390,32 @@ class CB_Checkout {
 		
 		$total = (float) $order->get_total();
 		if($total > 0){
-			$approval_code = (string) $order->get_meta('approval_code'); 
+			$approval_code = (string) $order->get_meta('approval_code');
 			if (stripos($approval_code, 'DECLINED') !== false) {
+				CB_Audit_Log::log('thankyou_skipped', 'checkout', (string)$order_id, [
+					'approval_code' => $approval_code
+				], 'warning');
 				return;
 			}
 		}
 		
         if (self::order_has_meeting($order)) {
-    		remove_all_actions('woocommerce_thankyou');
+			remove_all_actions('woocommerce_thankyou');
 			remove_action('woocommerce_thankyou', 'woocommerce_thankyou_order_received_text', 10);
 			remove_all_actions('woocommerce_order_details_after_order_table');
 			
 			add_action('woocommerce_thankyou', [__CLASS__, 'render_meeting_thankyou'], 10, 1);
-		}
+			#add_action('woocommerce_thankyou', [__CLASS__, 'create_calendly_invitee'], 10, 1);
+
+			CB_Audit_Log::log('create_invitee', 'checkout', (string)$order_id, [], 'info');
+        }
     }
     
-    public static function run_after_payment_processes($order_id): void {
-		$order = wc_get_order($order_id);
-		if (!$order) return;
-
-		self::attach_order_to_account();
-		/*if (self::order_has_meeting($order)) {
-			self::render_meeting_thankyou($order_id);
-			#self::create_calendly_invitee($order_id);
-		}*/
+    public static function run_after_payment_processes($order_id) {
+        
     }
 
-	public static function render_meeting_thankyou($order_id): void {
+	public static function render_meeting_thankyou($order_id) {
 		$order = wc_get_order($order_id);
 		if (!$order) return;
 
@@ -436,7 +453,7 @@ class CB_Checkout {
 			'a2'     => $intro,
 		];
 
-	 ?>
+	?>
 
 		<!-- Calendly embed -->
 		<div id="calendly-wrapper" style="margin-top:2rem;">
@@ -481,9 +498,10 @@ class CB_Checkout {
 		});
 		</script>
 		<?php
+		CB_Audit_Log::log('render_meeting_thankyou', 'checkout', (string)$order_id, $params, 'info');
 	}
 	
-	public static function enqueue_calendly_embed(): void {
+	public static function enqueue_calendly_embed() {
 		wp_enqueue_script(
 			'calendly-widget',
 			'https://assets.calendly.com/assets/external/widget.js',
@@ -496,6 +514,7 @@ class CB_Checkout {
 	public static function order_has_meeting($order): bool {
 		if (!$order) {
 			error_log('[CB_Checkout] No order object passed to order_has_meeting().');
+			CB_Audit_Log::log('order_check_failed', 'checkout', '', ['reason' => 'no_order_object'], 'error');
 			return false;
 		}
 
@@ -503,6 +522,7 @@ class CB_Checkout {
 			$product = $item->get_product();
 			if (!$product) {
 				error_log("[CB_Checkout] Item {$item_id} has no product.");
+				CB_Audit_Log::log('order_item_missing_product', 'checkout', (string)$item_id, [], 'warning');
 				continue;
 			}
 
@@ -512,12 +532,27 @@ class CB_Checkout {
 			$uuid        = get_post_meta($product_id, '_cb_event_uuid', true);
 			$parent_uuid = $parent_id ? get_post_meta($parent_id, '_cb_event_uuid', true) : '';
 
+			error_log("[CB_Checkout] Checking product {$product_id} (parent {$parent_id}) — UUID: {$uuid} | Parent UUID: {$parent_uuid}");
+			CB_Audit_Log::log('order_item_checked', 'checkout', (string)$product_id, [
+				'parent_id'   => $parent_id,
+				'uuid'        => $uuid,
+				'parent_uuid' => $parent_uuid,
+			], 'info');
+
 			if (!empty($uuid) || !empty($parent_uuid)) {
+				error_log("[CB_Checkout] Meeting product detected for order " . $order->get_id());
+				CB_Audit_Log::log('meeting_product_detected', 'checkout', (string)$order->get_id(), [
+					'product_id'   => $product_id,
+					'parent_id'    => $parent_id,
+					'uuid'         => $uuid,
+					'parent_uuid'  => $parent_uuid,
+				], 'info');
 				return true;
 			}
 		}
 
 		error_log("[CB_Checkout] No meeting products found for order " . $order->get_id());
+		CB_Audit_Log::log('no_meeting_product', 'checkout', (string)$order->get_id(), [], 'info');
 		return false;
 	}
 }
