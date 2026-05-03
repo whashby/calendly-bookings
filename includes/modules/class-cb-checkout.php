@@ -453,7 +453,7 @@ class CB_Checkout {
 			'a2'     => $intro,
 		];
 
-	?>
+	 ?>
 
 		<!-- Calendly embed -->
 		<div id="calendly-wrapper" style="margin-top:2rem;">
@@ -493,7 +493,7 @@ class CB_Checkout {
 					}
 				},
 				utm:{},
-				resize: true,
+				resize: true,									
 			});
 		});
 		</script>
