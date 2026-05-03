@@ -330,8 +330,27 @@ final class CB_API {
 
             // Build event_type URI
             $event_type = self::API_BASE . '/event_types/' . $event_type_uuid;
+            $result = [];
 
-            // Call Calendly API
+            do {
+                // Call Calendly API
+                $res = $this->get('/event_type_available_times', [
+                    'event_type' => $event_type,
+                    'start_time' => $start_utc_iso,
+                    'end_time'   => $end_utc_iso,
+                ], true, 60);
+
+                CB_Audit_Log::log('info', 'event_type_available_times', $event_type_uuid, [
+                    'start' => $start_utc_iso,
+                    'end'   => $end_utc_iso,
+                    'response' => $res,
+                ]);
+
+                $result .= $res['collection'] ?? [];
+                $start_utc_iso = $end_utc_iso->format('Y-m-d\TH:i:s\Z');
+                $end_utc_iso   = $start_utc_iso->modify('+7 days')->format('Y-m-d\TH:i:s\Z');
+            } while (!empty($res['collection']));
+/*            // Call Calendly API
             $res = $this->get('/event_type_available_times', [
                 'event_type' => $event_type,
                 'start_time' => $start_utc_iso,
@@ -344,7 +363,7 @@ final class CB_API {
                 'response' => $res,
             ]);
 
-            $result = $res['collection'] ?? [];
+            $result = $res['collection'] ?? [];*/
             CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['count' => count($result)], 'info');
             return $result;
         } catch (\Throwable $e) {
