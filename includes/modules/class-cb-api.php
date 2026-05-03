@@ -346,10 +346,12 @@ final class CB_API {
                     'response' => $res,
                 ]);
 
-                $result .= $res['collection'] ?? [];
+                $result[] .= $res['collection'] ?? [];
                 $start_utc_iso = $end_utc_iso->format('Y-m-d\TH:i:s\Z');
                 $end_utc_iso   = $start_utc_iso->modify('+7 days')->format('Y-m-d\TH:i:s\Z');
             } while (!empty($res['collection']));
+
+
 /*            // Call Calendly API
             $res = $this->get('/event_type_available_times', [
                 'event_type' => $event_type,
