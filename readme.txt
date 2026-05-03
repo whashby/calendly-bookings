@@ -4,7 +4,7 @@ Tags: calendly, bookings, scheduling, woocommerce, appointments
 Requires at least: 5.2
 Tested up to: 6.5
 Requires PHP: 8.0
-Stable tag: 6.9.168
+Stable tag: 6.9.169
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
