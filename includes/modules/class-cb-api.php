@@ -264,228 +264,221 @@ final class CB_API {
     }
 
 
-    public function query_event_type_available_times( string $event_type_uuid, ?string $start_iso = null, ?string $end_iso = null ): array {
-        try {
-            // If no parameters passed, default to now → +7 days
-            if ($start_iso === null || $end_iso === null) {
-                $nowObj = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+    public function query_event_type_available_times(string $event_type_uuid): array {
+        // Current UTC time
+        $nowObj = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
 
-                // Round to next half-hour slot
-                $minutes = (int) $nowObj->format('i');
-                $seconds = (int) $nowObj->format('s');
-                $totalMinutes = $minutes + ($seconds > 0 ? 1 : 0);
+        // Round to next half-hour slot
+        $minutes = (int) $nowObj->format('i');
+        $seconds = (int) $nowObj->format('s');
 
-                $roundedMinutes = $totalMinutes <= 30 ? 30 : 0;
-                $roundedHour    = $totalMinutes <= 30
-                    ? (int) $nowObj->format('H')
-                    : (int) $nowObj->format('H') + 1;
+        // Total minutes past the hour
+        $totalMinutes = $minutes + ($seconds > 0 ? 1 : 0);
 
-                $rounded = $nowObj->setTime($roundedHour % 24, $roundedMinutes, 0);
+        // Compute next slot: either :30 or next hour
+        $roundedMinutes = $totalMinutes <= 30 ? 30 : 0;
+        $roundedHour    = $totalMinutes <= 30 ? (int) $nowObj->format('H') : (int) $nowObj->format('H') + 1;
 
-                $start_iso = $rounded->format('Y-m-d\TH:i:s\Z');
-                $end_iso   = $rounded->modify('+7 days')->format('Y-m-d\TH:i:s\Z');
-            }
+        $rounded = $nowObj->setTime($roundedHour % 24, $roundedMinutes, 0);
 
-            // Build event_type URI
-            $event_type = self::API_BASE . '/event_types/' . $event_type_uuid;
+        // ISO‑8601 UTC window
+        $start_utc_iso = $rounded->format('Y-m-d\TH:i:s\Z');
+        $end_utc_iso   = $rounded->modify('+7 days')->format('Y-m-d\TH:i:s\Z');
 
-            // Call Calendly API
-            $res = $this->get('/event_type_available_times', [
-                'event_type' => $event_type,
-                'start_time' => $start_iso,
-                'end_time'   => $end_iso,
-            ], true, 60);
+        // Build event_type URI
+        $event_type = self::API_BASE . '/event_types/' . $event_type_uuid;
 
-            return $res['collection'] ?? [];
-        } catch (\Throwable $e) {
-            error_log('Error occurred while querying event type available times: ' . $e->getMessage());
-            return [];
-        }
+        // Call Calendly API
+        $res = $this->get('/event_type_available_times', [
+            'event_type' => $event_type,
+            'start_time' => $start_utc_iso,
+            'end_time'   => $end_utc_iso,
+        ], true, 60);
+
+        CB_Audit_Log::log('info', 'event_type_available_times', $event_type_uuid, [
+            'start' => $start_utc_iso,
+            'end'   => $end_utc_iso,
+            'response' => $res,
+        ]);
+
+        $result = $res['collection'] ?? [];
+        CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['count' => count($result)], 'info');
+        return $result;
     }
 
     public function set_event_type_available_times(string $event_type_uuid, array $slots): int {
-        try {
-            global $wpdb;
-            $table = $wpdb->prefix . 'cb_event_type_available_times';
 
-            // Resolve event_type_id
-            $event_type_id = $wpdb->get_var(
-                $wpdb->prepare("SELECT id FROM {$wpdb->prefix}cb_event_types WHERE uuid=%s", $event_type_uuid)
-            );
-            if (!$event_type_id) {
-                CB_Audit_Log::log('warning', 'api', __METHOD__, ['message' => 'Event type not found', 'event_type_uuid' => $event_type_uuid], 'warning');
-                return 0;
-            }
+        global $wpdb;
+        $table = $wpdb->prefix . 'cb_event_type_available_times';
 
-            $count = 0;
-            foreach ($slots as $slot) {
-                // Normalize values
-                $status            = sanitize_text_field($slot['status'] ?? 'available');
-                $invitees_remaining = absint($slot['invitees_remaining'] ?? 0);
-                $start_time        = gmdate('Y-m-d H:i:s', strtotime($slot['start_time'] ?? 'now'));
-                $scheduling_url    = esc_url_raw($slot['scheduling_url'] ?? '');
-
-                // Upsert into DB
-                $wpdb->query($wpdb->prepare(
-                    "INSERT INTO $table (event_type_id, status, invitees_remaining, start_time, scheduling_url, created_ts, updated_ts)
-                    VALUES (%d, %s, %d, %s, %s, NOW(), NOW())
-                    ON DUPLICATE KEY UPDATE
-                    status=VALUES(status),
-                    invitees_remaining=VALUES(invitees_remaining),
-                    scheduling_url=VALUES(scheduling_url),
-                    updated_ts=NOW()",
-                    $event_type_id,
-                    $status,
-                    $invitees_remaining,
-                    $start_time,
-                    $scheduling_url
-                ));
-
-                $count++;
-
-                // Audit log per slot
-                CB_Audit_Log::log('set_event_type_available_time', 'event_type_times', $event_type_uuid, [
-                    'event_type_id'      => $event_type_id,
-                    'status'             => $status,
-                    'invitees_remaining' => $invitees_remaining,
-                    'start_time'         => $start_time,
-                    'scheduling_url'     => $scheduling_url,
-                ], 'info');
-            }
-
-            CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['inserted' => $count], 'info');
-            return $count;
-        } catch (\Throwable $e) {
-            CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage(), 'event_type_uuid' => $event_type_uuid], 'error');
+        // Resolve event_type_id
+        $event_type_id = $wpdb->get_var(
+            $wpdb->prepare("SELECT id FROM {$wpdb->prefix}cb_event_types WHERE uuid=%s", $event_type_uuid)
+        );
+        if (!$event_type_id) {
+            CB_Audit_Log::log('warning', 'api', __METHOD__, ['message' => 'Event type not found', 'event_type_uuid' => $event_type_uuid], 'warning');
             return 0;
         }
-    }
 
-    public function get_event_type_available_times($event_identifier, $start_iso): array {
-        try {
-            global $wpdb;
+        $count = 0;
+        foreach ($slots as $slot) {
+            // Normalize values
+            $status            = sanitize_text_field($slot['status'] ?? 'available');
+            $invitees_remaining = absint($slot['invitees_remaining'] ?? 0);
+            $start_time        = gmdate('Y-m-d H:i:s', strtotime($slot['start_time'] ?? 'now'));
+            $scheduling_url    = esc_url_raw($slot['scheduling_url'] ?? '');
 
-            $table_event_types  = $wpdb->prefix . 'cb_event_types';
-            $table_times        = $wpdb->prefix . 'cb_event_type_available_times';
-
-            // Step 1: Resolve event_type_id from identifier (uuid or id)
-            $event_type_id = null;
-            if (is_numeric($event_identifier)) {
-                $event_type_id = (int) $event_identifier;
-            } else {
-                $event_type_id = $wpdb->get_var(
-                    $wpdb->prepare("SELECT id FROM {$table_event_types} WHERE uuid = %s", $event_identifier)
-                );
-            }
-
-            if (!$event_type_id) {
-                return [];
-            }
-
-        // Step 2: Define current hour window
-        try {
-            $dt = new \DateTimeImmutable($start_iso); 
-        } catch (\Exception $e) { 
-            $dt = new \DateTimeImmutable('now'); 
-        }
-
-        $utc = $dt->setTimezone(new \DateTimeZone('UTC'));
-        $m = (int) $utc->format('i'); $s = (int) $utc->format('s');
-
-        if ($m === 0 && $s === 0) { 
-            $rounded = $utc->setTime((int) $utc->format('H'), 30, 0); 
-        } elseif ($m < 30) { 
-            $rounded = $utc->setTime((int) $utc->format('H'), 30, 0); 
-        } else { 
-            $rounded = $utc->modify('+1 hour')->setTime((int) $utc->modify('+1 hour')->format('H'), 0, 0);
-        }
-
-        $start_utc_iso = $rounded->format('Y-m-d\TH:i:s\Z');
-        $end_utc_iso   = $rounded->modify('+30 days')->format('Y-m-d\TH:i:s\Z');
-
-            // Step 3: Query available times within this hour
-            $rows = $wpdb->get_results(
-                $wpdb->prepare(
-                    "SELECT DISTINCT invitees_remaining, scheduling_url, start_time, status
-                    FROM {$table_times}
-                    WHERE event_type_id = %d
-                    AND status = 'available'
-                    AND start_time BETWEEN %s AND %s
-                    ORDER BY start_time ASC",
-                    $event_type_id,
-                    $start_utc_iso,
-                    $end_utc_iso
-                ),
-                ARRAY_A
-            );
-
-        foreach ($rows as &$row) {
-            $row['start_time'] = implode('T', explode(' ', $row['start_time'])) . 'Z';
-        }
-
-            // Step 4: Format output
-            $available_times['collection'] = $rows;
-
-            return $available_times;
-        } catch (\Throwable $e) {
-            error_log('Error occurred while retrieving event type available times: ' . $e->getMessage());
-            return [];
-        }
-    }
-
-public function sync_event_type_available_times(): array {
-    CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
-    $results = ['upserted' => 0, 'errors' => []];
-
-    try {
-        global $wpdb;
-        $event_types = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_event_types WHERE product_id>0 AND active=1");
-
-        foreach ($event_types as $uuid) {
-            // Purge expired slots once before looping
+            // Upsert into DB
             $wpdb->query($wpdb->prepare(
-                "DELETE FROM {$wpdb->prefix}cb_event_type_available_times
-                 WHERE event_type_id = (SELECT id FROM {$wpdb->prefix}cb_event_types WHERE uuid=%s)
-                 AND start_time < UTC_TIMESTAMP()",
-                $uuid
+                "INSERT INTO $table (event_type_id, status, invitees_remaining, start_time, scheduling_url, created_ts, updated_ts)
+                VALUES (%d, %s, %d, %s, %s, NOW(), NOW())
+                ON DUPLICATE KEY UPDATE
+                status=VALUES(status),
+                invitees_remaining=VALUES(invitees_remaining),
+                scheduling_url=VALUES(scheduling_url),
+                updated_ts=NOW()",
+                $event_type_id,
+                $status,
+                $invitees_remaining,
+                $start_time,
+                $scheduling_url
             ));
 
-            $start = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
-            $end   = $start->modify('+7 days');
+            $count++;
 
-            do {
-                // Query Calendly for this window
-                $collection = $this->query_event_type_available_times(
-                    $uuid,
-                    $start->format('Y-m-d\TH:i:s\Z'),
-                    $end->format('Y-m-d\TH:i:s\Z')
-                );
-
-                // Only save if collection is non-empty
-                if (!empty($collection)) {
-                    $count = $this->set_event_type_available_times($uuid, $collection);
-                    $results['upserted'] += $count;
-
-                    // Advance window
-                    $start = $end->modify('+1 day');
-                    $end   = $start->modify('+7 days');
-                } else {
-                    break; // stop when no more slots
-                }
-            } while (!empty($collection));
-
-            CB_Audit_Log::log('info', 'sync_event_type_available_times', $uuid, [
-                'upserted' => $results['upserted']
-            ]);
+            // Audit log per slot
+            CB_Audit_Log::log('set_event_type_available_time', 'event_type_times', $event_type_uuid, [
+                'event_type_id'      => $event_type_id,
+                'status'             => $status,
+                'invitees_remaining' => $invitees_remaining,
+                'start_time'         => $start_time,
+                'scheduling_url'     => $scheduling_url,
+            ], 'info');
         }
 
-        update_option(CB_Constants::OPT_LAST_SYNC_EVENT_TYPE_AVAILABLE_TIMES, current_time('timestamp'));
+        CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['inserted' => $count], 'info');
+        return $count;
+
+}
+
+
+public function get_event_type_available_times($event_identifier, $start_iso): array {
+    try {
+        global $wpdb;
+
+        $table_event_types  = $wpdb->prefix . 'cb_event_types';
+        $table_times        = $wpdb->prefix . 'cb_event_type_available_times';
+
+        // Step 1: Resolve event_type_id from identifier (uuid or id)
+        $event_type_id = null;
+        if (is_numeric($event_identifier)) {
+            $event_type_id = (int) $event_identifier;
+        } else {
+            $event_type_id = $wpdb->get_var(
+                $wpdb->prepare("SELECT id FROM {$table_event_types} WHERE uuid = %s", $event_identifier)
+            );
+        }
+
+        if (!$event_type_id) {
+            return [];
+        }
+
+    // Step 2: Define current hour window
+    try {
+        $dt = new \DateTimeImmutable($start_iso); 
+    } catch (\Exception $e) { 
+        $dt = new \DateTimeImmutable('now'); 
+    }
+
+    $utc = $dt->setTimezone(new \DateTimeZone('UTC'));
+    $m = (int) $utc->format('i'); $s = (int) $utc->format('s');
+
+    if ($m === 0 && $s === 0) { 
+        $rounded = $utc->setTime((int) $utc->format('H'), 30, 0); 
+    } elseif ($m < 30) { 
+        $rounded = $utc->setTime((int) $utc->format('H'), 30, 0); 
+    } else { 
+        $rounded = $utc->modify('+1 hour')->setTime((int) $utc->modify('+1 hour')->format('H'), 0, 0);
+    }
+
+    $start_utc_iso = $rounded->format('Y-m-d\TH:i:s\Z');
+    $end_utc_iso   = $rounded->modify('+30 days')->format('Y-m-d\TH:i:s\Z');
+
+        // Step 3: Query available times within this hour
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT DISTINCT invitees_remaining, scheduling_url, start_time, status
+                FROM {$table_times}
+                WHERE event_type_id = %d
+                AND status = 'available'
+                AND start_time BETWEEN %s AND %s
+                ORDER BY start_time ASC",
+                $event_type_id,
+                $start_utc_iso,
+                $end_utc_iso
+            ),
+            ARRAY_A
+        );
+
+    foreach ($rows as &$row) {
+        $row['start_time'] = implode('T', explode(' ', $row['start_time'])) . 'Z';
+    }
+
+        // Step 4: Format output
+        $available_times['collection'] = $rows;
+
+        return $available_times;
     } catch (\Throwable $e) {
-        $results['errors'][] = $e->getMessage();
-        CB_Audit_Log::log('error', 'sync_event_type_available_times', 'exception', [
-            'error' => $e->getMessage()
+        error_log('Error occurred while retrieving event type available times: ' . $e->getMessage());
+        return [];
+    }
+}
+
+public function sync_event_type_available_times(): array {
+    $results = ['upserted' => 0, 'errors' => []];
+
+    global $wpdb;
+    $event_types = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_event_types WHERE product_id>0 AND active=1");
+
+    foreach ($event_types as $uuid) {
+        // Purge slots once before looping
+        $wpdb->query($wpdb->prepare(
+            "DELETE FROM {$wpdb->prefix}cb_event_type_available_times
+                WHERE event_type_id = (SELECT id FROM {$wpdb->prefix}cb_event_types WHERE uuid=%s)
+                ",
+            $uuid
+        ));
+
+        $start = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        $end   = $start->modify('+7 days');
+
+        do {
+            // Query Calendly for this window
+            $collection = $this->query_event_type_available_times(
+                $uuid,
+                $start->format('Y-m-d\TH:i:s\Z'),
+                $end->format('Y-m-d\TH:i:s\Z')
+            );
+
+            // Only save if collection is non-empty
+            if (!empty($collection)) {
+                $count = $this->set_event_type_available_times($uuid, $collection);
+                $results['upserted'] += $count;
+
+                // Advance window
+                $start = $end->modify('+1 day');
+                $end   = $start->modify('+7 days');
+            } else {
+                break; // stop when no more slots
+            }
+        } while (!empty($collection));
+
+        CB_Audit_Log::log('info', 'sync_event_type_available_times', $uuid, [
+            'upserted' => $results['upserted']
         ]);
     }
+
+    update_option(CB_Constants::OPT_LAST_SYNC_EVENT_TYPE_AVAILABLE_TIMES, current_time('timestamp'));
 
     return [
         'success'   => empty($results['errors']),
