@@ -458,7 +458,7 @@ class CB_Checkout {
 		<!-- Calendly embed -->
 		<div id="calendly-wrapper" style="margin-top:2rem;">
 				<?php echo esc_html__('Please confirm the details below before scheduling this event.', 'calendly-bookings'); ?>
-			<div id="calendly-embed"></div>
+			<div id="calendly-embed" style="min-width:320px;height:700px;"></div>
 		</div>
 
 		<script>
@@ -493,7 +493,7 @@ class CB_Checkout {
 					}
 				},
 				utm:{},
-				resize: true,									
+				resize: true,
 			});
 		});
 		</script>
