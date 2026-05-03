@@ -211,7 +211,6 @@ final class CB_API {
     }
 
     public function set_event_types(array $event_types): int {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['count' => count($event_types)], 'info');
         try {
             global $wpdb;
             $table = $wpdb->prefix . 'cb_event_types';
@@ -324,6 +323,9 @@ final class CB_API {
 
             $rounded = $nowObj->setTime($roundedHour % 24, $roundedMinutes, 0);
 
+            $start_time = $rounded;
+            $end_time = $rounded->modify('+7 days');
+
             // ISO‑8601 UTC window
             $start_utc_iso = $rounded->format('Y-m-d\TH:i:s\Z');
             $end_utc_iso   = $rounded->modify('+7 days')->format('Y-m-d\TH:i:s\Z');
@@ -331,8 +333,10 @@ final class CB_API {
             // Build event_type URI
             $event_type = self::API_BASE . '/event_types/' . $event_type_uuid;
             $result = [];
+            $counter = 0;
 
             do {
+                echo "Querying available times for event type {$event_type_uuid} from {$start_utc_iso} to {$end_utc_iso}\r\n\r\n";
                 // Call Calendly API
                 $res = $this->get('/event_type_available_times', [
                     'event_type' => $event_type,
@@ -347,9 +351,15 @@ final class CB_API {
                 ]);
 
                 $result = array_merge($result, $res['collection'] ?? []);
-                $start_utc_iso = $end_utc_iso->format('Y-m-d\TH:i:s\Z');
-                $end_utc_iso   = $start_utc_iso->modify('+7 days')->format('Y-m-d\TH:i:s\Z');
-            } while (!empty($res['collection']));
+
+                $start_time = $end_time->modify('+1 second'); // Avoid overlap by adding 1 second
+                $end_time = $start_time->modify('+7 days');
+
+                $start_utc_iso = $start_time->format('Y-m-d\TH:i:s\Z');
+                $end_utc_iso   = $end_time->format('Y-m-d\TH:i:s\Z');
+
+                $counter++;
+            } while ($counter < 4); // Limit to 4 iterations (1 month) to prevent infinite loops in case of API issues
 
 
 /*            // Call Calendly API
@@ -512,8 +522,15 @@ final class CB_API {
         try {
             global $wpdb;
             $event_types = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_event_types WHERE active=1");
-
+            // Purge slots once before looping
             foreach ($event_types as $uuid) {
+                $wpdb->query($wpdb->prepare(
+                    "DELETE FROM {$wpdb->prefix}cb_event_type_available_times
+                        WHERE event_type_id = (SELECT id FROM {$wpdb->prefix}cb_event_types WHERE uuid=%s)
+                        ",
+                    $uuid
+                ));
+
                 $slots = $this->query_event_type_available_times($uuid);
 
                 if (empty($slots)) {
