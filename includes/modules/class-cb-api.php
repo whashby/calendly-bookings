@@ -360,21 +360,6 @@ final class CB_API {
                 $counter++;
             } while ($counter < 4); // Limit to 4 iterations (1 month) to prevent infinite loops in case of API issues
 
-
-/*            // Call Calendly API
-            $res = $this->get('/event_type_available_times', [
-                'event_type' => $event_type,
-                'start_time' => $start_utc_iso,
-                'end_time'   => $end_utc_iso,
-            ], true, 60);
-
-            CB_Audit_Log::log('info', 'event_type_available_times', $event_type_uuid, [
-                'start' => $start_utc_iso,
-                'end'   => $end_utc_iso,
-                'response' => $res,
-            ]);
-
-            $result = $res['collection'] ?? [];*/
             CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['count' => count($result)], 'info');
             return $result;
         } catch (\Throwable $e) {
