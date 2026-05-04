@@ -1,4 +1,7 @@
 <?php
+
+$slug = get_post_field( 'post_name', get_the_ID() );
+
 $current_user = wp_get_current_user();
 $first_name   = esc_attr($current_user->user_firstname ?? '');
 $last_name    = esc_attr($current_user->user_lastname ?? '');
@@ -53,6 +56,7 @@ $email        = esc_attr($current_user->user_email ?? '');
 
 </div>
 
+<?php if($slug == "initial-meeting"): ?>
   <!-- Intro -->
   <div class="cb-field">
     <label for="cb_hier_intro"><?php esc_html_e('How did you hear about HIER Life?', 'calendly-bookings'); ?></label>
@@ -65,7 +69,7 @@ $email        = esc_attr($current_user->user_email ?? '');
       <option value="<?php esc_html_e('Social Media', 'calendly-bookings'); ?>"><?php esc_html_e('Social Media', 'calendly-bookings'); ?></option>
     </select>
   </div>
-
+<?php endif; ?>
   <p>
     <input type="hidden" name="cb_prefill" value="1">
   </p>
