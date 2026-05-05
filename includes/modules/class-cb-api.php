@@ -498,11 +498,6 @@ final class CB_API {
 
                 $count = $this->set_event_type_available_times($uuid, $slots);
                 $results['upserted'] += $count;
-
-                CB_Audit_Log::log('info', 'sync_event_type_available_times', $uuid, [
-                    'upserted' => $count,
-                    'total_upserted' => $results['upserted']
-                ]);
             }
 
             update_option(CB_Constants::OPT_LAST_SYNC_EVENT_TYPE_AVAILABLE_TIMES, current_time('timestamp'));
