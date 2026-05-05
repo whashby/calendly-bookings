@@ -22,10 +22,8 @@ final class CB_API {
 
     /* Initialize the module (called on plugins_loaded) */
     public static function init(): void {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
         try {
             // Nothing to initialize for now.
-            CB_Audit_Log::log('method_exit', 'api', __METHOD__, [], 'info');
         } catch (\Throwable $e) {
             CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage()], 'error');
         }
@@ -145,7 +143,6 @@ final class CB_API {
 	
         
     public function sync(): array {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
         $results = [
             'locations'                  => [],
             'scheduled_events'           => [],
@@ -173,13 +170,6 @@ final class CB_API {
             // Update global sync timestamp
             update_option(CB_Constants::OPT_LAST_SYNC_ALL, current_time('timestamp'));
 
-            CB_Audit_Log::log('info', 'sync_all', 'master', [
-                'event_types_upserted'      => $results['event_types']['upserted'] ?? 0,
-                'scheduled_events_upserted' => $results['scheduled_events']['upserted'] ?? 0,
-                'available_times_upserted'  => $results['event_type_available_times']['upserted'] ?? 0,
-                'invitees_upserted'         => $results['scheduled_event_invitees']['upserted'] ?? 0,
-                'errors'                    => $results['errors'],
-            ]);
         } catch (\Throwable $e) {
             $results['errors'][] = $e->getMessage();
             CB_Audit_Log::log('error', 'sync_all', 'exception', [
@@ -187,7 +177,6 @@ final class CB_API {
             ]);
         }
 
-        CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['success' => empty($results['errors'])], 'info');
         return [
             'success'   => empty($results['errors']),
             'last_sync' => current_time('mysql'),
@@ -198,11 +187,9 @@ final class CB_API {
 
 
     public function query_event_types(): array {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
         try {
             $res = $this->get('/event_types', ['count' => 100], false, 120);
             $result = $res['collection'] ?? [];
-            CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['count' => count($result)], 'info');
             return $result;
         } catch (\Throwable $e) {
             CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage()], 'error');
@@ -242,7 +229,6 @@ final class CB_API {
                 ));
                 $count++;
             }
-            CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['inserted' => $count], 'info');
             return $count;
         } catch (\Throwable $e) {
             CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage()], 'error');
@@ -251,7 +237,6 @@ final class CB_API {
     }
 
     public function get_event_types(): array {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
         try {
             global $wpdb;
             $result = $wpdb->get_results(
@@ -268,7 +253,6 @@ final class CB_API {
             ORDER BY et.name ASC",
                 ARRAY_A
             );
-            CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['count' => count($result)], 'info');
             return $result;
         } catch (\Throwable $e) {
             CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage()], 'error');
@@ -277,7 +261,6 @@ final class CB_API {
     }
 
     public function sync_event_types(): array {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, [], 'info');
         $results = ['upserted' => 0, 'errors' => []];
 
         try {
@@ -295,7 +278,6 @@ final class CB_API {
         if (!empty($results['errors'])) {
             CB_Audit_Log::log('warning', 'api', __METHOD__, ['errors' => $results['errors']], 'warning');
         }
-        CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['success' => empty($results['errors']), 'upserted' => $results['upserted']], 'info');
         return [
             'success'   => empty($results['errors']),
             'last_sync' => current_time('mysql'),
@@ -360,7 +342,6 @@ final class CB_API {
                 $counter++;
             } while ($counter < 4); // Limit to 4 iterations (1 month) to prevent infinite loops in case of API issues
 
-            CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['count' => count($result)], 'info');
             return $result;
         } catch (\Throwable $e) {
             CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage(), 'event_type_uuid' => $event_type_uuid], 'error');
@@ -408,17 +389,8 @@ final class CB_API {
 
                 $count++;
 
-                // Audit log per slot
-                CB_Audit_Log::log('set_event_type_available_time', 'event_type_times', $event_type_uuid, [
-                    'event_type_id'      => $event_type_id,
-                    'status'             => $status,
-                    'invitees_remaining' => $invitees_remaining,
-                    'start_time'         => $start_time,
-                    'scheduling_url'     => $scheduling_url,
-                ], 'info');
             }
 
-            CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['inserted' => $count], 'info');
             return $count;
         } catch (\Throwable $e) {
             CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage(), 'event_type_uuid' => $event_type_uuid], 'error');
@@ -492,7 +464,6 @@ final class CB_API {
             // Step 4: Format output
             $available_times['collection'] = $rows;
 
-            CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['count' => count($rows)], 'info');
             return $available_times;
         } catch (\Throwable $e) {
             CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage(), 'event_identifier' => $event_identifier], 'error');
@@ -545,7 +516,6 @@ final class CB_API {
         if (!empty($results['errors'])) {
             CB_Audit_Log::log('warning', 'api', __METHOD__, ['errors' => $results['errors']], 'warning');
         }
-        CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['success' => empty($results['errors']), 'upserted' => $results['upserted']], 'info');
         return [
             'success'   => empty($results['errors']),
             'last_sync' => current_time('mysql'),
@@ -580,7 +550,6 @@ final class CB_API {
                 $cursor = $res['pagination']['next_page'] ?? null;
             } while ($count === null && $cursor);
 
-            CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['count' => count($allEvents)], 'info');
             return $allEvents;
         } catch (\Throwable $e) {
             CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage()], 'error');
@@ -730,7 +699,6 @@ final class CB_API {
                 ], 'info');
             }
 
-            CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['inserted' => $count], 'info');
             return $count;
         } catch (\Throwable $e) {
             CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage()], 'error');
@@ -854,7 +822,6 @@ final class CB_API {
                 'count'   => count($events),
             ], 'info');
 
-            CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['count' => count($events)], 'info');
             return $events;
         } catch (\Throwable $e) {
             CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage()], 'error');
@@ -885,7 +852,6 @@ final class CB_API {
         if (!empty($results['errors'])) {
             CB_Audit_Log::log('warning', 'api', __METHOD__, ['errors' => $results['errors']], 'warning');
         }
-        CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['success' => empty($results['errors']), 'upserted' => $results['upserted']], 'info');
         return [
             'success'   => empty($results['errors']),
             'last_sync' => current_time('mysql'),
@@ -899,7 +865,6 @@ final class CB_API {
         try {
             $res = $this->get('/scheduled_events/' . $scheduled_event_uuid . '/invitees', [], false, 60);
             $result = $res['collection'] ?? [];
-            CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['count' => count($result)], 'info');
             return $result;
         } catch (\Throwable $e) {
             CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage(), 'scheduled_event_uuid' => $scheduled_event_uuid], 'error');
@@ -908,7 +873,6 @@ final class CB_API {
     }
 
     public function set_scheduled_event_invitees(string $scheduled_event_uuid, array $invitees): int {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['scheduled_event_uuid' => $scheduled_event_uuid, 'invitees_count' => count($invitees)], 'info');
         try {
             global $wpdb;
             $table = $wpdb->prefix . 'cb_scheduled_event_invitees';
@@ -945,7 +909,6 @@ final class CB_API {
                 ));
                 $count++;
             }
-            CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['inserted' => $count], 'info');
             return $count;
         } catch (\Throwable $e) {
             CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage(), 'scheduled_event_uuid' => $scheduled_event_uuid], 'error');
@@ -991,7 +954,6 @@ final class CB_API {
         if (!empty($results['errors'])) {
             CB_Audit_Log::log('warning', 'api', __METHOD__, ['errors' => $results['errors']], 'warning');
         }
-        CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['success' => empty($results['errors']), 'upserted' => $results['upserted']], 'info');
         return [
             'success'   => empty($results['errors']),
             'last_sync' => current_time('mysql'),
@@ -1004,7 +966,6 @@ final class CB_API {
         try {
             $res = $this->get('/locations', ['count' => 100], false, 120);
             $result = $res['collection'] ?? [];
-            CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['count' => count($result)], 'info');
             return $result;
         } catch (\Throwable $e) {
             CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage()], 'error');
@@ -1013,7 +974,6 @@ final class CB_API {
     }
 
     public function set_locations(array $locations): int {
-        CB_Audit_Log::log('method_entry', 'api', __METHOD__, ['locations_count' => count($locations)], 'info');
         try {
             global $wpdb;
             $table = $wpdb->prefix . 'cb_meeting_locations';
@@ -1058,7 +1018,6 @@ final class CB_API {
                 $count++;
             }
 
-            CB_Audit_Log::log('method_exit', 'api', __METHOD__, ['inserted_or_updated' => $count], 'info');
             return $count;
         } catch (\Throwable $e) {
             CB_Audit_Log::log('error', 'api', __METHOD__, ['error' => $e->getMessage()], 'error');
