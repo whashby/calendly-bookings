@@ -189,7 +189,7 @@ final class CB_Admin_Ajax {
     /**
      * Handle walk-in creation from admin interface
      */
-    public function create_walk_in(): void {
+    public static function create_walk_in() {
         // Decode JSON payload into array of name/value pairs
         $decoded = json_decode(stripslashes($_POST['data']), true);
 
