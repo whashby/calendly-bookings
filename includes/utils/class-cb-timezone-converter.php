@@ -51,8 +51,11 @@ final class CB_Timezone_Converter {
         }
 
         try {
-            // Create DateTime object from input using site timezone
-            $dt = new \DateTime($input_time, wp_timezone());
+            // Detect site timezone, fallback to UTC
+            $tz = wp_timezone() ?: new \DateTimeZone('UTC');
+
+            // Parse input relative to site timezone
+            $dt = new \DateTime($input_time, $tz);
 
             // Convert to UTC
             $dt->setTimezone(new \DateTimeZone('UTC'));
@@ -60,7 +63,9 @@ final class CB_Timezone_Converter {
             // Format as ISO 8601 with trailing Z
             return $dt->format('Y-m-d\TH:i:s\Z');
         } catch (\Exception $e) {
-            return $input_time; // fallback to raw input
+            // Fallback: return raw input
+            return $input_time;
         }
     }
+
 }
