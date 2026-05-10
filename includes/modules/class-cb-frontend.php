@@ -61,32 +61,32 @@ final class CB_Frontend {
         $product_id = 0;
         $event_uuid = '';
 
-if (is_singular('product')) {
-    $product_id = get_the_ID();
-    $product    = wc_get_product($product_id);
+        if (is_singular('product')) {
+            $product_id = get_the_ID();
+            $product    = wc_get_product($product_id);
 
-    // Only proceed if product exists and is in the right categories
-    if ($product && has_term(['meeting', 'meetings'], 'product_cat', $product_id)) {
-        // Retrieve UUID
-        $event_uuid = get_post_meta($product_id, '_cb_event_uuid', true);
+            // Only proceed if product exists and is in the right categories
+            if ($product && has_term(['meeting', 'meetings'], 'product_cat', $product_id)) {
+                // Retrieve UUID
+                $event_uuid = get_post_meta($product_id, '_cb_event_uuid', true);
 
-        // Enqueue scripts/styles
-        wp_enqueue_script(
-            'cb-frontend',
-            CB_Constants::url('includes/frontend/assets/cb-frontend.js'),
-            ['jquery'],
-            CB_Constants::VERSION,
-            true
-        );
+                // Enqueue scripts/styles
+                wp_enqueue_script(
+                    'cb-frontend',
+                    CB_Constants::url('includes/frontend/assets/cb-frontend.js'),
+                    ['jquery'],
+                    CB_Constants::VERSION,
+                    true
+                );
 
-        wp_enqueue_style(
-            'cb-frontend',
-            CB_Constants::url('includes/frontend/assets/cb-frontend.css'),
-            [],
-            CB_Constants::VERSION
-        );
-    }
-}
+                wp_enqueue_style(
+                    'cb-frontend',
+                    CB_Constants::url('includes/frontend/assets/cb-frontend.css'),
+                    [],
+                    CB_Constants::VERSION
+                );
+            }
+        }
 
         $messages = include CB_Constants::path('includes/frontend/view/validation-messages.php');
 
@@ -121,28 +121,31 @@ if (is_singular('product')) {
 
 
     public static function render_calendly_form($atts = []): string {
-        $context = [
-            'account_exists'   => false,
-            'logged_in'        => is_user_logged_in(),
-            'has_meeting_order'=> false,
-        ];
+        $product_id = get_the_ID();
+        $product    = wc_get_product($product_id);
 
-        if ($context['logged_in']) {
-            $orders = wc_get_orders([
-                'customer_id' => get_current_user_id(),
-                'status'      => ['completed', 'processing'],
-            ]);
-            foreach ($orders as $order) {
-                foreach ($order->get_items() as $item) {
-                    if (stripos($item->get_name(), 'meeting') !== false) {
-                        $context['has_meeting_order'] = true;
-                        break 2;
+        if (self::is_meeting_product($product)) {
+            $context = [
+                'account_exists'   => false,
+                'logged_in'        => is_user_logged_in(),
+                'has_meeting_order'=> false,
+            ];
+
+            if ($context['logged_in']) {
+                $orders = wc_get_orders([
+                    'customer_id' => get_current_user_id(),
+                    'status'      => ['completed', 'processing'],
+                ]);
+                foreach ($orders as $order) {
+                    foreach ($order->get_items() as $item) {
+                        if (stripos($item->get_name(), 'meeting') !== false) {
+                            $context['has_meeting_order'] = true;
+                            break 2;
+                        }
                     }
                 }
             }
-        }
 
-        if (self::is_meeting_product()) {
             ob_start();
             include CB_Constants::path('includes/frontend/view/index.php');
             $output = ob_get_clean();
