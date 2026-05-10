@@ -114,10 +114,7 @@ final class CB_Frontend {
 
     
     public static function output_before_cart(): void {
-        $product_id = get_the_ID();
-        $product    = wc_get_product($product_id);
-
-        if (self::is_meeting_product($product)) {
+        if (self::is_meeting_product()) {
             echo self::render_calendly_form();
         }
     }
@@ -172,32 +169,30 @@ final class CB_Frontend {
         }
     }
 
-    
-    
+
+
     /**
      * Determine if the current product belongs to the "meeting" or "meetings" category.
      *
-     * @param WC_Product|int|null $product Product object, product ID, or null (defaults to current global post).
      * @return bool
      */
-    public static function is_meeting_product($product = null): bool {
-        // If no product passed, try to get from global $post
-        if ($product === null) {
-            global $post;
-            if (!$post || $post->post_type !== 'product') {
-                return false;
-            }
-            $product = wc_get_product($post->ID);
-        } elseif (is_numeric($product)) {
-            $product = wc_get_product($product);
-        }
-        if (!$product instanceof WC_Product) {
+    public static function is_meeting_product(): bool {
+        global $post;
+
+        // Ensure we are on a product page
+        if (!$post || $post->post_type !== 'product') {
             return false;
         }
-    
+
+        // Load product object
+        $product = wc_get_product($post->ID);
+        if (!$product instanceof \WC_Product) {
+            return false;
+        }
+
         // Get product category slugs
         $categories = wp_get_post_terms($product->get_id(), 'product_cat', ['fields' => 'slugs']);
-    
+
         // Return true if "meeting" or "meetings" is present
         return in_array('meeting', $categories, true) || in_array('meetings', $categories, true);
     }
