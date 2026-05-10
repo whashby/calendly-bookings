@@ -114,43 +114,43 @@ final class CB_Frontend {
 
     
     public static function output_before_cart(): void {
+        $product_id = get_the_ID();
+        $product    = wc_get_product($product_id);
+
+        if (self::is_meeting_product($product)) {
             echo self::render_calendly_form();
+        }
     }
 
 
 
 
     public static function render_calendly_form($atts = []): string {
-        $product_id = get_the_ID();
-        $product    = wc_get_product($product_id);
+        $context = [
+            'account_exists'   => false,
+            'logged_in'        => is_user_logged_in(),
+            'has_meeting_order'=> false,
+        ];
 
-        if (self::is_meeting_product($product)) {
-            $context = [
-                'account_exists'   => false,
-                'logged_in'        => is_user_logged_in(),
-                'has_meeting_order'=> false,
-            ];
-
-            if ($context['logged_in']) {
-                $orders = wc_get_orders([
-                    'customer_id' => get_current_user_id(),
-                    'status'      => ['completed', 'processing'],
-                ]);
-                foreach ($orders as $order) {
-                    foreach ($order->get_items() as $item) {
-                        if (stripos($item->get_name(), 'meeting') !== false) {
-                            $context['has_meeting_order'] = true;
-                            break 2;
-                        }
+        if ($context['logged_in']) {
+            $orders = wc_get_orders([
+                'customer_id' => get_current_user_id(),
+                'status'      => ['completed', 'processing'],
+            ]);
+            foreach ($orders as $order) {
+                foreach ($order->get_items() as $item) {
+                    if (stripos($item->get_name(), 'meeting') !== false) {
+                        $context['has_meeting_order'] = true;
+                        break 2;
                     }
                 }
             }
-
-            ob_start();
-            include CB_Constants::path('includes/frontend/view/index.php');
-            $output = ob_get_clean();
-            return $output;
         }
+
+        ob_start();
+        include CB_Constants::path('includes/frontend/view/index.php');
+        $output = ob_get_clean();
+        return $output;
     }
 
     public static function cb_insert_after_title(): void {
