@@ -234,7 +234,6 @@ final class CB_Admin_Ajax {
                 'display_name' => $name,
                 'first_name' => $firstname,
                 'last_name' => $lastname,
-                'role' => 'customer'
             ]);
         } else {
             $user_id = wp_create_user($email, wp_generate_password(), $email);
