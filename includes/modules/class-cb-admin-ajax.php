@@ -216,7 +216,7 @@ final class CB_Admin_Ajax {
         $initial_session_id = $data['initial_session_id'] ?? '';
         $initial_session_uuid = $data['initial_session_uuid'] ?? '';
         $initial_product_id = $data['initial_session_product_id'] ?? '';
-        $start_time = CB_Timezone_Converter::to_utc($data['start_time'] ?? '') ?? '';
+        $start_time = CB_Timezone_Converter::to_iso_time($data['start_time'] ?? '') ?? '';
         $notes = wp_json_encode($data['notes'] ?? []);
         $location_id = $data['location'] ?? '';
         $followup_session = $data['followup_session'] ?? '';
