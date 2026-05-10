@@ -216,7 +216,7 @@ final class CB_Admin_Ajax {
         $initial_session_id = $data['initial_session_id'] ?? '';
         $initial_session_uuid = $data['initial_session_uuid'] ?? '';
         $initial_product_id = $data['initial_session_product_id'] ?? '';
-        $start_time = CB_Timezone_Converter::to_iso_time($data['start_time'] ?? '') ?? '';
+        $start_time = CB_Timezone_Converter::to_iso_time($data['start_time']) ?? '';
         $notes = wp_json_encode($data['notes'] ?? []);
         $location_id = $data['location'] ?? '';
         $followup_session = $data['followup_session'] ?? '';
@@ -246,7 +246,6 @@ final class CB_Admin_Ajax {
                 'role' => 'customer'
             ]);
         }
-        wp_error_log("Walk-in user: " . ($user->ID ?? $user_id) . " - $email");
 
         // 2. Insert completed scheduled event
         global $wpdb;
@@ -321,7 +320,6 @@ final class CB_Admin_Ajax {
             $name,
             $email
         ));
-        wp_error_log("Walk-in event: " . ($event_id ?? 'unknown') . " - $initial_session for $email");
 
         // 3. Create Completed WooCommerce order
         $order = wc_create_order();
@@ -359,7 +357,6 @@ final class CB_Admin_Ajax {
                 ['id' => $event_id] // precise targeting by primary key
             );
         }
-        wp_error_log("Walk-in order: " . ($order_id ?? 'unknown') . " - $initial_session for $email");
 
         // 4. Send follow-up email with booking link
         $reset_link = wp_lostpassword_url();
