@@ -142,10 +142,12 @@ if (is_singular('product')) {
             }
         }
 
-        ob_start();
-        include CB_Constants::path('includes/frontend/view/index.php');
-        $output = ob_get_clean();
-        return $output;
+        if (self::is_meeting_product()) {
+            ob_start();
+            include CB_Constants::path('includes/frontend/view/index.php');
+            $output = ob_get_clean();
+            return $output;
+        }
     }
 
     public static function cb_insert_after_title(): void {
