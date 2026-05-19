@@ -45,7 +45,7 @@ $email        = esc_attr($current_user->user_email ?? '');
 <div class="cb-field-row">
   <div class="cb-field half">
     <label for="cb_meeting_date"><?php esc_html_e('Meeting Date', 'calendly-bookings'); ?></label>
-    <input type="text" id="cb_meeting_date" name="cb_meeting_date" required />
+    <input type="text" id="cb_meeting_date" name="cb_meeting_date" placeholder="Select Meeting Date & Time" required />
   </div>
 
   <div class="cb-field half">
@@ -56,7 +56,7 @@ $email        = esc_attr($current_user->user_email ?? '');
 
 </div>
 
-<?php if($slug == "initial-meeting"): ?>
+<?php if($slug == "initial-consultation"): ?>
   <!-- Intro -->
   <div class="cb-field">
     <label for="cb_hier_intro"><?php esc_html_e('How did you hear about HIER Life?', 'calendly-bookings'); ?></label>
