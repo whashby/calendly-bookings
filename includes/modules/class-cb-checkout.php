@@ -401,7 +401,7 @@ class CB_Checkout {
 		$date  = $order->get_meta('_cb_meeting_date');
 		$time  = $order->get_meta('_cb_meeting_time');
 		$location = $order->get_meta('_cb_meeting_location');
-		$intro = $order->get_meta('_cb_hier_intro');
+		$intro = $order->get_meta('_cb_hier_intro')??'';
 		$notes = empty($order->get_customer_note())?"Nil":$order->get_customer_note();
 
 		// Collect scheduling URLs from products in the order
@@ -432,13 +432,26 @@ class CB_Checkout {
 			'a2'     => $intro,
 		];
 
-	 ?>
+        $confirmation_url = $scheduling_url
+        . 'name=' . urlencode($params['name'])
+        . '&email=' . urlencode($params['email'])
+        . '&location=' . urlencode($params['location'])
+        . '&a1=' . urlencode($params['a1'])
+        . '&a2=' . urlencode($params['a2']);
+?>
 
-		<!-- Calendly embed -->
-		<div id="calendly-wrapper" style="margin-top:2rem;">
-				<?php echo esc_html__('Please confirm the details below before scheduling this event.', 'calendly-bookings'); ?>
-			<div id="calendly-embed" style="min-width:320px;height:700px;"></div>
-		</div>
+<!-- Calendly embed -->
+<div id="calendly-wrapper" style="margin-top:2rem;">
+    <p>
+        <?php echo esc_html__('Please confirm the details below before scheduling this event. If you do not see the session details, click on the confirmation link provided.', 'calendly-bookings'); ?>
+        <br>
+        <a href="<?php echo esc_url($confirmation_url); ?>" target="_blank">
+            <?php echo esc_html($confirmation_url); ?>
+        </a>
+    </p>
+    <div id="calendly-embed" style="min-width:320px;height:700px;"></div>
+</div>
+
 
 		<script>
 		document.addEventListener("DOMContentLoaded", function() {
