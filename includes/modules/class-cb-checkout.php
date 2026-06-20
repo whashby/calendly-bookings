@@ -410,7 +410,7 @@ class CB_Checkout {
 			$product_id = $item->get_product_id();
 			if (!$product_id) continue;
 
-			$url = get_post_meta($product_id, '_cb_scheduling_url', true) . '/' . $date;
+			$url = get_post_meta($product_id, '_cb_scheduling_url', true) . '/' . $date . 'T' . $time . 'Z';
 			if ($url) {
 				$meeting_links[] = [
 					'product_name'   => $item->get_name(),
