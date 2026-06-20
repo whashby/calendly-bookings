@@ -433,7 +433,7 @@ class CB_Checkout {
 		];
 
         $confirmation_url = $scheduling_url
-        . 'name=' . urlencode($params['name'])
+        . '?name=' . urlencode($params['name'])
         . '&email=' . urlencode($params['email'])
         . '&location=' . urlencode($params['location'])
         . '&a1=' . urlencode($params['a1'])
