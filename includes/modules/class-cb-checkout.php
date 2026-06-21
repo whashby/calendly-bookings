@@ -403,6 +403,7 @@ class CB_Checkout {
 
     }
 
+    /*
     public static function maybe_override_thankyou() {
         if (!is_order_received_page()) return;
 
@@ -431,8 +432,56 @@ class CB_Checkout {
 			
         }
     }
-    
-    public static function run_after_payment_processes($order_id) {
+*/
+
+public static function maybe_override_thankyou(): void {
+    // Only run on the order received page
+    if (! is_order_received_page()) {
+        return;
+    }
+
+    // Get order id from query var
+    $order_id = absint( get_query_var( 'order-received' ) );
+    if ( ! $order_id ) {
+        return;
+    }
+
+    // Load order and validate
+    $order = wc_get_order( $order_id );
+    if ( ! $order instanceof \WC_Order ) {
+        return;
+    }
+
+    // If order total > 0, check approval code for declines
+    $total = (float) $order->get_total();
+    if ( $total > 0 ) {
+        $approval_code = (string) $order->get_meta( 'approval_code', true );
+        if ( $approval_code !== '' && stripos( $approval_code, 'DECLINED' ) !== false ) {
+            // Payment declined — do not override
+            return;
+        }
+    }
+
+    // If order does not contain a meeting product, do nothing
+    if ( ! self::order_has_meeting( $order ) ) {
+        return;
+    }
+
+    // Remove default thankyou actions so our custom renderer is the first thing shown.
+    remove_all_actions( 'woocommerce_thankyou' );
+    remove_all_actions( 'woocommerce_order_details_after_order_table' );
+    remove_all_actions( 'woocommerce_order_details_before_order_table' );
+
+    // Add our custom renderer at highest priority so it runs first
+    add_action( 'woocommerce_thankyou', [ __CLASS__, 'render_meeting_thankyou' ], 1, 1 );
+
+    // If you need to create the Calendly invitee immediately after rendering,
+    // attach it with a later priority so rendering happens first:
+    // add_action('woocommerce_thankyou', [__CLASS__, 'create_calendly_invitee'], 20, 1);
+}
+
+
+public static function run_after_payment_processes($order_id) {
         
     }
 
