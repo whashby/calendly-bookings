@@ -286,39 +286,81 @@ class CB_Checkout {
         return null; // No UUID found
     }
 
-
-
-
     public static function add_to_emails($order, $sent_to_admin, $plain_text, $email) {
-		$date  = $order->get_meta('_cb_meeting_date');
-		$time  = $order->get_meta('_cb_meeting_time');
-		$location = $order->get_meta('_cb_meeting_location');
-		$intro = $order->get_meta('_cb_hier_intro');
-		$notes = $order->get_meta('_cb_meeting_notes');
+        $date     = $order->get_meta('_cb_meeting_date');
+        $time     = $order->get_meta('_cb_meeting_time');
+        $location = $order->get_meta('_cb_meeting_location');
+        $intro    = $order->get_meta('_cb_hier_intro');
+        $notes    = $order->get_meta('_cb_meeting_notes');
 
-		// Skip if all empty or notes == Nil
-		if (!$date && !$time && (!$notes || $notes === 'Nil')) return;
+        // Collect scheduling URLs from products in the order
+        $meeting_links = [];
+        foreach ($order->get_items() as $item) {
+            $product_id = $item->get_product_id();
+            if (!$product_id) continue;
 
-		if ($plain_text) {
-			echo "\n" . __('Meeting Details', 'calendly-bookings') . "\n";
-			echo "--------------------------\n";
-			if ($date) echo __('Date:', 'calendly-bookings') . ' ' . $date . "\n";
-			if ($time) echo __('Time:', 'calendly-bookings') . ' ' . $time . "\n";
-			if ($notes && $notes !== 'Nil') echo __('Notes:', 'calendly-bookings') . ' ' . $notes . "\n";
-		} else {
-			echo '<h3>' . esc_html__('Meeting Details', 'calendly-bookings') . '</h3><ul>';
-			if ($date) echo '<li><strong>' . esc_html__('Date:', 'calendly-bookings') . '</strong> ' . esc_html($date) . '</li>';
-			if ($time) echo '<li><strong>' . esc_html__('Time:', 'calendly-bookings') . '</strong> ' . esc_html($time) . '</li>';
-			if ($intro) echo '<li><strong>' . esc_html__('Initial introduction:', 'calendly-bookings') . '</strong> ' . esc_html($intro) . '</li>';
-			if ($notes && $notes !== 'Nil') {
-				echo '<li><strong>' . esc_html__('Notes:', 'calendly-bookings') . '</strong> ' . nl2br(esc_html($notes)) . '</li>';
-			}
-			echo '</ul>';
-		}
-		
-		
+            $base_url = get_post_meta($product_id, '_cb_scheduling_url', true);
+            if (!$base_url) continue;
 
-	}
+            // Build scheduling URL with date/time
+            $scheduling_url = trailingslashit($base_url) . $date . 'T' . $time . 'Z';
+
+            // Shared params for Calendly prefill
+            $params = [
+                'name'     => $order->get_formatted_billing_full_name(),
+                'email'    => $order->get_billing_email(),
+                'location' => $location,
+                'a1'       => $order->get_order_number(),
+                'a2'       => $intro,
+            ];
+
+            // Build confirmation URL
+            $confirmation_url = add_query_arg(array_map('urlencode', $params), $scheduling_url);
+
+            $meeting_links[] = [
+                'product_name'     => $item->get_name(),
+                'confirmation_url' => $confirmation_url,
+            ];
+        }
+
+        // Skip if no links
+        if (empty($meeting_links)) return;
+
+        if ($plain_text) {
+            echo "\n" . __('Meeting Details', 'calendly-bookings') . "\n";
+            echo "--------------------------\n";
+            if ($date) echo __('Date:', 'calendly-bookings') . ' ' . sanitize_text_field($date) . "\n";
+            if ($time) echo __('Time:', 'calendly-bookings') . ' ' . sanitize_text_field($time) . "\n";
+            if ($location) echo __('Location:', 'calendly-bookings') . ' ' . sanitize_text_field($location) . "\n";
+            if ($intro) echo __('Intro:', 'calendly-bookings') . ' ' . sanitize_text_field($intro) . "\n";
+            if ($notes && $notes !== 'Nil') echo __('Notes:', 'calendly-bookings') . ' ' . sanitize_textarea_field($notes) . "\n";
+
+            foreach ($meeting_links as $link) {
+                echo __('Product:', 'calendly-bookings') . ' ' . $link['product_name'] . "\n";
+                echo __('Confirmation URL:', 'calendly-bookings') . ' ' . esc_url($link['confirmation_url']) . "\n";
+            }
+        } else {
+            echo '<h3>' . esc_html__('Meeting Details', 'calendly-bookings') . '</h3><ul>';
+            if ($date) printf('<li><strong>%s</strong> %s</li>', esc_html__('Date:', 'calendly-bookings'), esc_html($date));
+            if ($time) printf('<li><strong>%s</strong> %s</li>', esc_html__('Time:', 'calendly-bookings'), esc_html($time));
+            if ($location) printf('<li><strong>%s</strong> %s</li>', esc_html__('Location:', 'calendly-bookings'), esc_html($location));
+            if ($intro) printf('<li><strong>%s</strong> %s</li>', esc_html__('Intro:', 'calendly-bookings'), esc_html($intro));
+            if ($notes && $notes !== 'Nil') {
+                printf('<li><strong>%s</strong> %s</li>', esc_html__('Notes:', 'calendly-bookings'), nl2br(esc_html($notes)));
+            }
+
+            foreach ($meeting_links as $link) {
+                printf('<li><strong>%s</strong> %s<br><strong>%s</strong> <a href="%s" target="_blank">%s</a></li>',
+                    esc_html__('Product:', 'calendly-bookings'),
+                    esc_html($link['product_name']),
+                    esc_html__('Confirmation URL:', 'calendly-bookings'),
+                    esc_url($link['confirmation_url']),
+                    esc_html($link['confirmation_url'])
+                );
+            }
+            echo '</ul>';
+        }
+    }
 
     public static function add_to_my_account($order) {
         $date  = $order->get_meta('_cb_meeting_date');
