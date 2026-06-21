@@ -27,7 +27,7 @@ class CB_Checkout {
         add_action('manage_shop_order_posts_custom_column', [__CLASS__, 'render_admin_column'], 10, 2);
         
         // Override Thank You page
-        add_action('template_redirect', [__CLASS__, 'maybe_override_thankyou']);
+        add_action('woocommerce_thankyou', [__CLASS__, 'maybe_override_thankyou'],1);
 		add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_calendly_embed']);
     }
 
