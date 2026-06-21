@@ -27,7 +27,7 @@ class CB_Checkout {
         add_action('manage_shop_order_posts_custom_column', [__CLASS__, 'render_admin_column'], 10, 2);
         
         // Override Thank You page
-        add_action('woocommerce_thankyou', [__CLASS__, 'maybe_override_thankyou'],1);
+        add_action('template_redirect', [__CLASS__, 'maybe_override_thankyou']);
 		add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_calendly_embed']);
     }
 
@@ -404,8 +404,7 @@ class CB_Checkout {
     }
 
     public static function maybe_override_thankyou() {
-        
-    if (!is_order_received_page()) return;
+        if (!is_order_received_page()) return;
 
         $order_id = absint(get_query_var('order-received'));
         $order    = wc_get_order($order_id);
