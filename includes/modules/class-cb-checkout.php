@@ -404,7 +404,8 @@ class CB_Checkout {
     }
 
     public static function maybe_override_thankyou() {
-        if (!is_order_received_page()) return;
+        
+    if (!is_order_received_page()) return;
 
         $order_id = absint(get_query_var('order-received'));
         $order    = wc_get_order($order_id);
