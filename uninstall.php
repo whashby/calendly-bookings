@@ -14,7 +14,6 @@ $tables = [
     "{$wpdb->prefix}cb_meeting_locations",
     "{$wpdb->prefix}cb_event_type_available_times",
     "{$wpdb->prefix}cb_event_types",
-    "{$wpdb->prefix}cb_audit_log",
 ];
 
 // Loop through and drop safely

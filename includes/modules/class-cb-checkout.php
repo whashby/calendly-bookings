@@ -4,6 +4,7 @@ namespace Calendly_Bookings\Modules;
 
 use WC_Order;
 use Calendly_Bookings\CB_Constants;
+use Calendly_Bookings\Utils\CB_Timezone_Converter;
 
 class CB_Checkout {
 
@@ -288,7 +289,7 @@ class CB_Checkout {
 
     public static function add_to_emails($order, $sent_to_admin, $plain_text, $email) {
         $date     = $order->get_meta('_cb_meeting_date');
-        $time     = $order->get_meta('_cb_meeting_time');
+        $time     = CB_Timezone_Converter::to_site_time($order->get_meta('_cb_meeting_time'), 'H:i A');
         $location = $order->get_meta('_cb_meeting_location');
         $intro    = $order->get_meta('_cb_hier_intro');
         $notes    = $order->get_meta('_cb_meeting_notes');

@@ -6,7 +6,6 @@ if (!defined('ABSPATH')) {
 }
 
 use Calendly_Bookings\CB_Constants;
-use Calendly_Bookings\Modules\CB_Audit_Log;
 
 /**
  * Handles secure GitHub update checks and token management.

@@ -8,7 +8,6 @@ if (!defined('ABSPATH')) {
 
 use Calendly_Bookings\CB_Constants;
 use Calendly_Bookings\Modules\CB_API;
-use Calendly_Bookings\Modules\CB_Audit_Log;
 
 final class CB_Dashboard_REST {
     public static function init(): void {
@@ -316,16 +315,11 @@ final class CB_Dashboard_REST {
 	public static function get_sync_health(): array {
 		global $wpdb;
 		$last_sync = get_option(CB_Constants::OPT_LAST_SYNC) ?: 'Never';
-		$errors24h = (int) $wpdb->get_var($wpdb->prepare(
-			"SELECT COUNT(*) FROM {$wpdb->prefix}cb_audit_log
-			 WHERE level = 'error' AND timestamp >= %s",
-			gmdate('Y-m-d H:i:s a', strtotime('-24 hours'))
-		));
+
 
 		return [
 			'calendly_api' => 'OK', // placeholder
 			'last_sync'    => $last_sync,
-			'errors24h'    => $errors24h,
 		];
 	}
 

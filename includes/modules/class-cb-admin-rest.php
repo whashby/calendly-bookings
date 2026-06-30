@@ -69,21 +69,6 @@ final class CB_Admin_Rest {
             'permission_callback' => '__return_true',
         ]);
 
-        
-		
-		register_rest_route($ns, '/audit-log', [
-			'methods'             => 'GET',
-			'callback'            => [\Calendly_Bookings\Modules\CB_Audit_Log::class, 'rest_fetch'],
-            'permission_callback' => [__CLASS__, 'can_manage'],
-			'args' => [
-				's'       => ['sanitize_callback' => 'sanitize_text_field'],
-				'level'   => ['sanitize_callback' => 'sanitize_text_field'],
-				'action'  => ['sanitize_callback' => 'sanitize_text_field'],
-				'context' => ['sanitize_callback' => 'sanitize_text_field'],
-				'paged'   => ['sanitize_callback' => 'absint'],
-			],
-		]);
-
         // WooCommerce linking/sync
         register_rest_route($ns, '/wc/link-product', [
             'methods'=>'POST',

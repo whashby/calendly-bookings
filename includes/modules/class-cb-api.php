@@ -102,10 +102,6 @@ final class CB_API {
 		}
 
 		$t0  = microtime(true);
-		CB_Audit_Log::log('debug', 'api', $path, [
-            'url' => $url,
-            'query' => $query,
-        ], 'info');
 
 		$res = wp_remote_get($url, ['headers' => $this->headers(), 'timeout' => 20]);
 		$dur = (int) round((microtime(true) - $t0) * 1000);
@@ -162,9 +158,7 @@ final class CB_API {
 
         } catch (\Throwable $e) {
             $results['errors'][] = $e->getMessage();
-            CB_Audit_Log::log('error', 'sync_all', 'exception', [
-                'error' => $e->getMessage()
-            ]);
+
         }
 
         return [
@@ -315,11 +309,6 @@ final class CB_API {
                     'end_time'   => $end_utc_iso,
                 ], true, 60);
 
-                CB_Audit_Log::log('info', 'event_type_available_times', $event_type_uuid, [
-                    'start' => $start_utc_iso,
-                    'end'   => $end_utc_iso,
-                    'response' => $res,
-                ]);
 
                 $result = array_merge($result, $res['collection'] ?? []);
 
@@ -480,9 +469,6 @@ final class CB_API {
 
                 if (empty($slots)) {
                     $results['errors'][] = "No available times for event_type {$uuid}";
-                    CB_Audit_Log::log('warning', 'sync_event_type_available_times', $uuid, [
-                        'message' => 'No slots returned'
-                    ]);
                     continue;
                 }
 
@@ -493,9 +479,6 @@ final class CB_API {
             update_option(CB_Constants::OPT_LAST_SYNC_EVENT_TYPE_AVAILABLE_TIMES, current_time('timestamp'));
         } catch (\Throwable $e) {
             $results['errors'][] = $e->getMessage();
-            CB_Audit_Log::log('error', 'sync_event_type_available_times', 'exception', [
-                'error' => $e->getMessage()
-            ]);
         }
 
         if (!empty($results['errors'])) {
@@ -669,19 +652,6 @@ final class CB_API {
                 ));
 
                 $count++;
-
-                // Audit log
-                CB_Audit_Log::log('set_scheduled_event', 'scheduled_events', $uuid, [
-                    'order_id'       => $order_id,
-                    'event_type_id'  => $event_type_id,
-                    'location_id'    => $location_id,
-                    'status'         => $status,
-                    'payload_status' => $raw_payload_status,
-                    'reschedule_url' => $reschedule_url,
-                    'cancel_url'     => $cancel_url,
-                    'start_time'     => $se['start_time'] ?? null,
-                    'end_time'       => $se['end_time'] ?? null,
-                ], 'info');
             }
 
             return $count;
@@ -800,13 +770,6 @@ final class CB_API {
                 ];
             }
 
-            // Audit log
-            CB_Audit_Log::log('get_scheduled_events', 'scheduled_events', $context, [
-                'filters' => $filters,
-                'limit'   => $limit,
-                'count'   => count($events),
-            ], 'info');
-
             return $events;
         } catch (\Throwable $e) {
             
@@ -913,27 +876,16 @@ final class CB_API {
 
                 if (empty($invitees)) {
                     $results['errors'][] = "No invitees for scheduled_event {$uuid}";
-                    CB_Audit_Log::log('warning', 'sync_scheduled_event_invitees', $uuid, [
-                        'message' => 'No invitees returned'
-                    ]);
                     continue;
                 }
 
                 $count = $this->set_scheduled_event_invitees($uuid, $invitees);
                 $results['upserted'] += $count;
-
-                CB_Audit_Log::log('info', 'sync_scheduled_event_invitees', $uuid, [
-                    'upserted' => $count,
-                    'total_upserted' => $results['upserted']
-                ]);
             }
 
             update_option(CB_Constants::OPT_LAST_SYNC_SCHEDULED_EVENT_INVITEES, current_time('timestamp'));
         } catch (\Throwable $e) {
             $results['errors'][] = $e->getMessage();
-            CB_Audit_Log::log('error', 'sync_scheduled_event_invitees', 'exception', [
-                'error' => $e->getMessage()
-            ]);
         }
 
         if (!empty($results['errors'])) {

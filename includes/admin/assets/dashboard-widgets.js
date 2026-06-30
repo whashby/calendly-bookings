@@ -201,7 +201,6 @@ function renderHealthWidget() {
     container.innerHTML = '';
     container.innerHTML += `<div>Calendly API: ${data.calendly_api}</div>`;
     container.innerHTML += `<div>Last Sync: ${formatLocalTime(data.last_sync)}</div>`;
-    container.innerHTML += `<div>Errors (24h): ${data.errors24h}</div>`;
     container.innerHTML += `<button id="cb-sync-btn" class="button">Update</button>`; 
     container.innerHTML += `<button id="cb-refresh-btn" class="button">Refresh All Data</button>`; 
 

@@ -7,7 +7,6 @@ if (!defined('ABSPATH')) {
 }
 
 use Calendly_Bookings\Utils\CB_Encryption;
-use Calendly_Bookings\Modules\CB_Audit_Log;
 use Calendly_Bookings\CB_Constants;
 
 final class CB_Installer
@@ -60,23 +59,6 @@ final class CB_Installer
     }
 
     private static function migrate_all_tables(): void {
-        self::migrate_table('cb_audit_log', [
-            'columns' => [
-                "`id` BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT",
-                "`timestamp` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
-                "`level` ENUM('info','warning','error') NOT NULL DEFAULT 'info'",
-                "`action` VARCHAR(64) NOT NULL",
-                "`context` VARCHAR(64) NOT NULL",
-                "`identifier` VARCHAR(128) DEFAULT NULL",
-                "`details` LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`details`))",
-            ],
-            'keys' => [
-                "PRIMARY KEY (`id`)",
-                "KEY `idx_context` (`context`)",
-                "KEY `idx_identifier` (`identifier`)",
-                "KEY `idx_timestamp` (`timestamp`)",
-            ],
-        ]);
 
         self::migrate_table('cb_event_types', [
             'columns' => [
