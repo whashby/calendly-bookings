@@ -17,7 +17,7 @@ Calendly Bookings turns your WordPress site into a structured bookings console f
 - Syncs event types, available times, scheduled events, and invitees into custom tables.
 - Maps event types to WooCommerce products for paid bookings.
 - Provides dashboards for admins and account owners.
-- Handles webhooks, audit logging, and background sync.
+- Handles webhooks, and background sync.
 
 Built for performance, observability, and safety in production environments.
 
