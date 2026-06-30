@@ -54,7 +54,7 @@ final class CB_Admin {
                 );
 
             }
-            // CB Support gets maintenance, audit log, products, and settings
+            // CB Support gets maintenance, products, and settings
             if ($has_cb_support_role) {
                 add_submenu_page(
                     'calendly-bookings',
@@ -63,15 +63,6 @@ final class CB_Admin {
                     'manage_options',
                     'calendly-bookings-maintenance',
                     [__CLASS__, 'render_maintenance']
-                );
-
-                add_submenu_page(
-                    'calendly-bookings',
-                    __('Audit Log', 'calendly-bookings'),
-                    __('Audit Log', 'calendly-bookings'),
-                    'manage_options',
-                    'calendly-bookings-audit-log',
-                    [__CLASS__, 'render_audit_log']
                 );
             }
 
@@ -115,7 +106,6 @@ final class CB_Admin {
             'calendly-bookings_page_calendly-bookings-scheduled-events',
             'calendly-bookings_page_calendly-bookings-maintenance',
             'calendly-bookings_page_calendly-bookings-products',
-            'calendly-bookings_page_calendly-bookings-audit-log',
             'calendly-bookings_page_calendly-bookings-settings'
         ];
 
@@ -292,13 +282,6 @@ final class CB_Admin {
      */
     public static function render_products(): void {
         echo self::view('products/index');
-    }
-
-    /**
-     * Render: Audit Log
-     */
-    public static function render_audit_log(): void {
-        echo self::view('audit-log/index');
     }
 
     /**
