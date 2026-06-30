@@ -15,7 +15,7 @@ if($has_cb_admin_role || $has_cb_support_role || $is_admin) :
 ?>
 <div class="wrap">
   <h1><?php esc_html_e('Calendly Bookings', 'calendly-bookings'); ?></h1>
-  <p><?php esc_html_e('Manage your Calendly integration, view scheduled events, audit logs, configure settings, and link event types to WooCommerce products.', 'calendly-bookings'); ?></p>
+  <p><?php esc_html_e('Manage your Calendly integration, view scheduled events, configure settings, and link event types to WooCommerce products.', 'calendly-bookings'); ?></p>
 
   <div id="cb-admin-notices"></div>
 
@@ -33,16 +33,8 @@ if($has_cb_admin_role || $has_cb_support_role || $is_admin) :
           <?php esc_html_e('View Events', 'calendly-bookings'); ?>
         </a>
       </div>
-<?php       endif;
-            if($has_cb_support_role) :?>
-      <div class="cb-card">
-        <h3><?php esc_html_e('Audit Log', 'calendly-bookings'); ?></h3>
-        <p><?php esc_html_e('Review API calls and actions recorded by the system.', 'calendly-bookings'); ?></p>
-        <a href="<?php echo esc_url(admin_url('admin.php?page=calendly-bookings-audit-log')); ?>" class="button">
-          <?php esc_html_e('View Audit Log', 'calendly-bookings'); ?>
-        </a>
-      </div>
-        <?php endif; ?>
+<?php       endif;?>
+
 
       <div class="cb-card">
         <h3><?php esc_html_e('Settings', 'calendly-bookings'); ?></h3>
