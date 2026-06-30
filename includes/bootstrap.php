@@ -26,7 +26,6 @@ require_once __DIR__ . '/modules/class-cb-account-dashboard.php';
 require_once __DIR__ . '/modules/class-cb-dashboard-rest.php';
 require_once __DIR__ . '/modules/class-cb-maintenance.php';
 require_once __DIR__ . '/modules/class-cb-scheduled-events.php';
-require_once __DIR__ . '/modules/class-cb-audit-log.php';
 require_once __DIR__ . '/modules/class-cb-api.php';
 require_once __DIR__ . '/modules/class-cb-api-proxy.php';
 require_once __DIR__ . '/modules/class-cb-wc-sync.php';
