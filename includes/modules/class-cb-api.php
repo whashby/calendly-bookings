@@ -864,6 +864,7 @@ final class CB_API {
         }
     }
 
+/*
     public function set_locations(array $locations): int {
         try {
             global $wpdb;
@@ -910,7 +911,7 @@ final class CB_API {
             return 0;
         }
     }
-
+*/
 /**
  * Query all meeting locations from Calendly, handling pagination.
  *
