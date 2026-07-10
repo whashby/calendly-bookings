@@ -918,32 +918,13 @@ final class CB_API {
  */
 public function query_locations(): array {
     $all_locations = [];
-    $page_token    = null;
 
-    try {
-        do {
-            $params = ['count' => 100];
-            if ($page_token) {
-                $params['page_token'] = $page_token;
-            }
+    $res = $this->get('/locations', [], false, 120);
 
-            // Call Calendly API
-            $res = $this->get('/locations', $params, false, 120);
-
-            // Merge results
-            $collection = $res['collection'] ?? [];
-            if (!empty($collection)) {
-                $all_locations = array_merge($all_locations, $collection);
-            }
-
-            // Check pagination
-            $page_token = $res['pagination']['next_page_token'] ?? null;
-
-        } while ($page_token);
-
-    } catch (\Throwable $e) {
-        // Log error if needed
-        return [];
+    // Merge results
+    $collection = $res['collection'] ?? [];
+    if (!empty($collection)) {
+        $all_locations = array_merge($all_locations, $collection);
     }
 
     return $all_locations;
