@@ -85,17 +85,18 @@ jQuery(document).ready(function($) {
 
         // Individual syncs
 ['events','invitees','event_types','locations'].forEach(type => {
-    const checkboxId = `#cb-sync-${type}`;
-    const frequencyId = `#cb-${type}-frequency`;
+  const checkboxId  = `#cb_sync_${type}`;
+  const frequencyId = `#cb_sync_${type}_frequency`;
 
-    if (crons[type] && crons[type].enabled) {
-        $(checkboxId).prop('checked', true);
-        $(frequencyId).val(crons[type].frequency).prop('disabled', false);
-    } else {
-        $(checkboxId).prop('checked', false);
-        $(frequencyId).prop('disabled', true);
-    }
+  if (crons[type] && crons[type].enabled) {
+    $(checkboxId).prop('checked', true);
+    $(frequencyId).val(crons[type].frequency).prop('disabled', false);
+  } else {
+    $(checkboxId).prop('checked', false);
+    $(frequencyId).prop('disabled', true);
+  }
 });
+
 
 
         // Populate Active Cron Jobs panel
