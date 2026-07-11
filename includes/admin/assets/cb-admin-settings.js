@@ -50,20 +50,99 @@ jQuery(document).ready(function($) {
   $('#cb-sync-locations').on('click', () => runSync('cb_sync_locations'));
 
   // --- Reports ---
-  $('#cb-generate-report').on('click', function() {
-    window.location.href = ajaxurl + '?action=cb_generate_report';
-  });
-
-  $('#cb-preview-report').on('click', function() {
-    $.post(ajaxurl, { action: 'cb_preview_report' }, function(response) {
+  function loadReports() {
+    $.post(cb_admin.ajaxurl, { action: 'cb_get_reports', nonce: cb_admin.nonce }, function(response) {
       if (response.success) {
-        $('#cb-report-preview').html(response.html);
+        const reports = response.data;
+        let html = '';
+        if (reports.length === 0) {
+          html = '<tr><td colspan="4">No reports available</td></tr>';
+        } else {
+          reports.forEach(report => {
+            html += `
+              <tr>
+                <td>${report.date_range}</td>
+                <td>${report.file_type.toUpperCase()}</td>
+                <td>${new Date(report.created * 1000).toLocaleString()}</td>
+                <td>
+                  <a href="${report.download_url}" class="button">Download</a>
+                  <button class="button cb-delete-report" data-id="${report.id}">Delete</button>
+                </td>
+              </tr>
+            `;
+          });
+        }
+        $('#cb-report-list').html(html);
+      }
+    });
+  }
+
+  $('#cb-generate-report').on('click', function() {
+    const start = $('#cb_report_start').val();
+    const end   = $('#cb_report_end').val();
+    const type  = $('#cb_report_filetype').val();
+
+    if (!start || !end) {
+      alert('Please select a start and end date.');
+      return;
+    }
+
+    $.post(cb_admin.ajaxurl, {
+      action: 'cb_generate_report',
+      start_date: start,
+      end_date: end,
+      file_type: type,
+      nonce: cb_admin.nonce
+    }, function(response) {
+      if (response.success) {
+        alert('Report generated successfully.');
+        loadReports();
       } else {
-        alert('Preview failed');
+        alert('Failed to generate report: ' + response.data.message);
       }
     });
   });
 
+  $('#cb-preview-report').on('click', function() {
+    const start = $('#cb_report_start').val();
+    const end   = $('#cb_report_end').val();
+    const type  = $('#cb_report_filetype').val();
+
+    if (!start || !end) {
+      alert('Please select a start and end date.');
+      return;
+    }
+
+    $.post(cb_admin.ajaxurl, {
+      action: 'cb_preview_report',
+      start_date: start,
+      end_date: end,
+      file_type: type,
+      nonce: cb_admin.nonce
+    }, function(response) {
+      if (response.success) {
+        $('#cb-report-preview').html(response.html);
+      } else {
+        alert('Preview failed: ' + response.data.message);
+      }
+    });
+  });
+
+  $(document).on('click', '.cb-delete-report', function() {
+    const reportId = $(this).data('id');
+    $.post(cb_admin.ajaxurl, {
+      action: 'cb_delete_report',
+      report_id: reportId,
+      nonce: cb_admin.nonce
+    }, function(response) {
+      if (response.success) {
+        alert('Report deleted.');
+        loadReports();
+      } else {
+        alert('Failed to delete report: ' + response.data.message);
+      }
+    });
+  });
 
   // --- Refresh Active Cron Jobs Panel ---
   function refreshCronList() {
@@ -71,40 +150,36 @@ jQuery(document).ready(function($) {
       if (response.success) {
         const crons = response.data;
 
-// Master sync
-if (crons.master && crons.master.enabled) {
-  $('#cb_master_sync').prop('checked', true);
+        // Master sync
+        if (crons.master && crons.master.enabled) {
+          $('#cb_master_sync').prop('checked', true);
 
-  const freq = crons.master.frequency || $('#cb_master_frequency option:selected').val();
-  $('#cb_master_frequency').val(freq).prop('disabled', false);
+          const freq = crons.master.frequency || $('#cb_master_frequency option:selected').val();
+          $('#cb_master_frequency').val(freq).prop('disabled', false);
 
-  $('#cb-individual-section').css('opacity', 0.5)
-    .find('input, select').prop('disabled', true);
+          $('#cb-individual-section').css('opacity', 0.5)
+            .find('input, select').prop('disabled', true);
 
-  updateBadge('cb_master_sync', true);
-} else {
-  $('#cb_master_sync').prop('checked', false);
-  $('#cb-individual-section').css('opacity', 1)
-    .find('input, select').prop('disabled', false);
+          updateBadge('cb_master_sync', true);
+        } else {
+          $('#cb_master_sync').prop('checked', false);
+          $('#cb-individual-section').css('opacity', 1)
+            .find('input, select').prop('disabled', false);
 
-  updateBadge('cb_master_sync', false);
-}
+          updateBadge('cb_master_sync', false);
+        }
 
+        // Individual syncs
+        ['events','invitees','event_types','locations'].forEach(type => {
+          const checkboxId  = `#cb_sync_${type}`;
+          const frequencyId = `#cb_sync_${type}_frequency`;
+          const enabled = crons[type] && crons[type].enabled;
 
-// Individual syncs
-['events','invitees','event_types','locations'].forEach(type => {
-  const checkboxId  = `#cb_sync_${type}`;
-  const frequencyId = `#cb_sync_${type}_frequency`;
-  const enabled = crons[type] && crons[type].enabled;
+          $(checkboxId).prop('checked', enabled);
+          $(frequencyId).val(crons[type]?.frequency || 'cb_daily').prop('disabled', !enabled);
 
-  $(checkboxId).prop('checked', enabled);
-  $(frequencyId).val(crons[type]?.frequency || 'cb_daily').prop('disabled', !enabled);
-
-  updateBadge(`cb_sync_${type}`, enabled);
-});
-
-
-
+          updateBadge(`cb_sync_${type}`, enabled);
+        });
 
         // Populate Active Cron Jobs panel
         let listHtml = '';
@@ -127,12 +202,7 @@ if (crons.master && crons.master.enabled) {
         frequency: $('#cb_master_frequency').val(),
         nonce: cb_admin.nonce
       }, function(response) {
-        if (response.success) {
-          alert(response.data.message);
-        } else {
-          alert(response.data.message);
-          $('#cb_master_sync').prop('checked', false);
-        }
+        alert(response.data.message);
         refreshCronList();
       });
     } else {
@@ -153,12 +223,7 @@ if (crons.master && crons.master.enabled) {
         frequency: $(`#${syncId}_frequency`).val(),
         nonce: cb_admin.nonce
       }, function(response) {
-        if (response.success) {
-          alert(response.data.message);
-        } else {
-          alert(response.data.message);
-          $(`#${syncId}`).prop('checked', false);
-        }
+        alert(response.data.message);
         refreshCronList();
       });
     } else {
@@ -199,17 +264,17 @@ if (crons.master && crons.master.enabled) {
     }
   });
 
-// --- Helper to update badges ---
-function updateBadge(id, enabled) {
-  const badge = $(`#${id}`).closest('.cb-sync-item, .cb-sync-controls').find('.cb-status-badge');
-  if (enabled) {
-    badge.removeClass('disabled').addClass('enabled').text('Enabled');
-  } else {
-    badge.removeClass('enabled').addClass('disabled').text('Disabled');
+  // --- Helper to update badges ---
+  function updateBadge(id, enabled) {
+    const badge = $(`#${id}`).closest('.cb-sync-item, .cb-sync-controls').find('.cb-status-badge');
+    if (enabled) {
+      badge.removeClass('disabled').addClass('enabled').text('Enabled');
+    } else {
+      badge.removeClass('enabled').addClass('disabled').text('Disabled');
+    }
   }
-}
-
 
   // --- Initialize ---
   refreshCronList();
+  loadReports(); // also initialize the reports table
 });
