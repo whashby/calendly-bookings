@@ -30,9 +30,6 @@ final class CB_Admin_Ajax {
         add_action('wp_ajax_cb_test_email', [__CLASS__, 'test_email']);
         add_action('wp_ajax_cb_preview_email', [__CLASS__, 'preview_email']);
 
-        add_action('wp_ajax_cb_generate_report', [__CLASS__, 'generate_report']);
-        add_action('wp_ajax_cb_preview_report', [__CLASS__, 'preview_report']);
-
         add_action('wp_ajax_cb_schedule_individual_sync', [__CLASS__, 'schedule_individual_sync']);
         add_action('wp_ajax_cb_clear_individual_sync', [__CLASS__, 'clear_individual_sync']);
         add_action('wp_ajax_cb_clear_individual_crons', [__CLASS__, 'clear_individual_crons']);
@@ -503,7 +500,7 @@ public static function save_credentials(): void {
         wp_send_json(['success' => true, 'html' => $content]);
     }
 
-    public static function generate_report(): void {
+/*    public static function generate_report(): void {
         $filetype = get_option('cb_report_filetype', 'pdf');
         $content = CB_Reports::generate_report();
 
@@ -533,7 +530,7 @@ public static function save_credentials(): void {
 
         wp_send_json(['success' => true, 'html' => $html]);
     }
-
+*/
     public static function schedule_individual_sync(): void {
         check_ajax_referer('cb_admin_nonce', 'nonce');
         $sync_type = sanitize_text_field($_POST['sync_type'] ?? '');
