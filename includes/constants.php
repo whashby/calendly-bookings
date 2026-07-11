@@ -7,7 +7,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class CB_Constants {
-    public const VERSION = '6.9.204';
+    public const VERSION = '6.9.205';
     public const OPT_GROUP = 'calendly_bookings';
 
     public const OPT_API_TOKEN = 'cb_api_token';
