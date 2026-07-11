@@ -84,15 +84,19 @@ jQuery(document).ready(function($) {
         }
 
         // Individual syncs
-        ['events','invitees','event_types','locations'].forEach(type => {
-          if (crons[type] && crons[type].enabled) {
-            $(`#cb_sync_${type}`).prop('checked', true);
-            $(`#cb_sync_${type}_frequency`).val(crons[type].frequency).prop('disabled', false);
-          } else {
-            $(`#cb_sync_${type}`).prop('checked', false);
-            $(`#cb_sync_${type}_frequency`).prop('disabled', true);
-          }
-        });
+['events','invitees','event_types','locations'].forEach(type => {
+    const checkboxId = `#cb-sync-${type}`;
+    const frequencyId = `#cb-${type}-frequency`;
+
+    if (crons[type] && crons[type].enabled) {
+        $(checkboxId).prop('checked', true);
+        $(frequencyId).val(crons[type].frequency).prop('disabled', false);
+    } else {
+        $(checkboxId).prop('checked', false);
+        $(frequencyId).prop('disabled', true);
+    }
+});
+
 
         // Populate Active Cron Jobs panel
         let listHtml = '';
