@@ -864,72 +864,51 @@ final class CB_API {
         }
     }
 
-/*
-    public function set_locations(array $locations): int {
+    public function sync_scheduled_event_invitees(): array {
+        $results = ['upserted' => 0, 'errors' => []];
+
         try {
             global $wpdb;
-            $table = $wpdb->prefix . 'cb_meeting_locations';
-            $count = 0;
+            $scheduled_events = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_scheduled_events");
 
-            foreach ($locations as $loc) {
-                // Extract fields safely
-                $uuid            = $loc['uuid'] ?? wp_generate_uuid4();
-                $code            = $loc['code'] ?? '';
-                $name            = $loc['name'] ?? ucfirst($loc['kind'] ?? 'Unknown');
-                $type            = $loc['kind'] ?? 'unknown';
-                $value           = $loc['value'] ?? '';
-                $additional_info = isset($loc['additional_info']) ? maybe_serialize($loc['additional_info']) : '';
+            foreach ($scheduled_events as $uuid) {
+                $invitees = $this->query_scheduled_event_invitees($uuid);
 
-                // Insert or update
-                $wpdb->query(
-                    $wpdb->prepare(
-                        "INSERT INTO {$table} 
-                            (uuid, code, name, type, value, additional_info, created_ts, updated_ts) 
-                        VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())
-                        ON DUPLICATE KEY UPDATE
-                            code = VALUES(code),
-                            name = VALUES(name),
-                            type = VALUES(type),
-                            value = VALUES(value),
-                            additional_info = VALUES(additional_info),
-                            updated_ts = NOW()",
-                        sanitize_text_field($uuid),
-                        sanitize_text_field($code),
-                        sanitize_text_field($name),
-                        sanitize_text_field($type),
-                        sanitize_text_field($value),
-                        sanitize_text_field($additional_info)
-                    )
-                );
+                if (empty($invitees)) {
+                    $results['errors'][] = "No invitees for scheduled_event {$uuid}";
+                    continue;
+                }
 
-                $count++;
+                $count = $this->set_scheduled_event_invitees($uuid, $invitees);
+                $results['upserted'] += $count;
             }
 
-            return $count;
+            update_option(CB_Constants::OPT_LAST_SYNC_SCHEDULED_EVENT_INVITEES, current_time('timestamp'));
         } catch (\Throwable $e) {
-            // Log error if needed
-            return 0;
+            $results['errors'][] = $e->getMessage();
+        }
+
+        if (!empty($results['errors'])) {
+            
+        }
+        return [
+            'success'   => empty($results['errors']),
+            'last_sync' => current_time('mysql'),
+            'upserted'  => $results['upserted'],
+            'errors'    => $results['errors'],
+        ];
+    }
+
+    public function query_locations(): array {
+        try {
+            $res = $this->get('/locations', ['count' => 100], false, 120);
+            $result = $res['collection'] ?? [];
+            return $result;
+        } catch (\Throwable $e) {
+            
+            return [];
         }
     }
-*/
-/**
- * Query all meeting locations from Calendly, handling pagination.
- *
- * @return array
- */
-public function query_locations(): array {
-    $all_locations = [];
-
-    $res = $this->get('/locations', [], false, 120);
-
-    // Merge results
-    $collection = $res['collection'] ?? [];
-    if (!empty($collection)) {
-        $all_locations = array_merge($all_locations, $collection);
-    }
-
-    return $all_locations;
-}
 
     public function set_locations(array $locations): int {
         try {
