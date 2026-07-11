@@ -44,3 +44,40 @@
   background: #135e96;
   border-color: #135e96;
 }
+
+
+
+
+/* General badge styling */
+.cb-status-badge {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+/* Specific badge colors */
+.cb-status-badge.enabled {
+  background-color: #4caf50; /* green */
+  color: #fff;
+}
+.cb-status-badge.disabled {
+  background-color: #f44336; /* red */
+  color: #fff;
+}
+
+/* Notice icons for clarity */
+.cb-update-notice p::before {
+  content: "⚠️ ";
+  margin-right: 4px;
+}
+.notice-success p::before {
+  content: "✅ ";
+  margin-right: 4px;
+}
+.notice-error p::before {
+  content: "❌ ";
+  margin-right: 4px;
+}
