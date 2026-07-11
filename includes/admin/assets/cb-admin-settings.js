@@ -71,31 +71,38 @@ jQuery(document).ready(function($) {
       if (response.success) {
         const crons = response.data;
 
-        // Master sync
-        if (crons.master && crons.master.enabled) {
-          $('#cb_master_sync').prop('checked', true);
-          $('#cb_master_frequency').val(crons.master.frequency).prop('disabled', false);
-          $('#cb-individual-section').css('opacity', 0.5)
-            .find('input, select').prop('disabled', true);
-        } else {
-          $('#cb_master_sync').prop('checked', false);
-          $('#cb-individual-section').css('opacity', 1)
-            .find('input, select').prop('disabled', false);
-        }
+// Master sync
+if (crons.master && crons.master.enabled) {
+  $('#cb_master_sync').prop('checked', true);
 
-        // Individual syncs
+  const freq = crons.master.frequency || $('#cb_master_frequency option:selected').val();
+  $('#cb_master_frequency').val(freq).prop('disabled', false);
+
+  $('#cb-individual-section').css('opacity', 0.5)
+    .find('input, select').prop('disabled', true);
+
+  updateBadge('cb_master_sync', true);
+} else {
+  $('#cb_master_sync').prop('checked', false);
+  $('#cb-individual-section').css('opacity', 1)
+    .find('input, select').prop('disabled', false);
+
+  updateBadge('cb_master_sync', false);
+}
+
+
+// Individual syncs
 ['events','invitees','event_types','locations'].forEach(type => {
   const checkboxId  = `#cb_sync_${type}`;
   const frequencyId = `#cb_sync_${type}_frequency`;
+  const enabled = crons[type] && crons[type].enabled;
 
-  if (crons[type] && crons[type].enabled) {
-    $(checkboxId).prop('checked', true);
-    $(frequencyId).val(crons[type].frequency).prop('disabled', false);
-  } else {
-    $(checkboxId).prop('checked', false);
-    $(frequencyId).prop('disabled', true);
-  }
+  $(checkboxId).prop('checked', enabled);
+  $(frequencyId).val(crons[type]?.frequency || 'cb_daily').prop('disabled', !enabled);
+
+  updateBadge(`cb_sync_${type}`, enabled);
 });
+
 
 
 
@@ -191,6 +198,17 @@ jQuery(document).ready(function($) {
       });
     }
   });
+
+// --- Helper to update badges ---
+function updateBadge(id, enabled) {
+  const badge = $(`#${id}`).closest('.cb-sync-item, .cb-sync-controls').find('.cb-status-badge');
+  if (enabled) {
+    badge.removeClass('disabled').addClass('enabled').text('Enabled');
+  } else {
+    badge.removeClass('enabled').addClass('disabled').text('Disabled');
+  }
+}
+
 
   // --- Initialize ---
   refreshCronList();
