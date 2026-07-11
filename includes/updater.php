@@ -256,6 +256,7 @@ final class CB_GitHub_Updater
         $res->requires = '5.0';
         $res->tested = '7.0';
         $res->download_link = '';
+
         if (!empty($api->assets) && is_array($api->assets)) {
             foreach ($api->assets as $asset) {
                 if (!empty($asset->id) && $asset->name === 'calendly-bookings.zip') {
@@ -267,6 +268,7 @@ final class CB_GitHub_Updater
         if (empty($res->download_link)) {
             $res->download_link = $api->zipball_url ?? '';
         }
+
         $res->sections = [
             'description' => wp_kses_post($api->body ?? ''),
             'changelog'   => wp_kses_post($api->body ?? ''),
