@@ -51,6 +51,14 @@ use Calendly_Bookings\CB_Constants;
     </tr>
   </table>
 
+  <h2>Select Fields</h2>
+  <p>Choose which fields to include in your report:</p>
+  <label><input type="checkbox" class="cb-report-field" value="date" checked> Transaction Date</label><br>
+  <label><input type="checkbox" class="cb-report-field" value="product" checked> Product</label><br>
+  <label><input type="checkbox" class="cb-report-field" value="customer" checked> Customer Name</label><br>
+  <label><input type="checkbox" class="cb-report-field" value="transaction_id" checked> Transaction ID / Approval Code</label><br>
+  <label><input type="checkbox" class="cb-report-field" value="amount" checked> Amount</label><br>
+
   <?php submit_button('Save Report Settings'); ?>
 
   <h3>Manual Report Generation</h3>
@@ -76,4 +84,6 @@ use Calendly_Bookings\CB_Constants;
     </tbody>
   </table>
 </form>
-<div id="cb-report-preview"></div>
+
+<!-- Thickbox container for preview -->
+<div id="cb-report-preview" style="display:none;"></div>
