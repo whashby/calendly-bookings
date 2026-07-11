@@ -42,7 +42,14 @@ final class CB_Admin_Ajax {
         add_action('wp_ajax_cb_get_event_availability', [__CLASS__, 'get_event_availability']);
         add_action('wp_ajax_nopriv_cb_get_event_availability', [__CLASS__, 'get_event_availability']);
 
+        add_action('wp_ajax_cb_get_reports', [__CLASS__, 'get_reports']);
+        add_action('wp_ajax_cb_generate_report', [__CLASS__, 'generate_report']);
+        add_action('wp_ajax_cb_preview_report', [__CLASS__, 'preview_report']);
+        add_action('wp_ajax_cb_delete_report', [__CLASS__, 'delete_report']);
+        add_action('wp_ajax_cb_download_report', [__CLASS__, 'download_report']);
 
+        // Schedule cron hook
+        add_action('cb_generate_scheduled_report', [__CLASS__, 'generate_scheduled_report']);
     }
 
     /**
@@ -672,4 +679,168 @@ public static function save_credentials(): void {
             wp_send_json_error(['message' => $e->getMessage()]);
         }
     }
+
+
+    /**
+     * List all reports
+     */
+    public function get_reports() {
+        check_ajax_referer('cb_admin_nonce', 'nonce');
+        $reports = get_option('cb_generated_reports', []);
+        wp_send_json_success($reports);
+    }
+
+    /**
+     * Generate a manual report
+     */
+    public function generate_report() {
+        check_ajax_referer('cb_admin_nonce', 'nonce');
+
+        $start  = sanitize_text_field($_POST['start_date'] ?? '');
+        $end    = sanitize_text_field($_POST['end_date'] ?? '');
+        $type   = sanitize_text_field($_POST['file_type'] ?? 'pdf');
+        $fields = array_map('sanitize_text_field', $_POST['fields'] ?? []);
+
+        if (empty($start) || empty($end)) {
+            wp_send_json_error(['message' => 'Missing date range']);
+        }
+
+        $report = $this->create_report($start, $end, $type, $fields);
+
+        wp_send_json_success(['message' => 'Report generated', 'report' => $report]);
+    }
+
+    /**
+     * Preview report in Thickbox
+     */
+    public function preview_report() {
+        check_ajax_referer('cb_admin_nonce', 'nonce');
+
+        $start  = sanitize_text_field($_POST['start_date'] ?? '');
+        $end    = sanitize_text_field($_POST['end_date'] ?? '');
+        $fields = array_map('sanitize_text_field', $_POST['fields'] ?? []);
+
+        if (empty($start) || empty($end)) {
+            wp_send_json_error(['message' => 'Missing date range']);
+        }
+
+        $html = '<table class="widefat"><thead><tr>';
+        foreach ($fields as $field) {
+            $html .= '<th>' . esc_html(ucwords(str_replace('_',' ', $field))) . '</th>';
+        }
+        $html .= '</tr></thead><tbody>';
+
+        // Sample preview rows
+        for ($i=1; $i<=5; $i++) {
+            $html .= '<tr>';
+            foreach ($fields as $field) {
+                $html .= '<td>Sample ' . esc_html($field) . ' ' . $i . '</td>';
+            }
+            $html .= '</tr>';
+        }
+
+        $html .= '</tbody></table>';
+
+        wp_send_json_success(['html' => $html]);
+    }
+
+    /**
+     * Delete a report
+     */
+    public function delete_report() {
+        check_ajax_referer('cb_admin_nonce', 'nonce');
+
+        $id = sanitize_text_field($_POST['report_id'] ?? '');
+        $reports = get_option('cb_generated_reports', []);
+
+        $reports = array_filter($reports, function($r) use ($id) {
+            return $r['id'] !== $id;
+        });
+
+        update_option('cb_generated_reports', $reports, false);
+
+        wp_send_json_success(['message' => 'Report deleted']);
+    }
+
+    /**
+     * Download a report
+     */
+    public function download_report() {
+        check_ajax_referer('cb_admin_nonce', 'nonce');
+
+        $id = sanitize_text_field($_GET['report_id'] ?? '');
+        $reports = get_option('cb_generated_reports', []);
+        $report = null;
+
+        foreach ($reports as $r) {
+            if ($r['id'] === $id) {
+                $report = $r;
+                break;
+            }
+        }
+
+        if (!$report) {
+            wp_die('Report not found');
+        }
+
+        header('Content-Type: text/plain');
+        header('Content-Disposition: attachment; filename="report-' . $id . '.' . $report['file_type'] . '"');
+
+        echo "Report: {$report['date_range']}\n";
+        echo "Fields: " . implode(', ', $report['fields']) . "\n";
+        echo "Generated: " . date('Y-m-d H:i:s', $report['created']) . "\n";
+        exit;
+    }
+
+    /**
+     * Cron job: generate scheduled report
+     */
+    public function generate_scheduled_report() {
+        $schedule = get_option('cb_report_schedule', 'none');
+        if ($schedule === 'none') return;
+
+        $type   = get_option('cb_report_filetype', 'pdf');
+        $fields = ['date','product','customer','transaction_id','amount']; // default fields
+        $start  = date('Y-m-01'); // first of month
+        $end    = date('Y-m-t');  // last of month
+
+        $this->create_report($start, $end, $type, $fields);
+    }
+
+    /**
+     * Helper: create and save report
+     */
+    private function create_report($start, $end, $type, $fields) {
+        $reports = get_option('cb_generated_reports', []);
+        $id = uniqid('report_', true);
+
+        $report = [
+            'id'          => $id,
+            'date_range'  => $start . ' → ' . $end,
+            'file_type'   => $type,
+            'fields'      => $fields,
+            'created'     => time(),
+            'download_url'=> admin_url("admin-ajax.php?action=cb_download_report&report_id={$id}&nonce=" . wp_create_nonce('cb_admin_nonce'))
+        ];
+
+        $reports[] = $report;
+
+        // Retention policy
+        $maxCount = (int) get_option('cb_report_retention_count', 10);
+        $maxDays  = (int) get_option('cb_report_retention_days', 30);
+
+        if (count($reports) > $maxCount) {
+            $reports = array_slice($reports, -$maxCount);
+        }
+
+        $cutoff = time() - ($maxDays * DAY_IN_SECONDS);
+        $reports = array_filter($reports, function($r) use ($cutoff) {
+            return $r['created'] >= $cutoff;
+        });
+
+        update_option('cb_generated_reports', $reports, false);
+
+        return $report;
+    }
+
 }
