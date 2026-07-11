@@ -50,99 +50,117 @@ jQuery(document).ready(function($) {
   $('#cb-sync-locations').on('click', () => runSync('cb_sync_locations'));
 
   // --- Reports ---
-  function loadReports() {
-    $.post(cb_admin.ajaxurl, { action: 'cb_get_reports', nonce: cb_admin.nonce }, function(response) {
-      if (response.success) {
-        const reports = response.data;
-        let html = '';
-        if (reports.length === 0) {
-          html = '<tr><td colspan="4">No reports available</td></tr>';
-        } else {
-          reports.forEach(report => {
-            html += `
-              <tr>
-                <td>${report.date_range}</td>
-                <td>${report.file_type.toUpperCase()}</td>
-                <td>${new Date(report.created * 1000).toLocaleString()}</td>
-                <td>
-                  <a href="${report.download_url}" class="button">Download</a>
-                  <button class="button cb-delete-report" data-id="${report.id}">Delete</button>
-                </td>
-              </tr>
-            `;
-          });
-        }
-        $('#cb-report-list').html(html);
+// --- Reports ---
+function loadReports() {
+  $.post(cb_admin.ajaxurl, { action: 'cb_get_reports', nonce: cb_admin.nonce }, function(response) {
+    if (response.success) {
+      const reports = response.data;
+      let html = '';
+      if (reports.length === 0) {
+        html = '<tr><td colspan="4">No reports available</td></tr>';
+      } else {
+        reports.forEach(report => {
+          html += `
+            <tr>
+              <td>${report.date_range}</td>
+              <td>${report.file_type.toUpperCase()}</td>
+              <td>${new Date(report.created * 1000).toLocaleString()}</td>
+              <td>
+                <a href="${report.download_url}" class="button">Download</a>
+                <button class="button cb-delete-report" data-id="${report.id}">Delete</button>
+              </td>
+            </tr>
+          `;
+        });
       }
-    });
+      $('#cb-report-list').html(html);
+    }
+  });
+}
+
+// Manual report generation
+$('#cb-generate-report').on('click', function() {
+  const start = $('#cb_report_start').val();
+  const end   = $('#cb_report_end').val();
+  const type  = $('#cb_report_filetype').val();
+
+  // Collect selected fields
+  const fields = [];
+  $('.cb-report-field:checked').each(function() {
+    fields.push($(this).val());
+  });
+
+  if (!start || !end) {
+    alert('Please select a start and end date.');
+    return;
   }
 
-  $('#cb-generate-report').on('click', function() {
-    const start = $('#cb_report_start').val();
-    const end   = $('#cb_report_end').val();
-    const type  = $('#cb_report_filetype').val();
-
-    if (!start || !end) {
-      alert('Please select a start and end date.');
-      return;
+  $.post(cb_admin.ajaxurl, {
+    action: 'cb_generate_report',
+    start_date: start,
+    end_date: end,
+    file_type: type,
+    fields: fields,
+    nonce: cb_admin.nonce
+  }, function(response) {
+    if (response.success) {
+      alert('Report generated successfully.');
+      loadReports();
+    } else {
+      alert('Failed to generate report: ' + response.data.message);
     }
+  });
+});
 
-    $.post(cb_admin.ajaxurl, {
-      action: 'cb_generate_report',
-      start_date: start,
-      end_date: end,
-      file_type: type,
-      nonce: cb_admin.nonce
-    }, function(response) {
-      if (response.success) {
-        alert('Report generated successfully.');
-        loadReports();
-      } else {
-        alert('Failed to generate report: ' + response.data.message);
-      }
-    });
+// Preview report in Thickbox
+$('#cb-preview-report').on('click', function() {
+  const start = $('#cb_report_start').val();
+  const end   = $('#cb_report_end').val();
+  const type  = $('#cb_report_filetype').val();
+
+  const fields = [];
+  $('.cb-report-field:checked').each(function() {
+    fields.push($(this).val());
   });
 
-  $('#cb-preview-report').on('click', function() {
-    const start = $('#cb_report_start').val();
-    const end   = $('#cb_report_end').val();
-    const type  = $('#cb_report_filetype').val();
+  if (!start || !end) {
+    alert('Please select a start and end date.');
+    return;
+  }
 
-    if (!start || !end) {
-      alert('Please select a start and end date.');
-      return;
+  $.post(cb_admin.ajaxurl, {
+    action: 'cb_preview_report',
+    start_date: start,
+    end_date: end,
+    file_type: type,
+    fields: fields,
+    nonce: cb_admin.nonce
+  }, function(response) {
+    if (response.success) {
+      tb_show('Report Preview', '#TB_inline?height=600&width=800&inlineId=cb-report-preview');
+      $('#cb-report-preview').html(response.html);
+    } else {
+      alert('Preview failed: ' + response.data.message);
     }
-
-    $.post(cb_admin.ajaxurl, {
-      action: 'cb_preview_report',
-      start_date: start,
-      end_date: end,
-      file_type: type,
-      nonce: cb_admin.nonce
-    }, function(response) {
-      if (response.success) {
-        $('#cb-report-preview').html(response.html);
-      } else {
-        alert('Preview failed: ' + response.data.message);
-      }
-    });
   });
+});
 
-  $(document).on('click', '.cb-delete-report', function() {
-    const reportId = $(this).data('id');
-    $.post(cb_admin.ajaxurl, {
-      action: 'cb_delete_report',
-      report_id: reportId,
-      nonce: cb_admin.nonce
-    }, function(response) {
-      if (response.success) {
-        alert('Report deleted.');
-        loadReports();
-      } else {
-        alert('Failed to delete report: ' + response.data.message);
-      }
-    });
+// Delete report
+$(document).on('click', '.cb-delete-report', function() {
+  const reportId = $(this).data('id');
+  $.post(cb_admin.ajaxurl, {
+    action: 'cb_delete_report',
+    report_id: reportId,
+    nonce: cb_admin.nonce
+  }, function(response) {
+    if (response.success) {
+      alert('Report deleted.');
+      loadReports();
+    } else {
+      alert('Failed to delete report: ' + response.data.message);
+    }
   });
+});
 
   // --- Refresh Active Cron Jobs Panel ---
   function refreshCronList() {
