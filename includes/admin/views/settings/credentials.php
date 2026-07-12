@@ -32,4 +32,5 @@ use Calendly_Bookings\CB_Constants;
 
   <?php submit_button('Save Credentials', 'primary', 'cb-submit'); ?>
   <button type="button" class="button" id="cb-test-connection">Test Connection</button>
+  <button type="button" class="button" id="cb-validate-license">Validate License</button>
 </form>
