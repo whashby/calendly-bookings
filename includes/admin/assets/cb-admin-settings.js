@@ -1,38 +1,67 @@
 jQuery(document).ready(function($) {
 
-  // --- Connection & Credentials ---
+  // --- Save Credentials ---
+  $('#cb-submit').on('click', function(e) {
+    e.preventDefault();
+
+    const apiKey  = $('#cb_api_key').val();
+    const uuid    = $('#cb_user_uuid').val();
+    const license = $('#cb_license_key').val();
+
+    $.post(cb_admin.ajaxurl, {
+      action: 'cb_save_credentials',
+      api_key: apiKey,
+      user_uuid: uuid,
+      license_key: license,
+      nonce: cb_admin.nonce
+    }, function(response) {
+      if (response.success) {
+        alert(response.message || 'Credentials saved successfully.');
+      } else {
+        alert('Save failed: ' + response.message);
+      }
+    });
+  });
+
+  // --- Test Connection ---
   $('#cb-test-connection').on('click', function() {
     const apiKey  = $('#cb_api_key').val();
     const uuid    = $('#cb_user_uuid').val();
     const license = $('#cb_license_key').val();
 
-    $.post(ajaxurl, {
+    $.post(cb_admin.ajaxurl, {
       action: 'cb_test_connection',
       api_key: apiKey,
       user_uuid: uuid,
-      license_key: license
+      license_key: license,
+      nonce: cb_admin.nonce
     }, function(response) {
-      alert(response.message);
+      if (response.success) {
+        alert(response.message || 'Connection and license authenticated.');
+      } else {
+        alert('Test failed: ' + response.message);
+      }
     });
   });
 
-  $('#cb-submit').on('click', function(e) {
-    e.preventDefault();
-    if (this.value !== 'Save Credentials') {
-      const apiKey  = $('#cb_api_key').val();
-      const uuid    = $('#cb_user_uuid').val();
-      const license = $('#cb_license_key').val();
+  // --- Validate License ---
+  $('#cb-validate-license').on('click', function() {
+    const license = $('#cb_license_key').val();
 
-      $.post(ajaxurl, {
-        action: 'cb_save_credentials',
-        api_key: apiKey,
-        user_uuid: uuid,
-        license_key: license
-      }, function(response) {
-        alert(response.message);
-      });
-    }
+    $.post(cb_admin.ajaxurl, {
+      action: 'cb_validate_license',
+      license_key: license,
+      nonce: cb_admin.nonce
+    }, function(response) {
+      if (response.success) {
+        alert(response.message || 'License validated successfully.');
+      } else {
+        alert('Validation failed: ' + response.message);
+      }
+    });
   });
+
+
 
   // --- Sync Helpers ---
   function runSync(action, params = {}) {
