@@ -304,7 +304,7 @@ final class CB_GitHub_Updater
         $res->author = '<a href="https://whashby.github.io">Wafiq Harris-Ashby</a>';
         $res->homepage = self::REPO;
         $res->requires = '5.0';
-        $res->tested = '7.0';
+        $res->tested = '7.0.1';
         $res->download_link = '';
         if (!empty($api->assets) && is_array($api->assets)) {
             foreach ($api->assets as $asset) {
