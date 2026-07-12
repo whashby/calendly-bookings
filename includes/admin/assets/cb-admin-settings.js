@@ -50,117 +50,197 @@ jQuery(document).ready(function($) {
   $('#cb-sync-locations').on('click', () => runSync('cb_sync_locations'));
 
   // --- Reports ---
-// --- Reports ---
-function loadReports() {
-  $.post(cb_admin.ajaxurl, { action: 'cb_get_reports', nonce: cb_admin.nonce }, function(response) {
-    if (response.success) {
-      const reports = response.data;
-      let html = '';
-      if (reports.length === 0) {
-        html = '<tr><td colspan="4">No reports available</td></tr>';
-      } else {
-        reports.forEach(report => {
-          html += `
-            <tr>
-              <td>${report.date_range}</td>
-              <td>${report.file_type.toUpperCase()}</td>
-              <td>${new Date(report.created * 1000).toLocaleString()}</td>
-              <td>
-                <a href="${report.download_url}" class="button">Download</a>
-                <button class="button cb-delete-report" data-id="${report.id}">Delete</button>
-              </td>
-            </tr>
-          `;
-        });
+  function loadReports() {
+    $.post(cb_admin.ajaxurl, { action: 'cb_get_reports', nonce: cb_admin.nonce }, function(response) {
+      if (response.success) {
+        const reports = response.data;
+        let html = '';
+        if (reports.length === 0) {
+          html = '<tr><td colspan="6">No reports available</td></tr>';
+        } else {
+          reports.forEach(report => {
+            html += `
+              <tr>
+                <td>${report.date_range}</td>
+                <td>${report.file_type.toUpperCase()}</td>
+                <td>${report.type.replace('_',' ')}</td>
+                <td>${report.fields.join(', ')}</td>
+                <td>${new Date(report.created * 1000).toLocaleString()}</td>
+                <td>
+                  <a href="${report.download_url}" class="button">Download</a>
+                  <button class="button cb-delete-report" data-id="${report.id}">Delete</button>
+                </td>
+              </tr>
+            `;
+          });
+        }
+        $('#cb-report-list').html(html);
       }
-      $('#cb-report-list').html(html);
-    }
-  });
-}
-
-// Manual report generation
-$('#cb-generate-report').on('click', function() {
-  const start = $('#cb_report_start').val();
-  const end   = $('#cb_report_end').val();
-  const type  = $('#cb_report_filetype').val();
-
-  // Collect selected fields
-  const fields = [];
-  $('.cb-report-field:checked').each(function() {
-    fields.push($(this).val());
-  });
-
-  if (!start || !end) {
-    alert('Please select a start and end date.');
-    return;
+    });
   }
 
-  $.post(cb_admin.ajaxurl, {
-    action: 'cb_generate_report',
-    start_date: start,
-    end_date: end,
-    file_type: type,
-    fields: fields,
-    nonce: cb_admin.nonce
-  }, function(response) {
-    if (response.success) {
-      alert('Report generated successfully.');
-      loadReports();
-    } else {
-      alert('Failed to generate report: ' + response.data.message);
-    }
-  });
-});
-
-// Preview report in Thickbox
-$('#cb-preview-report').on('click', function() {
-  const start = $('#cb_report_start').val();
-  const end   = $('#cb_report_end').val();
-  const type  = $('#cb_report_filetype').val();
-
-  const fields = [];
-  $('.cb-report-field:checked').each(function() {
-    fields.push($(this).val());
-  });
-
-  if (!start || !end) {
-    alert('Please select a start and end date.');
-    return;
+  // Helper to collect fields
+  function getSelectedFields(panel) {
+    const fields = [];
+    $(`${panel} .cb-report-field:checked`).each(function() {
+      fields.push($(this).val());
+    });
+    return fields;
   }
 
-  $.post(cb_admin.ajaxurl, {
-    action: 'cb_preview_report',
-    start_date: start,
-    end_date: end,
-    file_type: type,
-    fields: fields,
-    nonce: cb_admin.nonce
-  }, function(response) {
-    if (response.success) {
-      tb_show('Report Preview', '#TB_inline?height=600&width=800&inlineId=cb-report-preview');
-      $('#cb-report-preview').html(response.html);
-    } else {
-      alert('Preview failed: ' + response.data.message);
-    }
-  });
-});
+  // Generic handler for preview/generate
+  function handleReportAction(panel, reportType, action) {
+    const start = $(`${panel} input[type="date"]`).first().val();
+    const end   = $(`${panel} input[type="date"]`).last().val();
+    const type  = $(`${panel} select`).val();
+    const fields = getSelectedFields(panel);
 
-// Delete report
-$(document).on('click', '.cb-delete-report', function() {
-  const reportId = $(this).data('id');
-  $.post(cb_admin.ajaxurl, {
-    action: 'cb_delete_report',
-    report_id: reportId,
-    nonce: cb_admin.nonce
-  }, function(response) {
-    if (response.success) {
-      alert('Report deleted.');
-      loadReports();
-    } else {
-      alert('Failed to delete report: ' + response.data.message);
+    if (!start || !end) {
+      alert('Please select a start and end date.');
+      return;
     }
+
+    $.post(cb_admin.ajaxurl, {
+      action: action,
+      start_date: start,
+      end_date: end,
+      file_type: type,
+      fields: fields,
+      report_type: reportType,
+      nonce: cb_admin.nonce
+    }, function(response) {
+      if (response.success) {
+        if (action === 'cb_preview_report') {
+          tb_show('Report Preview', '#TB_inline?height=600&width=800&inlineId=cb-report-preview');
+          $('#cb-report-preview-content').html(response.data.html);
+          $('#cb-report-summary').html(response.data.summary);
+        } else {
+          alert('Report generated successfully.');
+          loadReports();
+        }
+      } else {
+        alert('Failed: ' + response.data.message);
+      }
+    });
+  }
+
+  // Bind buttons per tab
+  $('#cb-sales-general #cb-preview-report').on('click', () => handleReportAction('#cb-sales-general','sales_general','cb_preview_report'));
+  $('#cb-sales-general #cb-generate-report').on('click', () => handleReportAction('#cb-sales-general','sales_general','cb_generate_report'));
+
+  $('#cb-sales-product #cb-preview-product-report').on('click', () => handleReportAction('#cb-sales-product','sales_product','cb_preview_report'));
+  $('#cb-sales-product #cb-generate-product-report').on('click', () => handleReportAction('#cb-sales-product','sales_product','cb_generate_report'));
+
+  $('#cb-discounts-refunds #cb-preview-discount-report').on('click', () => handleReportAction('#cb-discounts-refunds','discounts_refunds','cb_preview_report'));
+  $('#cb-discounts-refunds #cb-generate-discount-report').on('click', () => handleReportAction('#cb-discounts-refunds','discounts_refunds','cb_generate_report'));
+
+  $('#cb-sales-statistics #cb-preview-stats-report').on('click', () => handleReportAction('#cb-sales-statistics','sales_statistics','cb_preview_report'));
+  $('#cb-sales-statistics #cb-generate-stats-report').on('click', () => handleReportAction('#cb-sales-statistics','sales_statistics','cb_generate_report'));
+
+    // Handle tab clicks
+    $('#cb-report-tabs .nav-tab').on('click', function(e) {
+      e.preventDefault();
+
+      // Remove active class from all tabs
+      $('#cb-report-tabs .nav-tab').removeClass('nav-tab-active');
+      // Add active class to clicked tab
+      $(this).addClass('nav-tab-active');
+
+      // Hide all panels
+      $('.cb-report-tab-panel').removeClass('active').hide();
+
+      // Show the selected panel
+      const target = $(this).attr('href');
+      $(target).addClass('active').show();
+    });
+  
+  // Manual report generation
+  $('#cb-generate-report').on('click', function() {
+    const start = $('#cb_report_start').val();
+    const end   = $('#cb_report_end').val();
+    const type  = $('#cb_report_filetype').val();
+    const reportType = $('#cb_report_type').val(); // dropdown or hidden field
+
+    const fields = [];
+    $('.cb-report-field:checked').each(function() {
+      fields.push($(this).val());
+    });
+
+    if (!start || !end) {
+      alert('Please select a start and end date.');
+      return;
+    }
+
+    $.post(cb_admin.ajaxurl, {
+      action: 'cb_generate_report',
+      start_date: start,
+      end_date: end,
+      file_type: type,
+      fields: fields,
+      report_type: reportType,
+      nonce: cb_admin.nonce
+    }, function(response) {
+      if (response.success) {
+        alert('Report generated successfully.');
+        loadReports();
+      } else {
+        alert('Failed to generate report: ' + response.data.message);
+      }
+    });
   });
-});
+
+  // Preview report in Thickbox
+  $('#cb-preview-report').on('click', function() {
+    const start = $('#cb_report_start').val();
+    const end   = $('#cb_report_end').val();
+    const type  = $('#cb_report_filetype').val();
+    const reportType = $('#cb_report_type').val();
+
+    const fields = [];
+    $('.cb-report-field:checked').each(function() {
+      fields.push($(this).val());
+    });
+
+    if (!start || !end) {
+      alert('Please select a start and end date.');
+      return;
+    }
+
+    $.post(cb_admin.ajaxurl, {
+      action: 'cb_preview_report',
+      start_date: start,
+      end_date: end,
+      file_type: type,
+      fields: fields,
+      report_type: reportType,
+      nonce: cb_admin.nonce
+    }, function(response) {
+      if (response.success) {
+        tb_show('Report Preview', '#TB_inline?height=600&width=800&inlineId=cb-report-preview');
+        $('#cb-report-preview-content').html(response.html);
+        $('#cb-report-summary').html(response.summary);
+      } else {
+        alert('Preview failed: ' + response.data.message);
+      }
+    });
+  });
+
+  // Delete report
+  $(document).on('click', '.cb-delete-report', function() {
+    const reportId = $(this).data('id');
+    $.post(cb_admin.ajaxurl, {
+      action: 'cb_delete_report',
+      report_id: reportId,
+      nonce: cb_admin.nonce
+    }, function(response) {
+      if (response.success) {
+        alert('Report deleted.');
+        loadReports();
+      } else {
+        alert('Failed to delete report: ' + response.data.message);
+      }
+    });
+  });
 
   // --- Refresh Active Cron Jobs Panel ---
   function refreshCronList() {
@@ -295,4 +375,6 @@ $(document).on('click', '.cb-delete-report', function() {
   // --- Initialize ---
   refreshCronList();
   loadReports(); // also initialize the reports table
+  $('.cb-report-tab-panel').hide();
+  $('#cb-sales-general').show().addClass('active');
 });

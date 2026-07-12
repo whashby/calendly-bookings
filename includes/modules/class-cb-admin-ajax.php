@@ -500,37 +500,6 @@ public static function save_credentials(): void {
         wp_send_json(['success' => true, 'html' => $content]);
     }
 
-/*    public static function generate_report(): void {
-        $filetype = get_option('cb_report_filetype', 'pdf');
-        $content = CB_Reports::generate_report();
-
-        $filename = 'calendly-report-' . date('Y-m-d') . '.' . $filetype;
-
-        header('Content-Description: File Transfer');
-        header('Content-Type: application/octet-stream');
-        header("Content-Disposition: attachment; filename={$filename}");
-        header('Content-Transfer-Encoding: binary');
-        echo $content;
-        exit;
-    }
-
-    public static function preview_report(): void {
-        $content = CB_Reports::generate_report();
-        $filetype = get_option('cb_report_filetype', 'pdf');
-
-        if ($filetype === 'pdf') {
-            // For preview, embed as base64 PDF
-            $base64 = base64_encode($content);
-            $html = "<embed src='data:application/pdf;base64,{$base64}' type='application/pdf' width='100%' height='600px' />";
-        } elseif ($filetype === 'csv') {
-            $html = "<pre>" . esc_html($content) . "</pre>";
-        } else {
-            $html = "<p>Excel report generated. Download to view.</p>";
-        }
-
-        wp_send_json(['success' => true, 'html' => $html]);
-    }
-*/
     public static function schedule_individual_sync(): void {
         check_ajax_referer('cb_admin_nonce', 'nonce');
         $sync_type = sanitize_text_field($_POST['sync_type'] ?? '');
@@ -678,91 +647,47 @@ public static function save_credentials(): void {
     }
 
 
-    /**
-     * List all reports
-     */
-    public function get_reports() {
+    public static function get_reports() {
         check_ajax_referer('cb_admin_nonce', 'nonce');
         $reports = get_option('cb_generated_reports', []);
         wp_send_json_success($reports);
     }
-
-    /**
-     * Generate a manual report
-     */
-    public function generate_report() {
+    public static function preview_report() {
         check_ajax_referer('cb_admin_nonce', 'nonce');
 
-        $start  = sanitize_text_field($_POST['start_date'] ?? '');
-        $end    = sanitize_text_field($_POST['end_date'] ?? '');
-        $type   = sanitize_text_field($_POST['file_type'] ?? 'pdf');
-        $fields = array_map('sanitize_text_field', $_POST['fields'] ?? []);
+        $reportType = sanitize_text_field($_POST['report_type'] ?? 'sales_general');
+        $start      = sanitize_text_field($_POST['start_date'] ?? '');
+        $end        = sanitize_text_field($_POST['end_date'] ?? '');
+        $fields     = array_map('sanitize_text_field', $_POST['fields'] ?? []);
 
         if (empty($start) || empty($end)) {
             wp_send_json_error(['message' => 'Missing date range']);
         }
 
-        $report = $this->create_report($start, $end, $type, $fields);
+        $orders = self::query_orders($start, $end, $reportType);
+
+        [$html, $summary] = self::build_preview($orders, $fields, $reportType);
+
+        wp_send_json_success(['html' => $html, 'summary' => $summary]);
+    }
+    public static function generate_report() {
+        check_ajax_referer('cb_admin_nonce', 'nonce');
+
+        $reportType = sanitize_text_field($_POST['report_type'] ?? 'sales_general');
+        $start      = sanitize_text_field($_POST['start_date'] ?? '');
+        $end        = sanitize_text_field($_POST['end_date'] ?? '');
+        $type       = sanitize_text_field($_POST['file_type'] ?? 'pdf');
+        $fields     = array_map('sanitize_text_field', $_POST['fields'] ?? []);
+
+        if (empty($start) || empty($end)) {
+            wp_send_json_error(['message' => 'Missing date range']);
+        }
+
+        $report = self::create_report($start, $end, $type, $fields, $reportType);
 
         wp_send_json_success(['message' => 'Report generated', 'report' => $report]);
     }
-
-    /**
-     * Preview report in Thickbox
-     */
-    public function preview_report() {
-        check_ajax_referer('cb_admin_nonce', 'nonce');
-
-        $start  = sanitize_text_field($_POST['start_date'] ?? '');
-        $end    = sanitize_text_field($_POST['end_date'] ?? '');
-        $fields = array_map('sanitize_text_field', $_POST['fields'] ?? []);
-
-        if (empty($start) || empty($end)) {
-            wp_send_json_error(['message' => 'Missing date range']);
-        }
-
-        $html = '<table class="widefat"><thead><tr>';
-        foreach ($fields as $field) {
-            $html .= '<th>' . esc_html(ucwords(str_replace('_',' ', $field))) . '</th>';
-        }
-        $html .= '</tr></thead><tbody>';
-
-        // Sample preview rows
-        for ($i=1; $i<=5; $i++) {
-            $html .= '<tr>';
-            foreach ($fields as $field) {
-                $html .= '<td>Sample ' . esc_html($field) . ' ' . $i . '</td>';
-            }
-            $html .= '</tr>';
-        }
-
-        $html .= '</tbody></table>';
-
-        wp_send_json_success(['html' => $html]);
-    }
-
-    /**
-     * Delete a report
-     */
-    public function delete_report() {
-        check_ajax_referer('cb_admin_nonce', 'nonce');
-
-        $id = sanitize_text_field($_POST['report_id'] ?? '');
-        $reports = get_option('cb_generated_reports', []);
-
-        $reports = array_filter($reports, function($r) use ($id) {
-            return $r['id'] !== $id;
-        });
-
-        update_option('cb_generated_reports', $reports, false);
-
-        wp_send_json_success(['message' => 'Report deleted']);
-    }
-
-    /**
-     * Download a report
-     */
-    public function download_report() {
+    public static function download_report() {
         check_ajax_referer('cb_admin_nonce', 'nonce');
 
         $id = sanitize_text_field($_GET['report_id'] ?? '');
@@ -780,34 +705,220 @@ public static function save_credentials(): void {
             wp_die('Report not found');
         }
 
-        header('Content-Type: text/plain');
-        header('Content-Disposition: attachment; filename="report-' . $id . '.' . $report['file_type'] . '"');
+        [$start, $end] = explode(' → ', $report['date_range']);
+        $orders = self::query_orders($start, $end, $report['type']);
 
-        echo "Report: {$report['date_range']}\n";
-        echo "Fields: " . implode(', ', $report['fields']) . "\n";
-        echo "Generated: " . date('Y-m-d H:i:s', $report['created']) . "\n";
-        exit;
+        // Export logic (CSV/XLSX/PDF) with detail + summary
+        self::export_report($orders, $report);
     }
+    private static function query_orders($start, $end, $reportType) {
+        $args = [
+            'status'       => 'completed',
+            'date_created' => $start . '...' . $end,
+            'orderby'      => 'date',
+            'order'        => 'DESC',
+        ];
 
-    /**
-     * Cron job: generate scheduled report
-     */
-    public function generate_scheduled_report() {
-        $schedule = get_option('cb_report_schedule', 'none');
-        if ($schedule === 'none') return;
+        // For statistics, include cancelled orders too
+        if ($reportType === 'sales_statistics') {
+            $args['status'] = ['completed', 'cancelled'];
+        }
 
-        $type   = get_option('cb_report_filetype', 'pdf');
-        $fields = ['date','product','customer','transaction_id','amount']; // default fields
-        $start  = date('Y-m-01'); // first of month
-        $end    = date('Y-m-t');  // last of month
-
-        $this->create_report($start, $end, $type, $fields);
+        $query = new WC_Order_Query($args);
+        return $query->get_orders();
     }
+    private static function build_preview($orders, $fields, $reportType) {
+        $html = '<table class="widefat"><thead><tr>';
+        foreach ($fields as $field) {
+            $html .= '<th>' . esc_html(ucwords(str_replace('_',' ', $field))) . '</th>';
+        }
+        $html .= '</tr></thead><tbody>';
 
-    /**
-     * Helper: create and save report
-     */
-    private function create_report($start, $end, $type, $fields) {
+        $summaryData = [
+            'totalSales'    => 0,
+            'totalVAT'      => 0,
+            'totalDiscounts'=> 0,
+            'completed'     => 0,
+            'cancelled'     => 0,
+            'products'      => [],
+            'coupons'       => [],
+        ];
+
+        foreach ($orders as $order) {
+            $html .= '<tr>';
+            foreach ($fields as $field) {
+                $value = self::get_field_value($order, $field);
+                $html .= '<td>' . esc_html($value) . '</td>';
+            }
+            $html .= '</tr>';
+
+            // Collect summary data
+            $summaryData['totalSales']    += $order->get_total();
+            $summaryData['totalVAT']      += $order->get_total_tax();
+            $summaryData['totalDiscounts']+= $order->get_total_discount();
+
+            if ($reportType === 'sales_statistics') {
+                if ($order->get_status() === 'completed') {
+                    $summaryData['completed']++;
+                } else {
+                    $summaryData['cancelled']++;
+                }
+            }
+
+            if ($reportType === 'sales_product') {
+                foreach ($order->get_items() as $item) {
+                    $name = $item->get_name();
+                    if (!isset($summaryData['products'][$name])) {
+                        $summaryData['products'][$name] = ['units'=>0,'revenue'=>0,'vat'=>0];
+                    }
+                    $summaryData['products'][$name]['units'] += $item->get_quantity();
+                    $summaryData['products'][$name]['revenue'] += $item->get_total();
+                    $summaryData['products'][$name]['vat'] += $item->get_total_tax();
+                }
+            }
+
+            if ($reportType === 'discounts_refunds') {
+                foreach ($order->get_coupon_codes() as $code) {
+                    if (!isset($summaryData['coupons'][$code])) {
+                        $summaryData['coupons'][$code] = 0;
+                    }
+                    $summaryData['coupons'][$code] += $order->get_total_discount();
+                }
+            }
+        }
+
+        $html .= '</tbody></table>';
+
+        // Build summary section
+        $summary = '<ul>';
+        if ($reportType === 'sales_general') {
+            $netRevenue = $summaryData['totalSales'] - $summaryData['totalDiscounts'] + $summaryData['totalVAT'];
+            $summary .= '<li>Total Sales: ' . wc_price($summaryData['totalSales']) . '</li>';
+            $summary .= '<li>Total VAT: ' . wc_price($summaryData['totalVAT']) . '</li>';
+            $summary .= '<li>Total Discounts: ' . wc_price($summaryData['totalDiscounts']) . '</li>';
+            $summary .= '<li>Net Revenue: ' . wc_price($netRevenue) . '</li>';
+        } elseif ($reportType === 'sales_product') {
+            foreach ($summaryData['products'] as $product => $data) {
+                $summary .= '<li>' . esc_html($product) . ': ' . $data['units'] . ' units, ' . wc_price($data['revenue']) . ' revenue, ' . wc_price($data['vat']) . ' VAT</li>';
+            }
+        } elseif ($reportType === 'discounts_refunds') {
+            foreach ($summaryData['coupons'] as $code => $total) {
+                $summary .= '<li>Coupon ' . esc_html($code) . ': ' . wc_price($total) . '</li>';
+            }
+            $summary .= '<li>Total Discounts: ' . wc_price($summaryData['totalDiscounts']) . '</li>';
+        } elseif ($reportType === 'sales_statistics') {
+            $summary .= '<li>Completed Orders: ' . $summaryData['completed'] . '</li>';
+            $summary .= '<li>Cancelled Orders: ' . $summaryData['cancelled'] . '</li>';
+            $totalOrders = $summaryData['completed'] + $summaryData['cancelled'];
+            if ($totalOrders > 0) {
+                $rate = round(($summaryData['completed'] / $totalOrders) * 100, 2);
+                $summary .= '<li>Completion Rate: ' . $rate . '%</li>';
+            }
+        }
+        $summary .= '</ul>';
+
+        return [$html, $summary];
+    }
+    private static function get_field_value($order, $field) {
+        switch ($field) {
+            case 'date': 
+                return $order->get_date_created()->date('Y-m-d');
+            case 'product': 
+                return implode(', ', array_map(fn($i)=>$i->get_name(), $order->get_items()));
+            case 'customer': 
+                return $order->get_billing_first_name() . ' ' . $order->get_billing_last_name();
+            case 'customer_email': 
+                return $order->get_billing_email();
+            case 'transaction_id': 
+                return $order->get_transaction_id();
+            case 'approval_code': 
+                return $order->get_meta('approval_code');
+            case 'lgnTransactionId': 
+                return $order->get_meta('lgnTransactionId');
+            case 'is_vct_attempt': 
+                return $order->get_meta('is_vct_attempt');
+            case 'coupon_code': 
+                return implode(', ', $order->get_coupon_codes());
+            case 'discount_amount': 
+                return $order->get_total_discount();
+            case 'vat': 
+                return $order->get_total_tax();
+            case 'amount': 
+                return $order->get_total();
+            case 'status': 
+                return ucfirst($order->get_status());
+            default: 
+                return '';
+        }
+    }
+    private static function export_report($orders, $report) {
+        $fields = $report['fields'];
+        $type   = $report['file_type'];
+        $id     = $report['id'];
+        $reportType = $report['type'];
+
+        switch ($type) {
+            case 'csv':
+                header('Content-Type: text/csv');
+                header('Content-Disposition: attachment; filename="report-' . $id . '.csv"');
+                $out = fopen('php://output', 'w');
+                fputcsv($out, $fields);
+                foreach ($orders as $order) {
+                    $row = [];
+                    foreach ($fields as $field) {
+                        $row[] = self::get_field_value($order, $field);
+                    }
+                    fputcsv($out, $row);
+                }
+                // Add summary row
+                fputcsv($out, ['Summary']);
+                [$html, $summary] = self::build_preview($orders, $fields, $reportType);
+                fputcsv($out, [strip_tags($summary)]);
+                fclose($out);
+                exit;
+
+            case 'xlsx':
+                header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+                header('Content-Disposition: attachment; filename="report-' . $id . '.xlsx"');
+                if (class_exists(\PhpOffice\PhpSpreadsheet\Spreadsheet::class)) {
+                    $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+                    $sheet = $spreadsheet->getActiveSheet();
+                    $sheet->fromArray($fields, NULL, 'A1');
+                    $rowIndex = 2;
+                    foreach ($orders as $order) {
+                        $row = [];
+                        foreach ($fields as $field) {
+                            $row[] = self::get_field_value($order, $field);
+                        }
+                        $sheet->fromArray($row, NULL, 'A' . $rowIndex++);
+                    }
+                    // Summary
+                    [$html, $summary] = self::build_preview($orders, $fields, $reportType);
+                    $sheet->setCellValue('A' . $rowIndex, 'Summary: ' . strip_tags($summary));
+                    $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+                    $writer->save('php://output');
+                } else {
+                    echo "XLSX export requires PhpSpreadsheet library.";
+                }
+                exit;
+
+            case 'pdf':
+            default:
+                header('Content-Type: application/pdf');
+                header('Content-Disposition: attachment; filename="report-' . $id . '.pdf"');
+                if (class_exists(\Dompdf\Dompdf::class)) {
+                    $dompdf = new \Dompdf\Dompdf();
+                    [$html, $summary] = self::build_preview($orders, $fields, $reportType);
+                    $dompdf->loadHtml('<h1>Report</h1>' . $html . '<h2>Summary</h2>' . $summary);
+                    $dompdf->render();
+                    $dompdf->stream("report-$id.pdf");
+                } else {
+                    echo "PDF export requires Dompdf library.";
+                }
+                exit;
+        }
+    }
+    private static function create_report($start, $end, $type, $fields, $reportType) {
         $reports = get_option('cb_generated_reports', []);
         $id = uniqid('report_', true);
 
@@ -816,6 +927,7 @@ public static function save_credentials(): void {
             'date_range'  => $start . ' → ' . $end,
             'file_type'   => $type,
             'fields'      => $fields,
+            'type'        => $reportType,
             'created'     => time(),
             'download_url'=> admin_url("admin-ajax.php?action=cb_download_report&report_id={$id}&nonce=" . wp_create_nonce('cb_admin_nonce'))
         ];
@@ -831,13 +943,38 @@ public static function save_credentials(): void {
         }
 
         $cutoff = time() - ($maxDays * DAY_IN_SECONDS);
-        $reports = array_filter($reports, function($r) use ($cutoff) {
-            return $r['created'] >= $cutoff;
-        });
+        $reports = array_filter($reports, fn($r) => $r['created'] >= $cutoff);
 
         update_option('cb_generated_reports', $reports, false);
 
         return $report;
     }
+    public static function delete_report() {
+        check_ajax_referer('cb_admin_nonce', 'nonce');
 
+        $id = sanitize_text_field($_POST['report_id'] ?? '');
+        $reports = get_option('cb_generated_reports', []);
+
+        $reports = array_filter($reports, function($r) use ($id) {
+            return $r['id'] !== $id;
+        });
+
+        update_option('cb_generated_reports', $reports, false);
+
+        wp_send_json_success(['message' => 'Report deleted']);
+    }
+    public static function generate_scheduled_report() {
+        $schedule = get_option('cb_report_schedule', 'none');
+        if ($schedule === 'none') return;
+
+        $type       = get_option('cb_report_filetype', 'pdf');
+        $reportType = get_option('cb_report_type', 'sales_general'); 
+        $fields     = get_option('cb_report_fields', ['date','product','customer','transaction_id','amount']); 
+
+        // Default to current month
+        $start  = date('Y-m-01'); // first of month
+        $end    = date('Y-m-t');  // last of month
+
+        self::create_report($start, $end, $type, $fields, $reportType);
+    }
 }
