@@ -371,6 +371,32 @@ jQuery(document).ready(function($) {
       badge.removeClass('enabled').addClass('disabled').text('Disabled');
     }
   }
+  
+  // Create toggle button in admin header
+  const toggleBtn = $('<button id="cb-darkmode-toggle" class="button">Toggle Dark Mode</button>');
+  $('#cb-report-tabs').before(toggleBtn);
+
+  // Apply saved preference
+  if (localStorage.getItem('cb_darkmode') === 'enabled') {
+    $('body').addClass('dark-mode');
+  }
+
+  // Toggle handler
+  $('#cb-darkmode-toggle').on('click', function() {
+    $('body').toggleClass('dark-mode');
+    if ($('body').hasClass('dark-mode')) {
+      localStorage.setItem('cb_darkmode', 'enabled');
+      $(this).text('Light Mode');
+    } else {
+      localStorage.setItem('cb_darkmode', 'disabled');
+      $(this).text('Dark Mode');
+    }
+  });
+
+  // Update button text on load
+  if ($('body').hasClass('dark-mode')) {
+    $('#cb-darkmode-toggle').text('Light Mode');
+  }
 
   // --- Initialize ---
   refreshCronList();

@@ -11,6 +11,7 @@ use Calendly_Bookings\Modules\CB_Scheduled_Events;
 use Calendly_Bookings\Utils\CB_Encryption;
 use Calendly_Bookings\Utils\CB_Mail;
 use Calendly_Bookings\Utils\CB_Timezone_Converter;
+use WC_Order_Query;
 
 final class CB_Admin_Ajax {
 
