@@ -26,25 +26,31 @@ final class CB_Admin_Ajax {
         // Maintenance actions
         add_action('wp_ajax_cb_maintenance_action',[__CLASS__, 'maintenance_action']);
         add_action('wp_ajax_cb_create_walk_in',[__CLASS__, 'create_walk_in']);
+
+
+
         add_action('wp_ajax_cb_test_connection',[__CLASS__, 'test_connection']);
         add_action('wp_ajax_cb_save_credentials',[__CLASS__, 'save_credentials']);
-        add_action('wp_ajax_cb_test_email', [__CLASS__, 'test_email']);
-        add_action('wp_ajax_cb_preview_email', [__CLASS__, 'preview_email']);
+        add_action('wp_ajax_cb_validate_license', [__CLASS__, 'validate_license']);
 
         add_action('wp_ajax_cb_schedule_individual_sync', [__CLASS__, 'schedule_individual_sync']);
         add_action('wp_ajax_cb_clear_individual_sync', [__CLASS__, 'clear_individual_sync']);
         add_action('wp_ajax_cb_clear_individual_crons', [__CLASS__, 'clear_individual_crons']);
         add_action('wp_ajax_cb_schedule_master_sync', [__CLASS__, 'schedule_master_sync']);
-
-        add_action('wp_ajax_cb_get_active_crons', [__CLASS__, 'get_active_crons']);
-        add_action('wp_ajax_cb_get_event_availability', [__CLASS__, 'get_event_availability']);
-        add_action('wp_ajax_nopriv_cb_get_event_availability', [__CLASS__, 'get_event_availability']);
+        
+        
+        add_action('wp_ajax_cb_test_email', [__CLASS__, 'test_email']);
+        add_action('wp_ajax_cb_preview_email', [__CLASS__, 'preview_email']);
 
         add_action('wp_ajax_cb_get_reports', [__CLASS__, 'get_reports']);
         add_action('wp_ajax_cb_generate_report', [__CLASS__, 'generate_report']);
         add_action('wp_ajax_cb_preview_report', [__CLASS__, 'preview_report']);
         add_action('wp_ajax_cb_delete_report', [__CLASS__, 'delete_report']);
         add_action('wp_ajax_cb_download_report', [__CLASS__, 'download_report']);
+
+        add_action('wp_ajax_cb_get_active_crons', [__CLASS__, 'get_active_crons']);
+        add_action('wp_ajax_cb_get_event_availability', [__CLASS__, 'get_event_availability']);
+        add_action('wp_ajax_nopriv_cb_get_event_availability', [__CLASS__, 'get_event_availability']);
 
         // Schedule cron hook
         add_action('cb_generate_scheduled_report', [__CLASS__, 'generate_scheduled_report']);
@@ -427,61 +433,89 @@ final class CB_Admin_Ajax {
 
     }
 
-    public static function test_connection(): void {
+    /**
+     * Validate license key against Worker endpoint.
+     */
+    public static function validate_license(string $license = ''): array {
+        $license = $license ?: get_option(CB_Constants::OPT_LICENSE_KEY, '');
+        if (empty($license)) {
+            return ['success' => false, 'message' => __('License key missing', 'calendly-bookings')];
+        }
 
-        $test_api = sanitize_text_field($_POST['api_key']) ?: get_option(CB_Constants::OPT_API_TOKEN);
-        $test_uuid = sanitize_text_field($_POST['user_uuid']) ?: get_option(CB_Constants::OPT_USER_UUID);;
-        $test_license = sanitize_text_field($_POST['license_key'])?: get_option(CB_Constants::OPT_LICENSE_KEY);
-
-        // Connection test logic
-        $connection_ok = CB_API::instance()->manual_connection_test($test_api, $test_uuid);
-
-        // License validation
-        $license_valid = CB_API::instance()->validate_license($test_license);
-
-        wp_send_json([
-            'success' => $connection_ok && $license_valid,
-            'message' => $connection_ok
-                ? ($license_valid ? 'Connection and license authenticated.' : 'Connection OK, license invalid.')
-                : 'Connection failed.'
+        $response = wp_remote_post(CB_Constants::CB_WORKER_ENDPOINT, [
+            'headers' => ['Content-Type' => 'application/json'],
+            'body'    => wp_json_encode(['license' => $license]),
+            'timeout' => 20,
         ]);
+
+        if (is_wp_error($response)) {
+            return ['success' => false, 'message' => __('Connection failed', 'calendly-bookings')];
+        }
+
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+
+        if (!empty($data['valid'])) {
+            update_option(CB_Constants::OPT_LICENSE_KEY, $license, false);
+            return ['success' => true, 'message' => __('License validated successfully.', 'calendly-bookings')];
+        }
+
+        return ['success' => false, 'message' => __('Invalid license key.', 'calendly-bookings')];
     }
 
-public static function save_credentials(): void {
-    // Collect posted values
-    $posted_api     = sanitize_text_field($_POST['api_key'] ?? '');
-    $posted_uuid    = sanitize_text_field($_POST['user_uuid'] ?? '');
-    $posted_license = sanitize_text_field($_POST['license_key'] ?? '');
+    /**
+     * Test API connection and license validity.
+     */
+    public static function test_connection(): void {
+        $apiKey   = sanitize_text_field($_POST['api_key'] ?? get_option(CB_Constants::OPT_API_TOKEN));
+        $uuid     = sanitize_text_field($_POST['user_uuid'] ?? get_option(CB_Constants::OPT_USER_UUID));
+        $license  = sanitize_text_field($_POST['license_key'] ?? get_option(CB_Constants::OPT_LICENSE_KEY));
 
-    // Resolve test values (fallback to stored if not entered)
-    $test_api     = $posted_api ?: get_option(CB_Constants::OPT_API_TOKEN);
-    $test_uuid    = $posted_uuid ?: get_option(CB_Constants::OPT_USER_UUID);
-    $test_license = $posted_license ?: get_option(CB_Constants::OPT_LICENSE_KEY);
+        $connection_ok = CB_API::instance()->manual_connection_test($apiKey, $uuid);
+        $license_check = self::validate_license($license);
 
-    // Validate entered values only
-    $api_valid     = !$posted_api   || CB_API::instance()->manual_connection_test($test_api, $test_uuid);
-    $uuid_valid    = !$posted_uuid  || CB_API::instance()->manual_connection_test($test_api, $test_uuid);
-    $license_valid = !$posted_license || CB_API::instance()->validate_license($test_license);
+        $success = $connection_ok && $license_check['success'];
+        $message = $connection_ok
+            ? ($license_check['success'] ? 'Connection and license authenticated.' : 'Connection OK, license invalid.')
+            : 'Connection failed.';
 
-    // Collect errors
-    $errors = [];
-    if ($posted_api   && !$api_valid)     { $errors[] = 'Invalid API key'; }
-    if ($posted_uuid  && !$uuid_valid)    { $errors[] = 'Invalid user UUID'; }
-    if ($posted_license && !$license_valid) { $errors[] = 'Invalid license key'; }
+        wp_send_json(['success' => $success, 'message' => $message]);
+    }
 
-    // Save valid entries
-    if ($posted_api   && $api_valid)     { update_option(CB_Constants::OPT_API_TOKEN, $test_api); }
-    if ($posted_uuid  && $uuid_valid)    { update_option(CB_Constants::OPT_USER_UUID, $test_uuid); }
-    if ($posted_license && $license_valid) { update_option(CB_Constants::OPT_LICENSE_KEY, $test_license); }
+    /**
+     * Save credentials after validation.
+     */
+    public static function save_credentials(): void {
+        $apiKey   = sanitize_text_field($_POST['api_key'] ?? '');
+        $uuid     = sanitize_text_field($_POST['user_uuid'] ?? '');
+        $license  = sanitize_text_field($_POST['license_key'] ?? '');
 
-    // Response
-    wp_send_json([
-        'success' => empty($errors),
-        'message' => empty($errors)
-            ? 'Credentials saved successfully.'
-            : implode(', ', $errors) . '. Please check and try again.'
-    ]);
-}
+        $errors = [];
+
+        // Validate API/UUID
+        if ($apiKey && $uuid && !CB_API::instance()->manual_connection_test($apiKey, $uuid)) {
+            $errors[] = 'Invalid API key or UUID';
+        }
+
+        // Validate license
+        $license_check = $license ? self::validate_license($license) : ['success' => true];
+
+        if ($license && !$license_check['success']) {
+            $errors[] = $license_check['message'];
+        }
+
+        // Save valid entries
+        if (empty($errors)) {
+            if ($apiKey)  update_option(CB_Constants::OPT_API_TOKEN, $apiKey);
+            if ($uuid)    update_option(CB_Constants::OPT_USER_UUID, $uuid);
+            if ($license && $license_check['success']) {
+                update_option(CB_Constants::OPT_LICENSE_KEY, $license);
+            }
+            wp_send_json(['success' => true, 'message' => 'Credentials saved successfully.']);
+        } else {
+            wp_send_json(['success' => false, 'message' => implode(', ', $errors)]);
+        }
+    }
+
 
     public static function test_email(): void {
         $to = get_option(CB_Constants::OPT_EMAIL_TO);
