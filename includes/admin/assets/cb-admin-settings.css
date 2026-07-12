@@ -123,3 +123,24 @@ body.dark-mode .cb-status-badge.disabled { background-color: #c62828; }
   #cb-report-preview-content table { font-size: 12px; }
   #cb-report-summary { padding: 10px; }
 }
+/* --- Dark Mode Toggle Button --- */
+#cb-darkmode-toggle {
+  margin: 10px 0;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .3s ease, color .3s ease;
+}
+
+body:not(.dark-mode) #cb-darkmode-toggle {
+  background: #222;
+  color: #fff;
+  border: 1px solid #444;
+}
+
+body.dark-mode #cb-darkmode-toggle {
+  background: #f1f1f1;
+  color: #222;
+  border: 1px solid #ccc;
+}
