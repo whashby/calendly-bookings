@@ -17,8 +17,7 @@ jQuery(document).ready(function($) {
   });
 
   $('#cb-submit').on('click', function(e) {
-    e.preventDefault(); // Prevent form submission
-
+    e.preventDefault();
     if (this.value !== 'Save Credentials') {
       const apiKey  = $('#cb_api_key').val();
       const uuid    = $('#cb_user_uuid').val();
@@ -115,7 +114,7 @@ jQuery(document).ready(function($) {
           $('#cb-report-preview-content').html(response.data.html);
           $('#cb-report-summary').html(response.data.summary);
         } else {
-          alert('Report generated successfully.');
+          alert(response.data.message || 'Report generated successfully.');
           loadReports();
         }
       } else {
@@ -137,92 +136,14 @@ jQuery(document).ready(function($) {
   $('#cb-sales-statistics #cb-preview-stats-report').on('click', () => handleReportAction('#cb-sales-statistics','sales_statistics','cb_preview_report'));
   $('#cb-sales-statistics #cb-generate-stats-report').on('click', () => handleReportAction('#cb-sales-statistics','sales_statistics','cb_generate_report'));
 
-    // Handle tab clicks
-    $('#cb-report-tabs .nav-tab').on('click', function(e) {
-      e.preventDefault();
-
-      // Remove active class from all tabs
-      $('#cb-report-tabs .nav-tab').removeClass('nav-tab-active');
-      // Add active class to clicked tab
-      $(this).addClass('nav-tab-active');
-
-      // Hide all panels
-      $('.cb-report-tab-panel').removeClass('active').hide();
-
-      // Show the selected panel
-      const target = $(this).attr('href');
-      $(target).addClass('active').show();
-    });
-  
-  // Manual report generation
-  $('#cb-generate-report').on('click', function() {
-    const start = $('#cb_report_start').val();
-    const end   = $('#cb_report_end').val();
-    const type  = $('#cb_report_filetype').val();
-    const reportType = $('#cb_report_type').val(); // dropdown or hidden field
-
-    const fields = [];
-    $('.cb-report-field:checked').each(function() {
-      fields.push($(this).val());
-    });
-
-    if (!start || !end) {
-      alert('Please select a start and end date.');
-      return;
-    }
-
-    $.post(cb_admin.ajaxurl, {
-      action: 'cb_generate_report',
-      start_date: start,
-      end_date: end,
-      file_type: type,
-      fields: fields,
-      report_type: reportType,
-      nonce: cb_admin.nonce
-    }, function(response) {
-      if (response.success) {
-        alert('Report generated successfully.');
-        loadReports();
-      } else {
-        alert('Failed to generate report: ' + response.data.message);
-      }
-    });
-  });
-
-  // Preview report in Thickbox
-  $('#cb-preview-report').on('click', function() {
-    const start = $('#cb_report_start').val();
-    const end   = $('#cb_report_end').val();
-    const type  = $('#cb_report_filetype').val();
-    const reportType = $('#cb_report_type').val();
-
-    const fields = [];
-    $('.cb-report-field:checked').each(function() {
-      fields.push($(this).val());
-    });
-
-    if (!start || !end) {
-      alert('Please select a start and end date.');
-      return;
-    }
-
-    $.post(cb_admin.ajaxurl, {
-      action: 'cb_preview_report',
-      start_date: start,
-      end_date: end,
-      file_type: type,
-      fields: fields,
-      report_type: reportType,
-      nonce: cb_admin.nonce
-    }, function(response) {
-      if (response.success) {
-        tb_show('Report Preview', '#TB_inline?height=600&width=800&inlineId=cb-report-preview');
-        $('#cb-report-preview-content').html(response.html);
-        $('#cb-report-summary').html(response.summary);
-      } else {
-        alert('Preview failed: ' + response.data.message);
-      }
-    });
+  // Tab switching
+  $('#cb-report-tabs .nav-tab').on('click', function(e) {
+    e.preventDefault();
+    $('#cb-report-tabs .nav-tab').removeClass('nav-tab-active');
+    $(this).addClass('nav-tab-active');
+    $('.cb-report-tab-panel').removeClass('active').hide();
+    const target = $(this).attr('href');
+    $(target).addClass('active').show();
   });
 
   // Delete report
@@ -234,7 +155,7 @@ jQuery(document).ready(function($) {
       nonce: cb_admin.nonce
     }, function(response) {
       if (response.success) {
-        alert('Report deleted.');
+        alert(response.data.message || 'Report deleted.');
         loadReports();
       } else {
         alert('Failed to delete report: ' + response.data.message);
@@ -251,19 +172,13 @@ jQuery(document).ready(function($) {
         // Master sync
         if (crons.master && crons.master.enabled) {
           $('#cb_master_sync').prop('checked', true);
-
           const freq = crons.master.frequency || $('#cb_master_frequency option:selected').val();
           $('#cb_master_frequency').val(freq).prop('disabled', false);
-
-          $('#cb-individual-section').css('opacity', 0.5)
-            .find('input, select').prop('disabled', true);
-
+          $('#cb-individual-section').css('opacity', 0.5).find('input, select').prop('disabled', true);
           updateBadge('cb_master_sync', true);
         } else {
           $('#cb_master_sync').prop('checked', false);
-          $('#cb-individual-section').css('opacity', 1)
-            .find('input, select').prop('disabled', false);
-
+          $('#cb-individual-section').css('opacity', 1).find('input, select').prop('disabled', false);
           updateBadge('cb_master_sync', false);
         }
 
@@ -272,10 +187,8 @@ jQuery(document).ready(function($) {
           const checkboxId  = `#cb_sync_${type}`;
           const frequencyId = `#cb_sync_${type}_frequency`;
           const enabled = crons[type] && crons[type].enabled;
-
           $(checkboxId).prop('checked', enabled);
           $(frequencyId).val(crons[type]?.frequency || 'cb_daily').prop('disabled', !enabled);
-
           updateBadge(`cb_sync_${type}`, enabled);
         });
 
@@ -371,17 +284,16 @@ jQuery(document).ready(function($) {
       badge.removeClass('enabled').addClass('disabled').text('Disabled');
     }
   }
-  
-  // Create toggle button in admin header
+
+  // --- Dark Mode Toggle ---
   const toggleBtn = $('<button id="cb-darkmode-toggle" class="button">Toggle Dark Mode</button>');
   $('#cb-report-tabs').before(toggleBtn);
 
-  // Apply saved preference
   if (localStorage.getItem('cb_darkmode') === 'enabled') {
     $('body').addClass('dark-mode');
+    $('#cb-darkmode-toggle').text('Light Mode');
   }
 
-  // Toggle handler
   $('#cb-darkmode-toggle').on('click', function() {
     $('body').toggleClass('dark-mode');
     if ($('body').hasClass('dark-mode')) {
@@ -393,14 +305,9 @@ jQuery(document).ready(function($) {
     }
   });
 
-  // Update button text on load
-  if ($('body').hasClass('dark-mode')) {
-    $('#cb-darkmode-toggle').text('Light Mode');
-  }
-
   // --- Initialize ---
   refreshCronList();
-  loadReports(); // also initialize the reports table
+  loadReports();
   $('.cb-report-tab-panel').hide();
   $('#cb-sales-general').show().addClass('active');
 });
