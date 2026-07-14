@@ -15,11 +15,7 @@ jQuery(document).ready(function($) {
       license_key: license,
       nonce: cb_admin.nonce
     }, function(response) {
-      if (response.success) {
-        alert(response.message || 'Credentials saved successfully.');
-      } else {
-        alert('Save failed: ' + response.message);
-      }
+      alert(response.message || (response.success ? 'Credentials saved successfully.' : 'Save failed.'));
     });
   });
 
@@ -36,11 +32,7 @@ jQuery(document).ready(function($) {
       license_key: license,
       nonce: cb_admin.nonce
     }, function(response) {
-      if (response.success) {
-        alert(response.message || 'Connection and license authenticated.');
-      } else {
-        alert('Test failed: ' + response.message);
-      }
+      alert(response.message || (response.success ? 'Connection and license authenticated.' : 'Test failed.'));
     });
   });
 
@@ -53,56 +45,57 @@ jQuery(document).ready(function($) {
       license_key: license,
       nonce: cb_admin.nonce
     }, function(response) {
-      if (response.success) {
-        alert(response.message || 'License validated successfully.');
-      } else {
-        alert('Validation failed: ' + response.message);
-      }
+      alert(response.message || (response.success ? 'License validated successfully.' : 'Validation failed.'));
     });
   });
 
+  // --- Reports ---
+  function renderReports(reports) {
+    let html = '';
+    if (!reports || reports.length === 0) {
+      html = '<tr><td colspan="7">No reports available</td></tr>';
+    } else {
+      html = `
+        <tr>
+          <th><input type="checkbox" id="cb-select-all-reports"></th>
+          <th>Date Range</th>
+          <th>File Type</th>
+          <th>Report Type</th>
+          <th>Fields Included</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      `;
+      reports.forEach(report => {
+        html += `
+          <tr>
+            <td><input type="checkbox" class="cb-report-select" data-id="${report.id}"></td>
+            <td>${report.date_range}</td>
+            <td>${report.file_type.toUpperCase()}</td>
+            <td>${report.type.replace('_',' ')}</td>
+            <td>${report.fields.join(', ')}</td>
+            <td>${new Date(report.created * 1000).toLocaleString()}</td>
+            <td>
+              <a href="${report.download_url}" class="button">Download</a>
+              <button class="button cb-delete-report" data-id="${report.id}">Delete</button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+    $('#cb-report-list').html(html);
 
-
-  // --- Sync Helpers ---
-  function runSync(action, params = {}) {
-    $.post(ajaxurl, { action, ...params }, function(response) {
-      alert(response.message);
-      refreshCronList();
+    // Bind select-all
+    $('#cb-select-all-reports').on('change', function() {
+      const checked = $(this).is(':checked');
+      $('.cb-report-select').prop('checked', checked);
     });
   }
 
-  $('#cb-sync-all').on('click', () => runSync('cb_sync_all'));
-  $('#cb-sync-events').on('click', () => runSync('cb_sync_events'));
-  $('#cb-sync-invitees').on('click', () => runSync('cb_sync_invitees', { force: true }));
-  $('#cb-sync-event-types').on('click', () => runSync('cb_sync_event_types'));
-  $('#cb-sync-locations').on('click', () => runSync('cb_sync_locations'));
-
-  // --- Reports ---
   function loadReports() {
     $.post(cb_admin.ajaxurl, { action: 'cb_get_reports', nonce: cb_admin.nonce }, function(response) {
       if (response.success) {
-        const reports = response.data;
-        let html = '';
-        if (reports.length === 0) {
-          html = '<tr><td colspan="6">No reports available</td></tr>';
-        } else {
-          reports.forEach(report => {
-            html += `
-              <tr>
-                <td>${report.date_range}</td>
-                <td>${report.file_type.toUpperCase()}</td>
-                <td>${report.type.replace('_',' ')}</td>
-                <td>${report.fields.join(', ')}</td>
-                <td>${new Date(report.created * 1000).toLocaleString()}</td>
-                <td>
-                  <a href="${report.download_url}" class="button">Download</a>
-                  <button class="button cb-delete-report" data-id="${report.id}">Delete</button>
-                </td>
-              </tr>
-            `;
-          });
-        }
-        $('#cb-report-list').html(html);
+        renderReports(response.data);
       }
     });
   }
@@ -144,7 +137,7 @@ jQuery(document).ready(function($) {
           $('#cb-report-summary').html(response.data.summary);
         } else {
           alert(response.data.message || 'Report generated successfully.');
-          loadReports();
+          renderReports(response.data.reports || []);
         }
       } else {
         alert('Failed: ' + response.data.message);
@@ -226,7 +219,7 @@ jQuery(document).ready(function($) {
         Object.keys(crons).forEach(type => {
           const job = crons[type];
           const freq = job.frequency || '—';
-          const nextRun = job.next_run ? new Date(job.next_run*1000).toLocaleString() : '—';
+          const nextRun = job.next_run ? new Date(job.next_run*1000          ) : '—';
           listHtml += `<li>${type} → ${freq}, next run: ${nextRun}</li>`;
         });
         $('#cb-cron-list').html(listHtml);
@@ -242,7 +235,7 @@ jQuery(document).ready(function($) {
         frequency: $('#cb_master_frequency').val(),
         nonce: cb_admin.nonce
       }, function(response) {
-        alert(response.data.message);
+        alert(response.message);
         refreshCronList();
       });
     } else {
@@ -263,7 +256,7 @@ jQuery(document).ready(function($) {
         frequency: $(`#${syncId}_frequency`).val(),
         nonce: cb_admin.nonce
       }, function(response) {
-        alert(response.data.message);
+        alert(response.message);
         refreshCronList();
       });
     } else {
@@ -283,7 +276,7 @@ jQuery(document).ready(function($) {
         frequency: $(this).val(),
         nonce: cb_admin.nonce
       }, function(response) {
-        alert(response.data.message);
+        alert(response.message);
         refreshCronList();
       });
     }
@@ -298,7 +291,7 @@ jQuery(document).ready(function($) {
         frequency: $(this).val(),
         nonce: cb_admin.nonce
       }, function(response) {
-        alert(response.data.message);
+        alert(response.message);
         refreshCronList();
       });
     }
