@@ -1,3 +1,22 @@
 /.vscode
 includes/modules/.class-cb-api copy.php
 includes/admin/views/settings/reports.php.txt
+
+# Composer
+/vendor/
+/composer.lock
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/editor files
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
+
+# Node (if you ever add build tooling)
+node_modules/
