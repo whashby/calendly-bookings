@@ -705,61 +705,72 @@ final class CB_Admin_Ajax {
 
         wp_send_json_success(['html' => $html, 'summary' => $summary]);
     }
-    private static function create_report($start, $end, $type, $fields, $reportType) {
-        $reports = get_option('cb_generated_reports', []);
-        $id = uniqid('report_', true);
+/**
+ * Create and persist a report with retention policy applied.
+ *
+ * @return array [$report, $reports] Newly created report and full updated list
+ */
+private static function create_report($start, $end, $type, $fields, $reportType) {
+    $reports = get_option('cb_generated_reports', []);
+    $id = uniqid('report_', true);
 
-        $report = [
-            'id'          => $id,
-            'date_range'  => $start . ' → ' . $end,
-            'file_type'   => $type,
-            'fields'      => $fields,
-            'type'        => $reportType,
-            'created'     => time(),
-            'download_url'=> admin_url("admin-ajax.php?action=cb_download_report&report_id={$id}&nonce=" . wp_create_nonce('cb_admin_nonce'))
-        ];
+    $report = [
+        'id'          => $id,
+        'date_range'  => $start . ' → ' . $end,
+        'file_type'   => $type,
+        'fields'      => $fields,
+        'type'        => $reportType,
+        'created'     => time(),
+        'download_url'=> admin_url("admin-ajax.php?action=cb_download_report&report_id={$id}&nonce=" . wp_create_nonce('cb_admin_nonce'))
+    ];
 
-        $reports[] = $report;
+    $reports[] = $report;
 
-        // Retention policy
-        $maxCount = (int) get_option('cb_report_retention_count', 10);
-        $maxDays  = (int) get_option('cb_report_retention_days', 30);
+    // Retention policy
+    $maxCount = (int) get_option('cb_report_retention_count', 10);
+    $maxDays  = (int) get_option('cb_report_retention_days', 30);
 
-        // Trim count
-        if (count($reports) > $maxCount) {
-            $reports = array_slice($reports, -$maxCount);
-        }
+    // Trim by count
+    if ($maxCount > 0 && count($reports) > $maxCount) {
+        $reports = array_slice($reports, -$maxCount);
+    }
 
-        // Trim by age
+    // Trim by age
+    if ($maxDays > 0) {
         $cutoff = time() - ($maxDays * DAY_IN_SECONDS);
         $reports = array_filter($reports, fn($r) => $r['created'] >= $cutoff);
-
-        update_option('cb_generated_reports', $reports, false);
-
-        return [$report, $reports];
     }
 
-    public static function generate_report() {
-        check_ajax_referer('cb_admin_nonce', 'nonce');
+    update_option('cb_generated_reports', $reports, false);
 
-        $reportType = sanitize_text_field($_POST['report_type'] ?? 'sales_general');
-        $start      = sanitize_text_field($_POST['start_date'] ?? '');
-        $end        = sanitize_text_field($_POST['end_date'] ?? '');
-        $type       = sanitize_text_field($_POST['file_type'] ?? 'pdf');
-        $fields     = array_map('sanitize_text_field', $_POST['fields'] ?? []);
+    return [$report, $reports];
+}
 
-        if (empty($start) || empty($end)) {
-            wp_send_json_error(['message' => 'Missing date range']);
-        }
+/**
+ * AJAX handler to generate a report and return updated list.
+ */
+public static function generate_report() {
+    check_ajax_referer('cb_admin_nonce', 'nonce');
 
-        [$report, $reports] = self::create_report($start, $end, $type, $fields, $reportType);
+    $reportType = sanitize_text_field($_POST['report_type'] ?? 'sales_general');
+    $start      = sanitize_text_field($_POST['start_date'] ?? '');
+    $end        = sanitize_text_field($_POST['end_date'] ?? '');
+    $type       = sanitize_text_field($_POST['file_type'] ?? 'pdf');
+    $fields     = array_map('sanitize_text_field', $_POST['fields'] ?? []);
 
-        wp_send_json_success([
-            'message' => 'Report generated successfully.',
-            'report'  => $report,
-            'reports' => array_values($reports) // send full updated list
-        ]);
+    if (empty($start) || empty($end)) {
+        wp_send_json_error(['message' => 'Missing date range']);
     }
+
+    [$report, $reports] = self::create_report($start, $end, $type, $fields, $reportType);
+
+    wp_send_json_success([
+        'message' => 'Report generated successfully.',
+        'report'  => $report,
+        'reports' => array_values($reports) // always return full updated list
+    ]);
+}
+
 
     /*public static function generate_report() {
         check_ajax_referer('cb_admin_nonce', 'nonce');
