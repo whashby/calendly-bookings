@@ -217,80 +217,49 @@ final class CB_GitHub_Updater
             return;
         }
 
-        // Suppress notices during update process
-        if (defined('DOING_CRON') && DOING_CRON) return;
-        if (defined('WP_INSTALLING') && WP_INSTALLING) return;
-        if (defined('WP_UPDATING') && WP_UPDATING) return;
-
-        $this->maybe_show_license_notice();
-        $this->maybe_show_update_notice();
-        $this->maybe_show_token_error_notice();
-        $this->maybe_show_token_success_notice();
-    }
-
-    /** License notice if license exists but token missing */
-    private function maybe_show_license_notice(): void {
-        $license = get_option(self::LICENSE_OPTION, '');
-        $token   = get_option(self::TOKEN_OPTION, '');
+        $license = get_option($this->license);
+        $token   = get_option($this->token);
 
         if (!empty($license) && empty($token)) {
             $url = wp_nonce_url(
                 admin_url('admin-post.php?action=cb_refresh_github_token'),
                 'cb_refresh_github_token'
             );
-            $this->render_notice(
-                'info',
-                __('Calendly Bookings license is set.', 'calendly-bookings') . ' ' .
-                '<a href="' . esc_url($url) . '">' .
-                esc_html__('Refresh GitHub token now', 'calendly-bookings') .
-                '</a>'
-            );
+            echo '<div class="notice notice-info notice-dismissible"><p>'
+                . esc_html__('Calendly Bookings license is set.', 'calendly-bookings')
+                . ' <a href="' . esc_url($url) . '">'
+                . esc_html__('Refresh GitHub token now', 'calendly-bookings')
+                . '</a></p></div>';
+            return;
         }
-    }
 
-    /** Update available notice */
-    private function maybe_show_update_notice(): void {
         $latest_version  = $this->get_latest_plugin_version();
         $current_version = $this->get_current_plugin_version();
 
         if (!empty($latest_version) && version_compare($latest_version, $current_version, '>')) {
             $update_url = admin_url('update-core.php');
-            $this->render_notice(
-                'warning',
-                sprintf(
+            echo '<div class="notice notice-warning notice-dismissible"><p>'
+                . sprintf(
                     esc_html__('Calendly Bookings update available: %1$s (current %2$s).', 'calendly-bookings'),
                     esc_html($latest_version),
                     esc_html($current_version)
-                ) . ' <a href="' . esc_url($update_url) . '">' . esc_html__('Update now', 'calendly-bookings') . '</a>'
-            );
+                )
+                . ' <a href="' . esc_url($update_url) . '">' . esc_html__('Update now', 'calendly-bookings') . '</a>'
+                . '</p></div>';
+            return;
         }
-    }
 
-    /** Token error notice */
-    private function maybe_show_token_error_notice(): void {
         $error = get_transient('cb_token_error');
         if ($error) {
-            $this->render_notice('error', $error);
+            echo '<div class="notice notice-error notice-dismissible"><p>' . esc_html($error) . '</p></div>';
             delete_transient('cb_token_error');
         }
-    }
 
-    /** Token success notice */
-    private function maybe_show_token_success_notice(): void {
         $success = get_transient('cb_token_success');
         if ($success) {
-            $this->render_notice('success', $success);
+            echo '<div class="notice notice-success notice-dismissible"><p>' . esc_html($success) . '</p></div>';
             delete_transient('cb_token_success');
         }
-    }
-
-    /** Render a dismissible admin notice */
-    private function render_notice(string $type, string $message): void {
-        printf(
-            '<div class="notice notice-%1$s is-dismissible"><p>%2$s</p></div>',
-            esc_attr($type),
-            wp_kses_post($message)
-        );
     }
 
     /** Retrieve or refresh token */
@@ -335,7 +304,7 @@ final class CB_GitHub_Updater
         $res->author = '<a href="https://whashby.github.io">Wafiq Harris-Ashby</a>';
         $res->homepage = self::REPO;
         $res->requires = '5.0';
-        $res->tested = '6.4';
+        $res->tested = '7.0';
         $res->download_link = '';
         if (!empty($api->assets) && is_array($api->assets)) {
             foreach ($api->assets as $asset) {
