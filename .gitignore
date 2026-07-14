@@ -3,7 +3,7 @@ includes/modules/.class-cb-api copy.php
 includes/admin/views/settings/reports.php.txt
 
 # Composer
-/vendor/
+#/vendor/
 /composer.lock
 
 # OS files
