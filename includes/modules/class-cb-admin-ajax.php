@@ -705,7 +705,63 @@ final class CB_Admin_Ajax {
 
         wp_send_json_success(['html' => $html, 'summary' => $summary]);
     }
+    private static function create_report($start, $end, $type, $fields, $reportType) {
+        $reports = get_option('cb_generated_reports', []);
+        $id = uniqid('report_', true);
+
+        $report = [
+            'id'          => $id,
+            'date_range'  => $start . ' → ' . $end,
+            'file_type'   => $type,
+            'fields'      => $fields,
+            'type'        => $reportType,
+            'created'     => time(),
+            'download_url'=> admin_url("admin-ajax.php?action=cb_download_report&report_id={$id}&nonce=" . wp_create_nonce('cb_admin_nonce'))
+        ];
+
+        $reports[] = $report;
+
+        // Retention policy
+        $maxCount = (int) get_option('cb_report_retention_count', 10);
+        $maxDays  = (int) get_option('cb_report_retention_days', 30);
+
+        // Trim count
+        if (count($reports) > $maxCount) {
+            $reports = array_slice($reports, -$maxCount);
+        }
+
+        // Trim by age
+        $cutoff = time() - ($maxDays * DAY_IN_SECONDS);
+        $reports = array_filter($reports, fn($r) => $r['created'] >= $cutoff);
+
+        update_option('cb_generated_reports', $reports, false);
+
+        return [$report, $reports];
+    }
+
     public static function generate_report() {
+        check_ajax_referer('cb_admin_nonce', 'nonce');
+
+        $reportType = sanitize_text_field($_POST['report_type'] ?? 'sales_general');
+        $start      = sanitize_text_field($_POST['start_date'] ?? '');
+        $end        = sanitize_text_field($_POST['end_date'] ?? '');
+        $type       = sanitize_text_field($_POST['file_type'] ?? 'pdf');
+        $fields     = array_map('sanitize_text_field', $_POST['fields'] ?? []);
+
+        if (empty($start) || empty($end)) {
+            wp_send_json_error(['message' => 'Missing date range']);
+        }
+
+        [$report, $reports] = self::create_report($start, $end, $type, $fields, $reportType);
+
+        wp_send_json_success([
+            'message' => 'Report generated successfully.',
+            'report'  => $report,
+            'reports' => array_values($reports) // send full updated list
+        ]);
+    }
+
+    /*public static function generate_report() {
         check_ajax_referer('cb_admin_nonce', 'nonce');
 
         $reportType = sanitize_text_field($_POST['report_type'] ?? 'sales_general');
@@ -720,8 +776,8 @@ final class CB_Admin_Ajax {
 
         $report = self::create_report($start, $end, $type, $fields, $reportType);
 
-        wp_send_json_success(['message' => 'Report generated', 'report' => $report]);
-    }
+        wp_send_json_success(['message' => 'Report generated successfully.', 'report' => $report]);
+    }*/
     public static function download_report() {
         check_ajax_referer('cb_admin_nonce', 'nonce');
 
@@ -953,7 +1009,7 @@ final class CB_Admin_Ajax {
                 exit;
         }
     }
-    private static function create_report($start, $end, $type, $fields, $reportType) {
+    /*private static function create_report($start, $end, $type, $fields, $reportType) {
         $reports = get_option('cb_generated_reports', []);
         $id = uniqid('report_', true);
 
@@ -983,7 +1039,7 @@ final class CB_Admin_Ajax {
         update_option('cb_generated_reports', $reports, false);
 
         return $report;
-    }
+    }*/
     public static function delete_report() {
         check_ajax_referer('cb_admin_nonce', 'nonce');
 
