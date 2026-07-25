@@ -56,19 +56,6 @@ if (file_exists(__DIR__ . '/vendor/autoload.php')) {
     require_once __DIR__ . '/vendor/autoload.php';
 }
 
-add_action('admin_init', function() {
-    register_setting(CB_Constants::OPT_GROUP, 'cb_report_fields');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_report_filetype');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_report_start');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_report_end');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_product_start');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_product_end');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_discount_start');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_discount_end');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_stats_start');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_stats_end');
-});
-
 /**
  * Handle manual token refresh.
  */

@@ -18,6 +18,20 @@ final class CB_Admin {
         add_action('admin_menu', [__CLASS__, 'register_menu']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
         add_action('admin_notices', [__CLASS__, 'show_admin_notices']);
+        
+        add_action('admin_init', function() {
+            register_setting(CB_Constants::OPT_GROUP, 'cb_report_fields');
+            register_setting(CB_Constants::OPT_GROUP, 'cb_report_filetype');
+            register_setting(CB_Constants::OPT_GROUP, 'cb_report_start');
+            register_setting(CB_Constants::OPT_GROUP, 'cb_report_end');
+            register_setting(CB_Constants::OPT_GROUP, 'cb_product_start');
+            register_setting(CB_Constants::OPT_GROUP, 'cb_product_end');
+            register_setting(CB_Constants::OPT_GROUP, 'cb_discount_start');
+            register_setting(CB_Constants::OPT_GROUP, 'cb_discount_end');
+            register_setting(CB_Constants::OPT_GROUP, 'cb_stats_start');
+            register_setting(CB_Constants::OPT_GROUP, 'cb_stats_end');
+        });
+
     }
 
     /**
