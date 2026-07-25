@@ -21,10 +21,49 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+require_once ABSPATH . 'wp-admin/includes/plugin.php';
+
+// --- WooCommerce Dependency Check ---
+register_activation_hook(__FILE__, function () {
+    if (!is_plugin_active('woocommerce/woocommerce.php')) {
+        deactivate_plugins(plugin_basename(__FILE__));
+        wp_die(
+            __('Calendly Bookings requires WooCommerce to be installed and active. Please install and activate WooCommerce first.', 'calendly-bookings'),
+            __('Plugin dependency check', 'calendly-bookings'),
+            ['back_link' => true]
+        );
+    }
+});
+
+// Runtime check: show admin notice if WooCommerce is deactivated later
+add_action('admin_init', function () {
+    register_setting(CB_Constants::OPT_GROUP, 'cb_report_fields');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_report_filetype');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_report_start');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_report_end');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_product_start');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_product_end');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_discount_start');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_discount_end');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_stats_start');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_stats_end');
+
+    if (!class_exists('WooCommerce')) {
+        add_action('admin_notices', function () {
+            $install_url = admin_url('plugin-install.php?s=woocommerce&tab=search&type=term');
+            echo '<div class="notice notice-error"><p>'
+                . __('Calendly Bookings requires WooCommerce. Please install and activate WooCommerce.', 'calendly-bookings')
+                . '</p><p><a href="' . esc_url($install_url) . '" class="button button-primary">'
+                . __('Install WooCommerce', 'calendly-bookings') . '</a></p></div>';
+        });
+    }
+});
+
+// --- Plugin bootstrap ---
 require_once __DIR__ . '/includes/constants.php';
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/updater.php';
-require_once ABSPATH . 'wp-admin/includes/plugin.php';
+
 if (file_exists(__DIR__ . '/vendor/autoload.php')) {
     require_once __DIR__ . '/vendor/autoload.php';
 }
@@ -40,7 +79,7 @@ add_action('admin_post_cb_refresh_github_token', function () {
     check_admin_referer('cb_refresh_github_token');
 
     global $cb_github_updater;
-    if ($cb_github_updater instanceof CB_GitHub_Updater) {
+    if ($cb_github_updater instanceof \Calendly_Bookings\CB_GitHub_Updater) {
         $cb_github_updater->refresh_token();
     }
 

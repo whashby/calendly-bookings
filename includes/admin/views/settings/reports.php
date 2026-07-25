@@ -23,33 +23,32 @@ use Calendly_Bookings\CB_Constants;
   </div>
 
   <div class="cb-report-tab-content">
+    <!-- Sales General -->
     <div id="cb-sales-general" class="cb-report-tab-panel active">
       <h3>Sales (General) Report Settings</h3>
       <p>Choose fields to include:</p>
-      <label><input type="checkbox" class="cb-report-field" value="date" checked> Transaction Date</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="product" checked> Product(s)</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="customer"> Customer Name</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="customer_email"> Customer Email</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="transaction_id" checked> Transaction ID</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="approval_code" checked> Approval Code</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="lgnTransactionId" checked> lgnTransactionId</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="is_vct_attempt"> VCT Attempt</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="coupon_code" checked> Coupon Code</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="discount_amount" checked> Discount Amount</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="vat" checked> VAT</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="amount" checked> Order Total</label><br>
+      <?php $saved_fields = get_option('cb_report_fields', []); ?>
+      <label><input type="checkbox" class="cb-report-field" value="date" <?php checked(in_array('date',$saved_fields)); ?>> Transaction Date</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="product" <?php checked(in_array('product',$saved_fields)); ?>> Product(s)</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="customer" <?php checked(in_array('customer',$saved_fields)); ?>> Customer Name</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="customer_email" <?php checked(in_array('customer_email',$saved_fields)); ?>> Customer Email</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="transaction_id" <?php checked(in_array('transaction_id',$saved_fields)); ?>> Transaction ID</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="approval_code" <?php checked(in_array('approval_code',$saved_fields)); ?>> Approval Code</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="coupon_code" <?php checked(in_array('coupon_code',$saved_fields)); ?>> Coupon Code</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="discount_amount" <?php checked(in_array('discount_amount',$saved_fields)); ?>> Discount Amount</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="vat" <?php checked(in_array('vat',$saved_fields)); ?>> VAT</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="amount" <?php checked(in_array('amount',$saved_fields)); ?>> Order Total</label><br>
 
       <h4>Date Range</h4>
-      <label for="cb_report_start">Start Date:</label>
-      <input type="date" id="cb_report_start" name="cb_report_start" />
-      <label for="cb_report_end">End Date:</label>
-      <input type="date" id="cb_report_end" name="cb_report_end" />
+      <input type="date" id="cb_report_start" name="cb_report_start" value="<?php echo esc_attr(get_option('cb_report_start','')); ?>" />
+      <input type="date" id="cb_report_end" name="cb_report_end" value="<?php echo esc_attr(get_option('cb_report_end','')); ?>" />
 
       <h4>File Type</h4>
+      <?php $filetype = get_option('cb_report_filetype','pdf'); ?>
       <select id="cb_report_filetype" name="cb_report_filetype">
-        <option value="pdf">PDF</option>
-        <option value="csv">CSV</option>
-        <option value="xlsx">Excel (XLSX)</option>
+        <option value="pdf" <?php selected($filetype,'pdf'); ?>>PDF</option>
+        <option value="csv" <?php selected($filetype,'csv'); ?>>CSV</option>
+        <option value="xlsx" <?php selected($filetype,'xlsx'); ?>>Excel (XLSX)</option>
       </select>
 
       <button type="button" class="button" id="cb-preview-report">Preview Report</button>
@@ -65,6 +64,8 @@ use Calendly_Bookings\CB_Constants;
         <div id="cb-report-summary"></div>
       </div>
     </div>
+
+    <!-- Sales by Product -->
     <div id="cb-sales-product" class="cb-report-tab-panel">
       <h3>Sales by Product Report Settings</h3>
       <p>This report groups sales by product.</p>
@@ -90,6 +91,8 @@ use Calendly_Bookings\CB_Constants;
         <div id="cb-product-report-summary"></div>
       </div>
     </div>
+
+    <!-- Discounts / Refunds -->
     <div id="cb-discounts-refunds" class="cb-report-tab-panel">
       <h3>Discounts / Refunds Report Settings</h3>
       <p>This report lists coupons and refunds.</p>
@@ -114,6 +117,8 @@ use Calendly_Bookings\CB_Constants;
         <div id="cb-discount-report-summary"></div>
       </div>
     </div>
+
+    <!-- Sales Statistics -->
     <div id="cb-sales-statistics" class="cb-report-tab-panel">
       <h3>Sales Statistics Report Settings</h3>
       <p>This report shows completed vs cancelled orders.</p>
@@ -122,8 +127,8 @@ use Calendly_Bookings\CB_Constants;
       <label><input type="checkbox" class="cb-report-field" value="status" checked> Order Status</label><br>
 
       <h4>Date Range</h4>
-      <input type="date" id="cb_stats_start" name="cb_stats_start" />
-      <input type="date" id="cb_stats_end" name="cb_stats_end" />
+      <input type="date" id="cb_stats_start" name="cb_stats_start" value="<?php echo esc_attr(get_option('cb_stats_start','')); ?>" />
+      <input type="date" id="cb_stats_end" name="cb_stats_end" value="<?php echo esc_attr(get_option('cb_stats_end','')); ?>" />
 
       <button type="button" class="button" id="cb-preview-stats-report">Preview Report</button>
       <button type="button" class="button" id="cb-generate-stats-report">Generate Report</button>
@@ -144,6 +149,7 @@ use Calendly_Bookings\CB_Constants;
   <table class="widefat">
     <thead>
       <tr>
+        <th><input type="checkbox" id="cb-select-all-reports"></th>
         <th>Date Range</th>
         <th>File Type</th>
         <th>Report Type</th>
@@ -153,9 +159,34 @@ use Calendly_Bookings\CB_Constants;
       </tr>
     </thead>
     <tbody id="cb-report-list">
-      <!-- Populated dynamically with saved reports -->
+      <?php
+      $reports = get_option('cb_generated_reports', []);
+      if (empty($reports)) {
+          echo '<tr><td colspan="7">No reports available</td></tr>';
+      } else {
+          foreach ($reports as $report) {
+              echo '<tr>
+                  <td><input type="checkbox" class="cb-report-select" data-id="' . esc_attr($report['id']) . '"></td>
+                  <td>' . esc_html($report['date_range']) . '</td>
+                  <td>' . esc_html(strtoupper($report['file_type'])) . '</td>
+                  <td>' . esc_html(str_replace('_',' ', $report['type'])) . '</td>
+                  <td>' . esc_html(implode(', ', $report['fields'])) . '</td>
+                  <td>' . esc_html(date('Y-m-d H:i:s', $report['created'])) . '</td>
+                  <td>
+                    <a href="' . esc_url($report['download_url']) . '" class="button">Download</a>
+                    <button type="button" class="button cb-delete-report" data-id="' . esc_attr($report['id']) . '">Delete</button>
+                  </td>
+              </tr>';
+          }
+      }
+      ?>
     </tbody>
   </table>
+
+  <div class="cb-report-bulk-actions">
+    <button type="button" class="button" id="cb-delete-selected">Delete Selected</button>
+    <button type="button" class="button" id="cb-download-selected">Download Selected</button>
+  </div>
 
   <?php submit_button('Save Report Settings'); ?>
 </form>
