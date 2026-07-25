@@ -3,7 +3,7 @@
  * Plugin Name: Calendly Bookings
  * Plugin URI: https://github.com/whashby/calendly-bookings
  * Description: A CMS for managing Calendly events, clients and WooCommerce products.
- * Version: 6.9.223
+ * Version: 6.9.222
  * Requires at least: 5.2
  * Requires PHP: 8.3
  * Author:      Wafiq Harris-Ashby
@@ -37,17 +37,6 @@ register_activation_hook(__FILE__, function () {
 
 // Runtime check: show admin notice if WooCommerce is deactivated later
 add_action('admin_init', function () {
-    register_setting(CB_Constants::OPT_GROUP, 'cb_report_fields');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_report_filetype');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_report_start');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_report_end');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_product_start');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_product_end');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_discount_start');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_discount_end');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_stats_start');
-    register_setting(CB_Constants::OPT_GROUP, 'cb_stats_end');
-
     if (!class_exists('WooCommerce')) {
         add_action('admin_notices', function () {
             $install_url = admin_url('plugin-install.php?s=woocommerce&tab=search&type=term');
@@ -58,7 +47,6 @@ add_action('admin_init', function () {
         });
     }
 });
-
 // --- Plugin bootstrap ---
 require_once __DIR__ . '/includes/constants.php';
 require_once __DIR__ . '/includes/bootstrap.php';
@@ -67,6 +55,19 @@ require_once __DIR__ . '/includes/updater.php';
 if (file_exists(__DIR__ . '/vendor/autoload.php')) {
     require_once __DIR__ . '/vendor/autoload.php';
 }
+
+add_action('admin_init', function() {
+    register_setting(CB_Constants::OPT_GROUP, 'cb_report_fields');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_report_filetype');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_report_start');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_report_end');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_product_start');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_product_end');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_discount_start');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_discount_end');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_stats_start');
+    register_setting(CB_Constants::OPT_GROUP, 'cb_stats_end');
+});
 
 /**
  * Handle manual token refresh.
