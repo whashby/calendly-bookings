@@ -28,16 +28,16 @@ use Calendly_Bookings\CB_Constants;
       <h3>Sales (General) Report Settings</h3>
       <p>Choose fields to include:</p>
       <?php $saved_fields = get_option('cb_report_fields', []); ?>
-      <label><input type="checkbox" class="cb-report-field" value="date" <?php checked(in_array('date',$saved_fields)); ?>> Transaction Date</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="product" <?php checked(in_array('product',$saved_fields)); ?>> Product(s)</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="customer" <?php checked(in_array('customer',$saved_fields)); ?>> Customer Name</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="customer_email" <?php checked(in_array('customer_email',$saved_fields)); ?>> Customer Email</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="transaction_id" <?php checked(in_array('transaction_id',$saved_fields)); ?>> Transaction ID</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="approval_code" <?php checked(in_array('approval_code',$saved_fields)); ?>> Approval Code</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="coupon_code" <?php checked(in_array('coupon_code',$saved_fields)); ?>> Coupon Code</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="discount_amount" <?php checked(in_array('discount_amount',$saved_fields)); ?>> Discount Amount</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="vat" <?php checked(in_array('vat',$saved_fields)); ?>> VAT</label><br>
-      <label><input type="checkbox" class="cb-report-field" value="amount" <?php checked(in_array('amount',$saved_fields)); ?>> Order Total</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="date" <?php checked(in_array('date',(array)$saved_fields)); ?>> Transaction Date</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="product" <?php checked(in_array('product',(array)$saved_fields)); ?>> Product(s)</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="customer" <?php checked(in_array('customer',(array)$saved_fields)); ?>> Customer Name</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="customer_email" <?php checked(in_array('customer_email',(array)$saved_fields)); ?>> Customer Email</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="transaction_id" <?php checked(in_array('transaction_id',(array)$saved_fields)); ?>> Transaction ID</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="approval_code" <?php checked(in_array('approval_code',(array)$saved_fields)); ?>> Approval Code</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="coupon_code" <?php checked(in_array('coupon_code',(array)$saved_fields)); ?>> Coupon Code</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="discount_amount" <?php checked(in_array('discount_amount',(array)$saved_fields)); ?>> Discount Amount</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="vat" <?php checked(in_array('vat',(array)$saved_fields)); ?>> VAT</label><br>
+      <label><input type="checkbox" class="cb-report-field" value="amount" <?php checked(in_array('amount',(array)$saved_fields)); ?>> Order Total</label><br>
 
       <h4>Date Range</h4>
       <input type="date" id="cb_report_start" name="cb_report_start" value="<?php echo esc_attr(get_option('cb_report_start','')); ?>" />

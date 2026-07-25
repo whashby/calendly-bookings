@@ -715,6 +715,115 @@ final class CB_Admin_Ajax {
         wp_send_json_success(['html' => $html, 'summary' => $summary]);
     }
 
+    public static function download_report() {
+        check_ajax_referer('cb_admin_nonce', 'nonce');
+
+        $id = sanitize_text_field($_GET['report_id'] ?? '');
+        $reports = get_option('cb_generated_reports', []);
+        $report = null;
+
+        foreach ($reports as $r) {
+            if ($r['id'] === $id) {
+                $report = $r;
+                break;
+            }
+        }
+
+        if (!$report) {
+            wp_die('Report not found');
+        }
+
+        [$start, $end] = explode(' → ', $report['date_range']);
+        $orders = self::query_orders($start, $end, $report['type']);
+
+        // Export logic (CSV/XLSX/PDF) with detail + summary
+        self::export_report($orders, $report);
+    }
+
+    private static function export_report($orders, $report) {
+        $fields = $report['fields'];
+        $type   = $report['file_type'];
+        $id     = $report['id'];
+        $reportType = $report['type'];
+
+        switch ($type) {
+            case 'csv':
+                header('Content-Type: text/csv');
+                header('Content-Disposition: attachment; filename="report-' . $id . '.csv"');
+                $out = fopen('php://output', 'w');
+                fputcsv($out, $fields);
+                foreach ($orders as $order) {
+                    $row = [];
+                    foreach ($fields as $field) {
+                        $row[] = self::get_field_value($order, $field);
+                    }
+                    fputcsv($out, $row);
+                }
+                // Add summary row
+                fputcsv($out, ['Summary']);
+                [$html, $summary] = self::build_preview($orders, $fields, $reportType);
+                fputcsv($out, [strip_tags($summary)]);
+                fclose($out);
+                exit;
+
+            case 'xlsx':
+                header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+                header('Content-Disposition: attachment; filename="report-' . $id . '.xlsx"');
+                if (class_exists(\PhpOffice\PhpSpreadsheet\Spreadsheet::class)) {
+                    $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+                    $sheet = $spreadsheet->getActiveSheet();
+                    $sheet->fromArray($fields, NULL, 'A1');
+                    $rowIndex = 2;
+                    foreach ($orders as $order) {
+                        $row = [];
+                        foreach ($fields as $field) {
+                            $row[] = self::get_field_value($order, $field);
+                        }
+                        $sheet->fromArray($row, NULL, 'A' . $rowIndex++);
+                    }
+                    // Summary
+                    [$html, $summary] = self::build_preview($orders, $fields, $reportType);
+                    $sheet->setCellValue('A' . $rowIndex, 'Summary: ' . strip_tags($summary));
+                    $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+                    $writer->save('php://output');
+                } else {
+                    echo "XLSX export requires PhpSpreadsheet library.";
+                }
+                exit;
+
+case 'pdf':
+default:
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: attachment; filename="report-' . $id . '.pdf"');
+
+    if (class_exists(\Dompdf\Dompdf::class)) {
+        // ✅ Configure Dompdf safely
+        $options = new \Dompdf\Options();
+        $options->set('isRemoteEnabled', true);
+        $options->set('chroot', WP_CONTENT_DIR); // ensures Dompdf has a valid base path
+        $options->set('defaultFont', 'DejaVu Sans'); // avoids missing font path errors
+
+        $dompdf = new \Dompdf\Dompdf($options);
+
+        // ✅ Build report content
+        [$html, $summary] = self::build_preview($orders, $fields, $reportType);
+
+        if (empty(trim($html))) {
+            wp_die('Report generation failed: no HTML content.');
+        }
+
+        // ✅ Load and render PDF
+        $dompdf->loadHtml('<h1>Report</h1>' . $html . '<h2>Summary</h2>' . $summary);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+        $dompdf->stream("report-$id.pdf");
+    } else {
+        echo "PDF export requires Dompdf library.";
+    }
+    exit;
+        }
+    }
+
     /**
      * Query WooCommerce orders for a given date range and report type.
      */
@@ -742,65 +851,79 @@ final class CB_Admin_Ajax {
     /**
      * Build preview HTML and summary for orders.
      */
-    private static function build_preview($orders, $fields, $reportType) {
-        $html = '<table class="widefat"><thead><tr>';
-        foreach ($fields as $field) {
-            $html .= '<th>' . esc_html(ucwords(str_replace('_',' ', $field))) . '</th>';
-        }
-        $html .= '</tr></thead><tbody>';
+private static function build_preview($orders, $fields, $reportType) {
+    // Ensure inputs are arrays
+    $orders = is_array($orders) ? $orders : [];
+    $fields = is_array($fields) ? $fields : [];
 
-        foreach ($orders as $order) {
-            $html .= '<tr>';
-            foreach ($fields as $field) {
-                switch ($field) {
-                    case 'date':
-                        $html .= '<td>' . esc_html($order->get_date_created()->date('Y-m-d')) . '</td>';
-                        break;
-                    case 'product':
-                        $items = [];
-                        foreach ($order->get_items() as $item) {
-                            $items[] = $item->get_name();
-                        }
-                        $html .= '<td>' . esc_html(implode(', ', $items)) . '</td>';
-                        break;
-                    case 'customer':
-                        $html .= '<td>' . esc_html($order->get_billing_first_name() . ' ' . $order->get_billing_last_name()) . '</td>';
-                        break;
-                    case 'customer_email':
-                        $html .= '<td>' . esc_html($order->get_billing_email()) . '</td>';
-                        break;
-                    case 'transaction_id':
-                        $html .= '<td>' . esc_html($order->get_transaction_id()) . '</td>';
-                        break;
-                    case 'amount':
-                        $html .= '<td>' . esc_html($order->get_total()) . '</td>';
-                        break;
-                    case 'discount_amount':
-                        $html .= '<td>' . esc_html($order->get_total_discount()) . '</td>';
-                        break;
-                    case 'vat':
-                        $html .= '<td>' . esc_html($order->get_total_tax()) . '</td>';
-                        break;
-                    case 'status':
-                        $html .= '<td>' . esc_html($order->get_status()) . '</td>';
-                        break;
-                    default:
-                        $html .= '<td>—</td>';
-                }
-            }
-            $html .= '</tr>';
-        }
-        $html .= '</tbody></table>';
-
-        // Build summary
-        $summary = sprintf(
-            'Total Orders: %d<br>Total Revenue: %s',
-            count($orders),
-            wc_price(array_sum(array_map(fn($o) => $o->get_total(), $orders)))
-        );
-
-        return [$html, $summary];
+    // Early exit if no data
+    if (empty($orders) || empty($fields)) {
+        return [
+            '<p>No data available for this report.</p>',
+            'Total Orders: 0<br>Total Revenue: ' . wc_price(0)
+        ];
     }
+
+    // Build table header
+    $html = '<table class="widefat"><thead><tr>';
+    foreach ($fields as $field) {
+        $label = esc_html(ucwords(str_replace('_', ' ', $field)));
+        $html .= "<th>{$label}</th>";
+    }
+    $html .= '</tr></thead><tbody>';
+
+    // Build table rows
+    foreach ($orders as $order) {
+        $html .= '<tr>';
+        foreach ($fields as $field) {
+            switch ($field) {
+                case 'date':
+                    $date = $order->get_date_created();
+                    $html .= '<td>' . esc_html($date ? $date->date('Y-m-d') : '—') . '</td>';
+                    break;
+                case 'product':
+                    $items = array_map(fn($item) => $item->get_name(), $order->get_items());
+                    $html .= '<td>' . esc_html(implode(', ', $items)) . '</td>';
+                    break;
+                case 'customer':
+                    $html .= '<td>' . esc_html(trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name())) . '</td>';
+                    break;
+                case 'customer_email':
+                    $html .= '<td>' . esc_html($order->get_billing_email()) . '</td>';
+                    break;
+                case 'transaction_id':
+                    $html .= '<td>' . esc_html($order->get_transaction_id() ?: '—') . '</td>';
+                    break;
+                case 'amount':
+                    $html .= '<td>' . esc_html($order->get_total()) . '</td>';
+                    break;
+                case 'discount_amount':
+                    $html .= '<td>' . esc_html(method_exists($order, 'get_total_discount') ? $order->get_total_discount() : '—') . '</td>';
+                    break;
+                case 'vat':
+                    $html .= '<td>' . esc_html($order->get_total_tax()) . '</td>';
+                    break;
+                case 'status':
+                    $html .= '<td>' . esc_html($order->get_status()) . '</td>';
+                    break;
+                default:
+                    $html .= '<td>—</td>';
+            }
+        }
+        $html .= '</tr>';
+    }
+    $html .= '</tbody></table>';
+
+    // Build summary
+    $totalRevenue = array_sum(array_map(fn($o) => $o->get_total(), $orders));
+    $summary = sprintf(
+        'Total Orders: %d<br>Total Revenue: %s',
+        count($orders),
+        wc_price($totalRevenue)
+    );
+
+    return [$html, $summary];
+}
 
     /**
      * Create and persist a report with retention policy applied.
@@ -891,7 +1014,13 @@ final class CB_Admin_Ajax {
      */
     public static function bulk_download_reports() {
         check_ajax_referer('cb_admin_nonce', 'nonce');
-        $ids = array_map('sanitize_text_field', $_POST['report_ids'] ?? []);
+		$raw_ids = $_POST['report_ids'] ?? [];
+		if (is_array($raw_ids)) {
+			$ids = array_map('sanitize_text_field', $raw_ids);
+		} else {
+			$ids = [sanitize_text_field($raw_ids)];
+		}
+
         $reports = get_option('cb_generated_reports', []);
         $selected = array_filter($reports, fn($r) => in_array($r['id'], $ids, true));
 
