@@ -853,21 +853,21 @@ final class CB_Admin_Ajax {
     }
 
     private static function render_report_table($orders, $fields) {
-    // Build a 2D array: first row = labels, subsequent rows = values
-    $rows = [];
-    $labels = array_map([self::class, 'get_field_label'], $fields);
-    $rows[] = $labels;
+        // Build a 2D array: first row = labels, subsequent rows = values
+        $rows = [];
+        $labels = array_map([self::class, 'get_field_label'], $fields);
+        $rows[] = $labels;
 
-    foreach ($orders as $order) {
-        $row = [];
-        foreach ($fields as $field) {
-            $row[] = self::get_field_value($order, $field);
+        foreach ($orders as $order) {
+            $row = [];
+            foreach ($fields as $field) {
+                $row[] = self::get_field_value($order, $field);
+            }
+            $rows[] = $row;
         }
-        $rows[] = $row;
-    }
 
-    return $rows;
-}
+        return $rows;
+    }
 
     /**
      * Query WooCommerce orders for a given date range and report type.
@@ -897,6 +897,7 @@ final class CB_Admin_Ajax {
      * Build preview HTML and summary for orders.
      */
     private static function build_preview($orders, $fields, $reportType) {
+        // Build table
         $html = '<table class="widefat"><thead><tr>';
         foreach ($fields as $field) {
             $html .= '<th>' . esc_html(self::get_field_label($field)) . '</th>';
@@ -912,12 +913,13 @@ final class CB_Admin_Ajax {
         }
         $html .= '</tbody></table>';
 
-        // Summaries (as drafted earlier)
+        // Summaries
         $summary = '';
         switch ($reportType) {
             case 'sales_general':
                 $totalRevenue = array_sum(array_map(fn($o) => $o->get_total(), $orders));
-                $summary = "Total Orders: " . count($orders) . "<br>Total Revenue: " . wc_price($totalRevenue);
+                $summary = "Total Orders: " . count($orders) .
+                        "<br>Total Revenue: " . wp_strip_all_tags(wc_price($totalRevenue));
                 break;
 
             case 'sales_product':
@@ -937,7 +939,8 @@ final class CB_Admin_Ajax {
             case 'discounts_refunds':
                 $discountTotal = array_sum(array_map(fn($o) => $o->get_total_discount(), $orders));
                 $refundTotal   = array_sum(array_map(fn($o) => $o->get_total_refunded(), $orders));
-                $summary = "Total Discounts: " . wc_price($discountTotal) . "<br>Total Refunds: " . wc_price($refundTotal);
+                $summary = "Total Discounts: " . wp_strip_all_tags(wc_price($discountTotal)) .
+                        "<br>Total Refunds: " . wp_strip_all_tags(wc_price($refundTotal));
                 break;
 
             case 'sales_statistics':

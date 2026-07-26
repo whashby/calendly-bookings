@@ -93,6 +93,9 @@ body.dark-mode #cb-report-preview-toolbar {
   top: 0;
   z-index: 2;
 }
+#cb-report-preview-content thead {
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* ✅ prevents bleed */
+}
 body.dark-mode #cb-report-preview-content th {
   background: #333;
   color: #eee;
