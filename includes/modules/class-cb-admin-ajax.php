@@ -691,10 +691,31 @@ final class CB_Admin_Ajax {
      */
     public static function save_report_settings() {
         check_ajax_referer('cb_admin_nonce','nonce');
+
+        // --- General Sales ---
         update_option('cb_report_fields', array_map('sanitize_text_field', $_POST['fields'] ?? []));
         update_option('cb_report_filetype', sanitize_text_field($_POST['filetype'] ?? 'pdf'));
         update_option('cb_report_start', sanitize_text_field($_POST['start_date'] ?? ''));
         update_option('cb_report_end', sanitize_text_field($_POST['end_date'] ?? ''));
+
+        // --- Product Sales ---
+        update_option('cb_product_fields', array_map('sanitize_text_field', $_POST['product_fields'] ?? []));
+        update_option('cb_product_filetype', sanitize_text_field($_POST['product_filetype'] ?? 'pdf'));
+        update_option('cb_product_start', sanitize_text_field($_POST['product_start_date'] ?? ''));
+        update_option('cb_product_end', sanitize_text_field($_POST['product_end_date'] ?? ''));
+
+        // --- Discounts / Refunds ---
+        update_option('cb_discount_fields', array_map('sanitize_text_field', $_POST['discount_fields'] ?? []));
+        update_option('cb_discount_filetype', sanitize_text_field($_POST['discount_filetype'] ?? 'pdf'));
+        update_option('cb_discount_start', sanitize_text_field($_POST['discount_start_date'] ?? ''));
+        update_option('cb_discount_end', sanitize_text_field($_POST['discount_end_date'] ?? ''));
+
+        // --- Sales Statistics ---
+        update_option('cb_stats_fields', array_map('sanitize_text_field', $_POST['stats_fields'] ?? []));
+        update_option('cb_stats_filetype', sanitize_text_field($_POST['stats_filetype'] ?? 'pdf'));
+        update_option('cb_stats_start', sanitize_text_field($_POST['stats_start_date'] ?? ''));
+        update_option('cb_stats_end', sanitize_text_field($_POST['stats_end_date'] ?? ''));
+
         wp_send_json_success(['message'=>'Settings saved successfully.']);
     }
 
@@ -753,30 +774,25 @@ final class CB_Admin_Ajax {
         self::export_report($orders, $report);
     }
 
-
-
     private static function export_report($orders, $report) {
-        $fields = $report['fields'];
-        $type   = $report['file_type'];
-        $id     = $report['id'];
+        $fields     = $report['fields'];
+        $type       = $report['file_type'];
+        $id         = $report['id'];
         $reportType = $report['type'];
+
+        // Build rows once
+        $rows = self::render_report_table($orders, $fields);
+        [$htmlPreview, $summary] = self::build_preview($orders, $fields, $reportType);
 
         switch ($type) {
             case 'csv':
                 header('Content-Type: text/csv');
                 header('Content-Disposition: attachment; filename="report-' . $id . '.csv"');
                 $out = fopen('php://output', 'w');
-                fputcsv($out, $fields);
-                foreach ($orders as $order) {
-                    $row = [];
-                    foreach ($fields as $field) {
-                        $row[] = self::get_field_value($order, $field);
-                    }
+                foreach ($rows as $row) {
                     fputcsv($out, $row);
                 }
-                // Add summary row
                 fputcsv($out, ['Summary']);
-                [$html, $summary] = self::build_preview($orders, $fields, $reportType);
                 fputcsv($out, [strip_tags($summary)]);
                 fclose($out);
                 exit;
@@ -787,18 +803,8 @@ final class CB_Admin_Ajax {
                 if (class_exists(\PhpOffice\PhpSpreadsheet\Spreadsheet::class)) {
                     $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
                     $sheet = $spreadsheet->getActiveSheet();
-                    $sheet->fromArray($fields, NULL, 'A1');
-                    $rowIndex = 2;
-                    foreach ($orders as $order) {
-                        $row = [];
-                        foreach ($fields as $field) {
-                            $row[] = self::get_field_value($order, $field);
-                        }
-                        $sheet->fromArray($row, NULL, 'A' . $rowIndex++);
-                    }
-                    // Summary
-                    [$html, $summary] = self::build_preview($orders, $fields, $reportType);
-                    $sheet->setCellValue('A' . $rowIndex, 'Summary: ' . strip_tags($summary));
+                    $sheet->fromArray($rows, NULL, 'A1');
+                    $sheet->setCellValue('A' . (count($rows)+2), 'Summary: ' . strip_tags($summary));
                     $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
                     $writer->save('php://output');
                 } else {
@@ -812,23 +818,30 @@ final class CB_Admin_Ajax {
                 header('Content-Disposition: attachment; filename="report-' . $id . '.pdf"');
 
                 if (class_exists(\Dompdf\Dompdf::class)) {
-                    // ✅ Configure Dompdf safely
                     $options = new \Dompdf\Options();
                     $options->set('isRemoteEnabled', true);
-                    $options->set('chroot', WP_CONTENT_DIR); // ensures Dompdf has a valid base path
-                    $options->set('defaultFont', 'DejaVu Sans'); // avoids missing font path errors
+                    $options->set('chroot', WP_CONTENT_DIR);
+                    $options->set('defaultFont', 'DejaVu Sans');
 
                     $dompdf = new \Dompdf\Dompdf($options);
 
-                    // ✅ Build report content
-                    [$html, $summary] = self::build_preview($orders, $fields, $reportType);
-
-                    if (empty(trim($html))) {
-                        wp_die('Report generation failed: no HTML content.');
+                    // Build HTML table from rows
+                    $html = '<h1>Report</h1><table border="1" cellspacing="0" cellpadding="4"><thead><tr>';
+                    foreach ($rows[0] as $label) {
+                        $html .= '<th>' . esc_html($label) . '</th>';
                     }
+                    $html .= '</tr></thead><tbody>';
+                    for ($i=1; $i<count($rows); $i++) {
+                        $html .= '<tr>';
+                        foreach ($rows[$i] as $cell) {
+                            $html .= '<td>' . esc_html($cell) . '</td>';
+                        }
+                        $html .= '</tr>';
+                    }
+                    $html .= '</tbody></table>';
+                    $html .= '<h2>Summary</h2>' . $summary;
 
-                    // ✅ Load and render PDF
-                    $dompdf->loadHtml('<h1>Report</h1>' . $html . '<h2>Summary</h2>' . $summary);
+                    $dompdf->loadHtml($html);
                     $dompdf->setPaper('A4', 'portrait');
                     $dompdf->render();
                     $dompdf->stream("report-$id.pdf");
@@ -838,6 +851,23 @@ final class CB_Admin_Ajax {
                 exit;
         }
     }
+
+    private static function render_report_table($orders, $fields) {
+    // Build a 2D array: first row = labels, subsequent rows = values
+    $rows = [];
+    $labels = array_map([self::class, 'get_field_label'], $fields);
+    $rows[] = $labels;
+
+    foreach ($orders as $order) {
+        $row = [];
+        foreach ($fields as $field) {
+            $row[] = self::get_field_value($order, $field);
+        }
+        $rows[] = $row;
+    }
+
+    return $rows;
+}
 
     /**
      * Query WooCommerce orders for a given date range and report type.
@@ -866,79 +896,67 @@ final class CB_Admin_Ajax {
     /**
      * Build preview HTML and summary for orders.
      */
-private static function build_preview($orders, $fields, $reportType) {
-    // Ensure inputs are arrays
-    $orders = is_array($orders) ? $orders : [];
-    $fields = is_array($fields) ? $fields : [];
-
-    // Early exit if no data
-    if (empty($orders) || empty($fields)) {
-        return [
-            '<p>No data available for this report.</p>',
-            'Total Orders: 0<br>Total Revenue: ' . wc_price(0)
-        ];
-    }
-
-    // Build table header
-    $html = '<table class="widefat"><thead><tr>';
-    foreach ($fields as $field) {
-        $label = esc_html(ucwords(str_replace('_', ' ', $field)));
-        $html .= "<th>{$label}</th>";
-    }
-    $html .= '</tr></thead><tbody>';
-
-    // Build table rows
-    foreach ($orders as $order) {
-        $html .= '<tr>';
+    private static function build_preview($orders, $fields, $reportType) {
+        $html = '<table class="widefat"><thead><tr>';
         foreach ($fields as $field) {
-            switch ($field) {
-                case 'date':
-                    $date = $order->get_date_created();
-                    $html .= '<td>' . esc_html($date ? $date->date('Y-m-d') : '—') . '</td>';
-                    break;
-                case 'product':
-                    $items = array_map(fn($item) => $item->get_name(), $order->get_items());
-                    $html .= '<td>' . esc_html(implode(', ', $items)) . '</td>';
-                    break;
-                case 'customer':
-                    $html .= '<td>' . esc_html(trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name())) . '</td>';
-                    break;
-                case 'customer_email':
-                    $html .= '<td>' . esc_html($order->get_billing_email()) . '</td>';
-                    break;
-                case 'transaction_id':
-                    $html .= '<td>' . esc_html($order->get_transaction_id() ?: '—') . '</td>';
-                    break;
-                case 'amount':
-                    $html .= '<td>' . esc_html($order->get_total()) . '</td>';
-                    break;
-                case 'discount_amount':
-                    $html .= '<td>' . esc_html(method_exists($order, 'get_total_discount') ? $order->get_total_discount() : '—') . '</td>';
-                    break;
-                case 'vat':
-                    $html .= '<td>' . esc_html($order->get_total_tax()) . '</td>';
-                    break;
-                case 'status':
-                    $html .= '<td>' . esc_html($order->get_status()) . '</td>';
-                    break;
-                default:
-                    $html .= '<td>—</td>';
-            }
+            $html .= '<th>' . esc_html(self::get_field_label($field)) . '</th>';
         }
-        $html .= '</tr>';
+        $html .= '</tr></thead><tbody>';
+
+        foreach ($orders as $order) {
+            $html .= '<tr>';
+            foreach ($fields as $field) {
+                $html .= '<td>' . esc_html(self::get_field_value($order, $field)) . '</td>';
+            }
+            $html .= '</tr>';
+        }
+        $html .= '</tbody></table>';
+
+        // Summaries (as drafted earlier)
+        $summary = '';
+        switch ($reportType) {
+            case 'sales_general':
+                $totalRevenue = array_sum(array_map(fn($o) => $o->get_total(), $orders));
+                $summary = "Total Orders: " . count($orders) . "<br>Total Revenue: " . wc_price($totalRevenue);
+                break;
+
+            case 'sales_product':
+                $productCounts = [];
+                foreach ($orders as $order) {
+                    foreach ($order->get_items() as $item) {
+                        $name = $item->get_name();
+                        $productCounts[$name] = ($productCounts[$name] ?? 0) + $item->get_quantity();
+                    }
+                }
+                $summary = "Units Sold:<br>";
+                foreach ($productCounts as $name => $qty) {
+                    $summary .= esc_html("$name: $qty") . "<br>";
+                }
+                break;
+
+            case 'discounts_refunds':
+                $discountTotal = array_sum(array_map(fn($o) => $o->get_total_discount(), $orders));
+                $refundTotal   = array_sum(array_map(fn($o) => $o->get_total_refunded(), $orders));
+                $summary = "Total Discounts: " . wc_price($discountTotal) . "<br>Total Refunds: " . wc_price($refundTotal);
+                break;
+
+            case 'sales_statistics':
+                $statuses = [];
+                foreach ($orders as $order) {
+                    $statuses[$order->get_status()] = ($statuses[$order->get_status()] ?? 0) + 1;
+                }
+                $summary = "Order Status Breakdown:<br>";
+                foreach ($statuses as $status => $count) {
+                    $summary .= esc_html(ucfirst($status) . ": $count") . "<br>";
+                }
+                break;
+
+            default:
+                $summary = "Total Orders: " . count($orders);
+        }
+
+        return [$html, $summary];
     }
-    $html .= '</tbody></table>';
-
-    // Build summary
-    $totalRevenue = array_sum(array_map(fn($o) => $o->get_total(), $orders));
-    $summary = sprintf(
-        'Total Orders: %d<br>Total Revenue: %s',
-        count($orders),
-        wc_price($totalRevenue)
-    );
-
-    return [$html, $summary];
-}
 
     /**
      * Create and persist a report with retention policy applied.
@@ -1000,16 +1018,91 @@ private static function build_preview($orders, $fields, $reportType) {
         ]);
     }
 
+    private static function get_field_value($order, $field) {
+        switch ($field) {
+            case 'date':
+            case 'transaction_date':
+                return $order->get_date_created() ? $order->get_date_created()->date('Y-m-d H:i') : '';
+
+            case 'product':
+            case 'products':
+                $items = [];
+                foreach ($order->get_items() as $item) {
+                    $items[] = $item->get_name() . ' x' . $item->get_quantity();
+                }
+                return implode(', ', $items);
+
+            case 'customer':
+            case 'customer_name':
+                return trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name());
+
+            case 'customer_email':
+                return $order->get_billing_email();
+
+            case 'transaction_id':
+                return $order->get_transaction_id();
+
+            case 'approval_code':
+                // If you store approval codes in meta
+                return $order->get_meta('_approval_code');
+
+            case 'coupon_code':
+                $coupons = $order->get_coupon_codes();
+                return implode(', ', $coupons);
+
+            case 'discount_amount':
+                return wc_price($order->get_total_discount());
+
+            case 'vat':
+            case 'tax':
+                return wc_price($order->get_total_tax());
+
+            case 'amount':
+            case 'order_total':
+                return wc_price($order->get_total());
+
+            case 'status':
+                return ucfirst($order->get_status());
+
+            default:
+                // Fallback: try meta field
+                return $order->get_meta($field) ?: '—';
+        }
+    }
+
+    private static function get_field_label($field) {
+        $map = [
+            'date'             => 'Transaction Date',
+            'transaction_date' => 'Transaction Date',
+            'product'          => 'Product(s)',
+            'products'         => 'Product(s)',
+            'customer'         => 'Customer Name',
+            'customer_name'    => 'Customer Name',
+            'customer_email'   => 'Customer Email',
+            'transaction_id'   => 'Transaction ID',
+            'approval_code'    => 'Approval Code',
+            'coupon_code'      => 'Coupon Code',
+            'discount_amount'  => 'Discount Amount',
+            'vat'              => 'VAT',
+            'tax'              => 'Tax',
+            'amount'           => 'Order Total',
+            'order_total'      => 'Order Total',
+            'status'           => 'Order Status',
+        ];
+
+        return $map[$field] ?? ucwords(str_replace('_',' ', $field));
+    }
+
     /**
      * Delete a single report.
      */
     public static function delete_report() {
-        check_ajax_referer('cb_admin_nonce', 'nonce');
-        $id = sanitize_text_field($_POST['report_id'] ?? '');
+        check_ajax_referer('cb_admin_nonce','nonce');
+        $id = intval($_POST['report_id'] ?? 0);
         $reports = get_option('cb_generated_reports', []);
-        $reports = array_filter($reports, fn($r) => $r['id'] !== $id);
-        update_option('cb_generated_reports', $reports, false);
-        wp_send_json_success(['message' => 'Report deleted.', 'reports' => array_values($reports)]);
+        $reports = array_filter($reports, fn($r) => $r['id'] != $id);
+        update_option('cb_generated_reports', $reports);
+        wp_send_json_success(['message'=>'Report deleted','reports'=>$reports]);
     }
 
     /**
