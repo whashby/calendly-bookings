@@ -55,11 +55,10 @@ use Calendly_Bookings\CB_Constants;
       <button type="button" class="button" id="cb-generate-report">Generate Report</button>
 
       <div id="cb-report-preview" style="display:none;">
+        <div id="cb-report-preview-content"></div>
         <div class="cb-report-actions">
           <button type="button" class="button" id="cb-print-report">Print</button>
-          <button type="button" class="button" id="cb-download-preview">Download</button>
         </div>
-        <div id="cb-report-preview-content"></div>
       </div>
     </div>
 
