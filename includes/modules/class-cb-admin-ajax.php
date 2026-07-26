@@ -1102,9 +1102,13 @@ final class CB_Admin_Ajax {
     public static function delete_report() {
         check_ajax_referer('cb_admin_nonce','nonce');
         $id = intval($_POST['report_id'] ?? 0);
+
+        // Only touch reports
         $reports = get_option('cb_generated_reports', []);
         $reports = array_filter($reports, fn($r) => $r['id'] != $id);
-        update_option('cb_generated_reports', $reports);
+
+        update_option('cb_generated_reports', $reports); // ✅ settings untouched
+
         wp_send_json_success(['message'=>'Report deleted','reports'=>$reports]);
     }
 

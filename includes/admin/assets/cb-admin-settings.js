@@ -180,6 +180,7 @@ jQuery(document).ready(function($) {
 
   // Delete report
   $(document).on('click', '.cb-delete-report', function() {
+    e.preventDefault();
     const reportId = $(this).data('id');
     $.post(cb_admin.ajaxurl, {
       action: 'cb_delete_report',
