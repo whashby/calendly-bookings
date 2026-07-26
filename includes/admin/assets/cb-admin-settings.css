@@ -94,12 +94,19 @@ body.dark-mode #cb-report-preview-toolbar {
   z-index: 2;
 }
 #cb-report-preview-content thead {
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* ✅ prevents bleed */
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #f1f1f1; /* solid background */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* subtle separation */
 }
-body.dark-mode #cb-report-preview-content th {
+#cb-report-preview-content th {
+  background: inherit; /* inherit from thead */
+}
+body.dark-mode #cb-report-preview-content thead {
   background: #333;
-  color: #eee;
 }
+
 body.dark-mode #cb-report-preview-content td { border-color: #444; }
 
 /* --- Summary Section --- */

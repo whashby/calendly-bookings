@@ -1054,15 +1054,15 @@ final class CB_Admin_Ajax {
                 return implode(', ', $coupons);
 
             case 'discount_amount':
-                return wc_price($order->get_total_discount());
+                return wp_strip_all_tags(wc_price($order->get_total_discount()));
 
             case 'vat':
             case 'tax':
-                return wc_price($order->get_total_tax());
+                return wp_strip_all_tags(wc_price($order->get_total_tax()));
 
             case 'amount':
             case 'order_total':
-                return wc_price($order->get_total());
+                return wp_strip_all_tags(wc_price($order->get_total()));
 
             case 'status':
                 return ucfirst($order->get_status());
