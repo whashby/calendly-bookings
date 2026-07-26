@@ -37,11 +37,13 @@ final class CB_Admin_Ajax {
         add_action('wp_ajax_cb_clear_individual_sync', [__CLASS__, 'clear_individual_sync']);
         add_action('wp_ajax_cb_clear_individual_crons', [__CLASS__, 'clear_individual_crons']);
         add_action('wp_ajax_cb_schedule_master_sync', [__CLASS__, 'schedule_master_sync']);
+        add_action('wp_ajax_cb_clear_master_sync', [__CLASS__, 'clear_master_sync']);
         
         
         add_action('wp_ajax_cb_test_email', [__CLASS__, 'test_email']);
         add_action('wp_ajax_cb_preview_email', [__CLASS__, 'preview_email']);
 
+        add_action('wp_ajax_cb_save_report_settings', [__CLASS__, 'save_report_settings']);
         add_action('wp_ajax_cb_get_reports', [__CLASS__, 'get_reports']);
         add_action('wp_ajax_cb_generate_report', [__CLASS__, 'generate_report']);
         add_action('wp_ajax_cb_generate_scheduled_report', [__CLASS__, 'generate_scheduled_report']);
@@ -684,6 +686,17 @@ final class CB_Admin_Ajax {
         }
     }
 
+    /**
+     * Save report settings.
+     */
+    public static function save_report_settings() {
+        check_ajax_referer('cb_admin_nonce','nonce');
+        update_option('cb_report_fields', array_map('sanitize_text_field', $_POST['fields'] ?? []));
+        update_option('cb_report_filetype', sanitize_text_field($_POST['filetype'] ?? 'pdf'));
+        update_option('cb_report_start', sanitize_text_field($_POST['start_date'] ?? ''));
+        update_option('cb_report_end', sanitize_text_field($_POST['end_date'] ?? ''));
+        wp_send_json_success(['message'=>'Settings saved successfully.']);
+    }
 
     /**
      * Get all generated reports.
@@ -716,14 +729,14 @@ final class CB_Admin_Ajax {
     }
 
     public static function download_report() {
-        check_ajax_referer('cb_admin_nonce', 'nonce');
+        check_ajax_referer('cb_admin_nonce','nonce');
 
-        $id = sanitize_text_field($_GET['report_id'] ?? '');
+        $id = intval($_GET['report_id'] ?? 0);
         $reports = get_option('cb_generated_reports', []);
         $report = null;
 
         foreach ($reports as $r) {
-            if ($r['id'] === $id) {
+            if ($r['id'] == $id) {
                 $report = $r;
                 break;
             }
@@ -733,12 +746,14 @@ final class CB_Admin_Ajax {
             wp_die('Report not found');
         }
 
-        [$start, $end] = explode(' → ', $report['date_range']);
-        $orders = self::query_orders($start, $end, $report['type']);
+        // Query orders again for this report
+        $orders = self::query_orders($report['start_date'], $report['end_date'], $report['type']);
 
-        // Export logic (CSV/XLSX/PDF) with detail + summary
+        // Call the export function
         self::export_report($orders, $report);
     }
+
+
 
     private static function export_report($orders, $report) {
         $fields = $report['fields'];
@@ -791,36 +806,36 @@ final class CB_Admin_Ajax {
                 }
                 exit;
 
-case 'pdf':
-default:
-    header('Content-Type: application/pdf');
-    header('Content-Disposition: attachment; filename="report-' . $id . '.pdf"');
+            case 'pdf':
+            default:
+                header('Content-Type: application/pdf');
+                header('Content-Disposition: attachment; filename="report-' . $id . '.pdf"');
 
-    if (class_exists(\Dompdf\Dompdf::class)) {
-        // ✅ Configure Dompdf safely
-        $options = new \Dompdf\Options();
-        $options->set('isRemoteEnabled', true);
-        $options->set('chroot', WP_CONTENT_DIR); // ensures Dompdf has a valid base path
-        $options->set('defaultFont', 'DejaVu Sans'); // avoids missing font path errors
+                if (class_exists(\Dompdf\Dompdf::class)) {
+                    // ✅ Configure Dompdf safely
+                    $options = new \Dompdf\Options();
+                    $options->set('isRemoteEnabled', true);
+                    $options->set('chroot', WP_CONTENT_DIR); // ensures Dompdf has a valid base path
+                    $options->set('defaultFont', 'DejaVu Sans'); // avoids missing font path errors
 
-        $dompdf = new \Dompdf\Dompdf($options);
+                    $dompdf = new \Dompdf\Dompdf($options);
 
-        // ✅ Build report content
-        [$html, $summary] = self::build_preview($orders, $fields, $reportType);
+                    // ✅ Build report content
+                    [$html, $summary] = self::build_preview($orders, $fields, $reportType);
 
-        if (empty(trim($html))) {
-            wp_die('Report generation failed: no HTML content.');
-        }
+                    if (empty(trim($html))) {
+                        wp_die('Report generation failed: no HTML content.');
+                    }
 
-        // ✅ Load and render PDF
-        $dompdf->loadHtml('<h1>Report</h1>' . $html . '<h2>Summary</h2>' . $summary);
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
-        $dompdf->stream("report-$id.pdf");
-    } else {
-        echo "PDF export requires Dompdf library.";
-    }
-    exit;
+                    // ✅ Load and render PDF
+                    $dompdf->loadHtml('<h1>Report</h1>' . $html . '<h2>Summary</h2>' . $summary);
+                    $dompdf->setPaper('A4', 'portrait');
+                    $dompdf->render();
+                    $dompdf->stream("report-$id.pdf");
+                } else {
+                    echo "PDF export requires Dompdf library.";
+                }
+                exit;
         }
     }
 

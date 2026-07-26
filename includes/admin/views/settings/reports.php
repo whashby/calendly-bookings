@@ -60,8 +60,6 @@ use Calendly_Bookings\CB_Constants;
           <button type="button" class="button" id="cb-download-preview">Download</button>
         </div>
         <div id="cb-report-preview-content"></div>
-        <h3>Summary</h3>
-        <div id="cb-report-summary"></div>
       </div>
     </div>
 
@@ -144,6 +142,7 @@ use Calendly_Bookings\CB_Constants;
       </div>
     </div>
   </div> <!-- end cb-report-tab-content -->
+<?php submit_button('Save Report Settings', 'primary', 'cb-save-settings'); ?>
 
   <h3>Generated Reports</h3>
   <table class="widefat">
@@ -188,5 +187,4 @@ use Calendly_Bookings\CB_Constants;
     <button type="button" class="button" id="cb-download-selected">Download Selected</button>
   </div>
 
-  <?php submit_button('Save Report Settings'); ?>
 </form>
