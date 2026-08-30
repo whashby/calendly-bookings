@@ -110,12 +110,12 @@ $email        = esc_attr($current_user->user_email ?? '');
           <div class="cb-field">
             <label><?php esc_html_e('Do you have any familiarity with the following?', 'calendly-bookings'); ?></label>
             <div>
-              <label><input type="checkbox" name="cb_familiarity[]" value="Centering Prayer"> Centering Prayer</label>
-              <label><input type="checkbox" name="cb_familiarity[]" value="Contemplation"> Contemplation</label>
-              <label><input type="checkbox" name="cb_familiarity[]" value="Concentrative meditation - mantras"> Concentrative meditation - mantras</label>
-              <label><input type="checkbox" name="cb_familiarity[]" value="Lectio Divina"> Lectio Divina</label>
-              <label><input type="checkbox" name="cb_familiarity[]" value="Binaural beats"> Binaural beats</label>
-              <label><input type="checkbox" name="cb_familiarity[]" value="Other"> Other</label>
+              <input type="checkbox" name="cb_familiarity[]" value="Centering Prayer"> <label>Centering Prayer</label>
+              <input type="checkbox" name="cb_familiarity[]" value="Contemplation"> <label>Contemplation</label>
+              <input type="checkbox" name="cb_familiarity[]" value="Concentrative meditation - mantras"> <label>Concentrative meditation - mantras</label>
+              <input type="checkbox" name="cb_familiarity[]" value="Lectio Divina"> <label>Lectio Divina</label>
+              <input type="checkbox" name="cb_familiarity[]" value="Binaural beats"> <label>Binaural beats</label>
+              <input type="checkbox" name="cb_familiarity[]" value="Other"> <label>Other</label>
             </div>
           </div>
           <?php
