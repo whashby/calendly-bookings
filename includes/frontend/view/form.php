@@ -107,7 +107,7 @@ $email        = esc_attr($current_user->user_email ?? '');
             <label for="cb_methods"><?php esc_html_e('If you have practiced before, what methods have you explored? If none respond - N/A', 'calendly-bookings'); ?></label>
             <input type="text" id="cb_methods" name="cb_methods">
           </div>
-          <div class="cb-row">
+          <div class="avaia_section">
   <label><?php esc_html_e('Do you have any familiarity with the following?', 'calendly-bookings'); ?></label>
   <div class="form_element form_element_checkbox">
     <span class="avia_checkbox">
