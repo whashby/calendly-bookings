@@ -108,16 +108,35 @@ $email        = esc_attr($current_user->user_email ?? '');
             <input type="text" id="cb_methods" name="cb_methods">
           </div>
           <div class="cb-field">
-            <label><?php esc_html_e('Do you have any familiarity with the following?', 'calendly-bookings'); ?></label>
-            <div>
-              <input type="checkbox" name="cb_familiarity[]" value="Centering Prayer"> <label>Centering Prayer</label>
-              <input type="checkbox" name="cb_familiarity[]" value="Contemplation"> <label>Contemplation</label>
-              <input type="checkbox" name="cb_familiarity[]" value="Concentrative meditation - mantras"> <label>Concentrative meditation - mantras</label>
-              <input type="checkbox" name="cb_familiarity[]" value="Lectio Divina"> <label>Lectio Divina</label>
-              <input type="checkbox" name="cb_familiarity[]" value="Binaural beats"> <label>Binaural beats</label>
-              <input type="checkbox" name="cb_familiarity[]" value="Other"> <label>Other</label>
-            </div>
-          </div>
+  <label><?php esc_html_e('Do you have any familiarity with the following?', 'calendly-bookings'); ?></label>
+  <div class="form_element form_element_checkbox">
+    <span class="avia_checkbox">
+      <input type="checkbox" id="cb_centering" name="cb_familiarity[]" value="Centering Prayer">
+      <label for="cb_centering">Centering Prayer</label>
+    </span>
+    <span class="avia_checkbox">
+      <input type="checkbox" id="cb_contemplation" name="cb_familiarity[]" value="Contemplation">
+      <label for="cb_contemplation">Contemplation</label>
+    </span>
+    <span class="avia_checkbox">
+      <input type="checkbox" id="cb_mantras" name="cb_familiarity[]" value="Concentrative meditation - mantras">
+      <label for="cb_mantras">Concentrative meditation - mantras</label>
+    </span>
+    <span class="avia_checkbox">
+      <input type="checkbox" id="cb_lectio" name="cb_familiarity[]" value="Lectio Divina">
+      <label for="cb_lectio">Lectio Divina</label>
+    </span>
+    <span class="avia_checkbox">
+      <input type="checkbox" id="cb_binaural" name="cb_familiarity[]" value="Binaural beats">
+      <label for="cb_binaural">Binaural beats</label>
+    </span>
+    <span class="avia_checkbox">
+      <input type="checkbox" id="cb_other" name="cb_familiarity[]" value="Other">
+      <label for="cb_other">Other</label>
+    </span>
+  </div>
+</div>
+
           <?php
           break;
 
