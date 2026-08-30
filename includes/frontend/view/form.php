@@ -30,10 +30,12 @@ $email        = esc_attr($current_user->user_email ?? '');
     <div class="cb-field">
       <label for="cb_meeting_location"><?php esc_html_e('Location', 'calendly-bookings'); ?></label>
       <select id="cb_meeting_location" name="cb_meeting_location" required>
-        <option value=""><?php esc_html_e('Select a location', 'calendly-bookings'); ?></option>
+        <?php if($slug != "hesychia"): ?>
+<option value=""><?php esc_html_e('Select a location', 'calendly-bookings'); ?></option>
         <option value="1">
           <?php esc_html_e('Zoom - Web conferencing details provided upon confirmation.', 'calendly-bookings'); ?>
         </option>
+        <?php endif; ?>
         <option value="2">
           <?php esc_html_e("HIER Life - Skeete's Road Jackmans, St. Michael", 'calendly-bookings'); ?>
         </option>
@@ -70,6 +72,13 @@ $email        = esc_attr($current_user->user_email ?? '');
     </select>
   </div>
 <?php endif; ?>
+<?php if($slug == "hesychia"): ?>
+  <div class="cb-field">
+    <button type="submit" id="hesychia-submit" class="button cb-submit">
+      <?php esc_html_e('Book Hesychia Session', 'calendly-bookings'); ?>
+    </button>
+  </div>
+  <?php endif; ?>
   <p>
     <input type="hidden" name="cb_prefill" value="1">
   </p>

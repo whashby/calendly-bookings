@@ -1,7 +1,6 @@
 (function ($) {
   'use strict';
 
-  const uuid = CB_REST.uuid;
   let availabilityByDate = {};
 
   const $timeContainer = $('#cb_meeting_time'); // tile container
@@ -101,6 +100,41 @@ function populateTimes(dateStr) {
       }
     });
   }
+
+    // --- Hesychia Submit ---
+$('#hesychia-submit').on('click', function(e) {
+  e.preventDefault();
+
+  const payload = {
+    first_name: $('#cb_firstname').val(),
+    last_name: $('#cb_lastname').val(),
+    email: $('#cb_email').val(),
+    location: $('#cb_meeting_location').val(),
+    date: $('#cb_meeting_date').val(),
+    time: $('#cb_meeting_time_value').val(),
+    uuid: CB_REST.uuid,
+    product_id: CB_REST.product
+  };
+
+  $.ajax({
+    url: CB_REST.root + 'schedule-hesychia',
+    method: 'POST',
+    data: payload,
+    headers: { 'X-WP-Nonce': CB_REST.nonce },
+    success: function(response) {
+      if (response.success) {
+        alert('Session booked successfully!');
+        window.location.href = response.redirect;
+      } else {
+        alert('Error: ' + (response.message || 'Unknown error'));
+      }
+    },
+    error: function(xhr) {
+      console.error("Failed to schedule Hesychia session", xhr);
+      alert('An unexpected error occurred.');
+    }
+  });
+});
 
   // --- Initialize ---
   const startIso = new Date().toISOString();

@@ -13,7 +13,8 @@ final class CB_Frontend {
     public static function init() {
         add_shortcode('calendly_booking_form', [__CLASS__, 'render_calendly_form']);
         add_action('woocommerce_single_product_summary', [__CLASS__, 'cb_insert_after_title' ], 4);
-        add_action('woocommerce_before_add_to_cart_button', [__CLASS__, 'output_before_cart']);
+#        add_action('woocommerce_before_add_to_cart_button', [__CLASS__, 'output_before_cart']);
+        add_action('woocommerce_short_description', [__CLASS__, 'output_before_cart']);
         add_action('wp_enqueue_scripts', [__CLASS__, 'cb_enqueue_flatpickr_assets']);
         add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
         add_action('wp_ajax_cb_login', [__CLASS__, 'cb_ajax_login']);
@@ -145,7 +146,7 @@ final class CB_Frontend {
         }
 
         ob_start();
-        include CB_Constants::path('includes/frontend/view/index.php');
+        include_once CB_Constants::path('includes/frontend/view/index.php');
         $output = ob_get_clean();
         return $output;
     }
@@ -165,7 +166,7 @@ final class CB_Frontend {
         <?php endif;
 
         if ( ! is_user_logged_in() ) {
-            include CB_Constants::path('includes/frontend/view/login-modal.php');
+            include_once CB_Constants::path('includes/frontend/view/login-modal.php');
         }
     }
 
