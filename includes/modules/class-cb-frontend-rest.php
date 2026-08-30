@@ -91,8 +91,6 @@ final class CB_Frontend_Rest {
             ],
         ]);
 
-        return $response; // Return the raw response for debugging purposes
-
         if (is_wp_error($response)) {
             return self::error($response->get_error_message(), 500);
         }

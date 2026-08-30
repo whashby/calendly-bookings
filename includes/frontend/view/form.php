@@ -30,8 +30,8 @@ $email        = esc_attr($current_user->user_email ?? '');
     <div class="cb-field">
       <label for="cb_meeting_location"><?php esc_html_e('Location', 'calendly-bookings'); ?></label>
       <select id="cb_meeting_location" name="cb_meeting_location" required>
-        <?php if($slug != "hesychia"): ?>
-<option value=""><?php esc_html_e('Select a location', 'calendly-bookings'); ?></option>
+        <option value=""><?php esc_html_e('Select a location', 'calendly-bookings'); ?></option>
+        <?php if($slug != "hesychia" && in_array($slug, ["initial-consultation", "meditation-session", "spiritual-companionship"], true)): ?>
         <option value="1">
           <?php esc_html_e('Zoom - Web conferencing details provided upon confirmation.', 'calendly-bookings'); ?>
         </option>
@@ -58,27 +58,109 @@ $email        = esc_attr($current_user->user_email ?? '');
 
 </div>
 
-<?php if($slug == "initial-consultation"): ?>
-  <!-- Intro -->
-  <div class="cb-field">
-    <label for="cb_hier_intro"><?php esc_html_e('How did you hear about HIER Life?', 'calendly-bookings'); ?></label>
-    <select id="cb_hier_intro" name="cb_hier_intro" required>
-      <option value=""><?php esc_html_e('Select...', 'calendly-bookings'); ?></option>
-      <option value="<?php esc_html_e('Google Search', 'calendly-bookings'); ?>"><?php esc_html_e('Google Search', 'calendly-bookings'); ?></option>
-      <option value="<?php esc_html_e('Word of mouth', 'calendly-bookings'); ?>"><?php esc_html_e('Word of mouth', 'calendly-bookings'); ?></option>
-      <option value="<?php esc_html_e('Referred by a professional', 'calendly-bookings'); ?>"><?php esc_html_e('Referred by a professional', 'calendly-bookings'); ?></option>
-      <option value="<?php esc_html_e('Spoke with Michael directly', 'calendly-bookings'); ?>"><?php esc_html_e('Spoke with Michael directly', 'calendly-bookings'); ?></option>
-      <option value="<?php esc_html_e('Social Media', 'calendly-bookings'); ?>"><?php esc_html_e('Social Media', 'calendly-bookings'); ?></option>
-    </select>
-  </div>
-<?php endif; ?>
-<?php if($slug == "hesychia"): ?>
-  <div class="cb-field">
-    <button type="submit" id="hesychia-submit" class="button cb-submit">
-      <?php esc_html_e('Book Hesychia Session', 'calendly-bookings'); ?>
-    </button>
-  </div>
-  <?php endif; ?>
+  <?php
+  switch ($slug) {
+      case "initial-consultation":
+          ?>
+          <!-- Intro -->
+          <div class="cb-field">
+            <label for="cb_hier_intro"><?php esc_html_e('How did you hear about HIER Life?', 'calendly-bookings'); ?></label>
+            <select id="cb_hier_intro" name="cb_hier_intro" required>
+              <option value=""><?php esc_html_e('Select...', 'calendly-bookings'); ?></option>
+              <option value="Google Search"><?php esc_html_e('Google Search', 'calendly-bookings'); ?></option>
+              <option value="Word of mouth"><?php esc_html_e('Word of mouth', 'calendly-bookings'); ?></option>
+              <option value="Referred by a professional"><?php esc_html_e('Referred by a professional', 'calendly-bookings'); ?></option>
+              <option value="Spoke with Michael directly"><?php esc_html_e('Spoke with Michael directly', 'calendly-bookings'); ?></option>
+              <option value="Social Media"><?php esc_html_e('Social Media', 'calendly-bookings'); ?></option>
+            </select>
+          </div>
+          <?php
+          break;
+
+      case "hesychia":
+          ?>
+          <!-- Hesychia Submit -->
+          <div class="cb-field">
+            <button type="submit" id="hesychia-submit" class="button cb-submit">
+              <?php esc_html_e('Book Hesychia Session', 'calendly-bookings'); ?>
+            </button>
+          </div>
+          <?php
+          break;
+
+      case "meditation-session":
+          ?>
+          <!-- Meditation Intake -->
+          <div class="cb-field">
+            <label for="cb_order_id"><?php esc_html_e('Order ID', 'calendly-bookings'); ?></label>
+            <input type="text" id="cb_order_id" name="cb_order_id" required>
+          </div>
+          <div class="cb-field">
+            <label for="cb_prep_notes"><?php esc_html_e('Please share anything that will help prepare for our meeting.', 'calendly-bookings'); ?></label>
+            <textarea id="cb_prep_notes" name="cb_prep_notes"></textarea>
+          </div>
+          <div class="cb-field">
+            <label for="cb_new_practice"><?php esc_html_e('Are you new to formal practice of meditation?', 'calendly-bookings'); ?></label>
+            <input type="text" id="cb_new_practice" name="cb_new_practice" required>
+          </div>
+          <div class="cb-field">
+            <label for="cb_methods"><?php esc_html_e('If you have practiced before, what methods have you explored? If none respond - N/A', 'calendly-bookings'); ?></label>
+            <input type="text" id="cb_methods" name="cb_methods">
+          </div>
+          <div class="cb-field">
+            <label><?php esc_html_e('Do you have any familiarity with the following?', 'calendly-bookings'); ?></label>
+            <div>
+              <label><input type="checkbox" name="cb_familiarity[]" value="Centering Prayer"> Centering Prayer</label>
+              <label><input type="checkbox" name="cb_familiarity[]" value="Contemplation"> Contemplation</label>
+              <label><input type="checkbox" name="cb_familiarity[]" value="Concentrative meditation - mantras"> Concentrative meditation - mantras</label>
+              <label><input type="checkbox" name="cb_familiarity[]" value="Lectio Divina"> Lectio Divina</label>
+              <label><input type="checkbox" name="cb_familiarity[]" value="Binaural beats"> Binaural beats</label>
+              <label><input type="checkbox" name="cb_familiarity[]" value="Other"> Other</label>
+            </div>
+          </div>
+          <?php
+          break;
+
+      case "spiritual-companionship":
+          ?>
+          <!-- Spiritual Companionship Intake -->
+          <div class="cb-field">
+            <label for="cb_order_id"><?php esc_html_e('Order ID', 'calendly-bookings'); ?></label>
+            <input type="text" id="cb_order_id" name="cb_order_id" required>
+          </div>
+          <div class="cb-field">
+            <label for="cb_experience"><?php esc_html_e('Since your previous session is there any experience or thought that you would want to raise in the coming session?', 'calendly-bookings'); ?></label>
+            <textarea id="cb_experience" name="cb_experience"></textarea>
+          </div>
+          <?php
+          break;
+
+      case "reconnective-healing":
+          ?>
+          <!-- Reconnective Healing Intake -->
+          <div class="cb-field">
+            <label for="cb_prep_notes"><?php esc_html_e('Please share anything that will help prepare for our meeting.', 'calendly-bookings'); ?></label>
+            <textarea id="cb_prep_notes" name="cb_prep_notes"></textarea>
+          </div>
+          <?php
+          break;
+
+      case "qhht-session":
+          ?>
+          <!-- QHHT® Session Intake -->
+          <div class="cb-field">
+            <label for="cb_prep_notes"><?php esc_html_e('Please share anything that will help prepare for our meeting.', 'calendly-bookings'); ?></label>
+            <textarea id="cb_prep_notes" name="cb_prep_notes"></textarea>
+          </div>
+          <div class="cb-field">
+            <label for="cb_qhht_questions"><?php esc_html_e('Write 6 questions you would want answers for during the session.', 'calendly-bookings'); ?></label>
+            <textarea id="cb_qhht_questions" name="cb_qhht_questions"></textarea>
+          </div>
+          <?php
+          break;
+  }
+  ?>
+
   <p>
     <input type="hidden" name="cb_prefill" value="1">
   </p>

@@ -221,9 +221,11 @@ class CB_Checkout {
             'event_type' => $event_type,
             'start_time' => $order->get_meta('_cb_meeting_time'),
             'invitee' => [
-                'name'  => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
                 'email' => $order->get_billing_email(),
-                'timezone' => 'UTC',
+                'first_name' => $order->get_billing_first_name(),
+                'last_name'  => $order->get_billing_last_name(),
+                'name'  => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
+                'timezone' => wp_timezone_string(),
             ],
             'location'   => [
                 'kind'     => $order->get_meta('_cb_meeting_location') === 1 ? 'zoom' : 'physical',
