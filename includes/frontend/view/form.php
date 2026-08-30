@@ -110,27 +110,27 @@ $email        = esc_attr($current_user->user_email ?? '');
           <div class="avaia_section">
   <label><?php esc_html_e('Do you have any familiarity with the following?', 'calendly-bookings'); ?></label>
   <div class="form_element form_element_checkbox">
-    <span class="avia_checkbox">
+    <span class="avia_checkbox first">
       <input type="checkbox" id="cb_centering" name="cb_familiarity[]" value="Centering Prayer">
       <label for="cb_centering">Centering Prayer</label>
     </span>
-    <span class="avia_checkbox">
+    <span class="avia_checkbox first">
       <input type="checkbox" id="cb_contemplation" name="cb_familiarity[]" value="Contemplation">
       <label for="cb_contemplation">Contemplation</label>
     </span>
-    <span class="avia_checkbox">
+    <span class="avia_checkbox first">
       <input type="checkbox" id="cb_mantras" name="cb_familiarity[]" value="Concentrative meditation - mantras">
       <label for="cb_mantras">Concentrative meditation - mantras</label>
     </span>
-    <span class="avia_checkbox">
+    <span class="avia_checkbox first">
       <input type="checkbox" id="cb_lectio" name="cb_familiarity[]" value="Lectio Divina">
       <label for="cb_lectio">Lectio Divina</label>
     </span>
-    <span class="avia_checkbox">
+    <span class="avia_checkbox first">
       <input type="checkbox" id="cb_binaural" name="cb_familiarity[]" value="Binaural beats">
       <label for="cb_binaural">Binaural beats</label>
     </span>
-    <span class="avia_checkbox">
+    <span class="avia_checkbox first">
       <input type="checkbox" id="cb_other" name="cb_familiarity[]" value="Other">
       <label for="cb_other">Other</label>
     </span>
