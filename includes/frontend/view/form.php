@@ -30,8 +30,8 @@ $email        = esc_attr($current_user->user_email ?? '');
     <div class="cb-field">
       <label for="cb_meeting_location"><?php esc_html_e('Location', 'calendly-bookings'); ?></label>
       <select id="cb_meeting_location" name="cb_meeting_location" required>
-        <option value=""><?php esc_html_e('Select a location', 'calendly-bookings'); ?></option>
         <?php if($slug != "hesychia" && in_array($slug, ["initial-consultation", "meditation-session", "spiritual-companionship"], true)): ?>
+        <option value=""><?php esc_html_e('Select a location', 'calendly-bookings'); ?></option>
         <option value="1">
           <?php esc_html_e('Zoom - Web conferencing details provided upon confirmation.', 'calendly-bookings'); ?>
         </option>
