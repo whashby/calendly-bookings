@@ -32,12 +32,35 @@ class CB_Checkout {
 		add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_calendly_embed']);
     }
 
-	public static function add_checkout_fields($checkout) {
-		echo '<input type="hidden" name="cb_meeting_location" value="' . esc_attr($checkout->get_value('cb_meeting_location')) . '" />';
-		echo '<input type="hidden" name="cb_meeting_date" value="' . esc_attr($checkout->get_value('cb_meeting_date')) . '" />';
-		echo '<input type="hidden" name="cb_meeting_time" value="' . esc_attr($checkout->get_value('cb_meeting_time')) . '" />';
-		echo '<input type="hidden" name="cb_hier_intro" value="' . esc_attr($checkout->get_value('cb_hier_intro')) . '" />';
-	}
+    public static function add_checkout_fields($checkout) {
+        // Common fields
+        echo '<input type="hidden" name="cb_meeting_location" value="' . esc_attr($checkout->get_value('cb_meeting_location')) . '" />';
+        echo '<input type="hidden" name="cb_meeting_date" value="' . esc_attr($checkout->get_value('cb_meeting_date')) . '" />';
+        echo '<input type="hidden" name="cb_meeting_time" value="' . esc_attr($checkout->get_value('cb_meeting_time')) . '" />';
+
+        // Initial Consultation
+        echo '<input type="hidden" name="cb_hier_intro" value="' . esc_attr($checkout->get_value('cb_hier_intro')) . '" />';
+
+        // Meditation Session
+        echo '<input type="hidden" name="cb_prep_notes" value="' . esc_attr($checkout->get_value('cb_prep_notes')) . '" />';
+        echo '<input type="hidden" name="cb_new_practice" value="' . esc_attr($checkout->get_value('cb_new_practice')) . '" />';
+        echo '<input type="hidden" name="cb_methods" value="' . esc_attr($checkout->get_value('cb_methods')) . '" />';
+        // familiarity checkboxes come through as array → join them
+        $familiarity = $checkout->get_value('cb_familiarity');
+        if (!empty($familiarity) && is_array($familiarity)) {
+            echo '<input type="hidden" name="cb_familiarity" value="' . esc_attr(implode(',', $familiarity)) . '" />';
+        }
+        //echo '<input type="hidden" name="cb_other_text" value="' . esc_attr($checkout->get_value('cb_other_text')) . '" />';
+
+        // Spiritual Companionship
+        echo '<input type="hidden" name="cb_experience" value="' . esc_attr($checkout->get_value('cb_experience')) . '" />';
+
+        // Reconnective Healing
+        echo '<input type="hidden" name="cb_prep_notes" value="' . esc_attr($checkout->get_value('cb_prep_notes')) . '" />';
+
+        // QHHT Session
+        echo '<input type="hidden" name="cb_qhht_questions" value="' . esc_attr($checkout->get_value('cb_qhht_questions')) . '" />';
+    }
     
     public static function capture_form_data($cart_item_data, $product_id, $variation_id) {
         // Define expected fields and their sanitization callbacks
@@ -45,19 +68,37 @@ class CB_Checkout {
             'cb_meeting_location' => 'sanitize_text_field',
             'cb_meeting_date'     => 'sanitize_text_field',
             'cb_meeting_time'     => 'sanitize_text_field',
-            'cb_hier_intro'       => 'sanitize_textarea_field', // longer text, allow line breaks
-            'order_comments'      => 'sanitize_textarea_field', // comments field
+            'cb_hier_intro'       => 'sanitize_textarea_field', // initial consultation
+            'order_comments'      => 'sanitize_textarea_field',
+
+            // Meditation session
+            'cb_order_id'         => 'sanitize_text_field',
+            'cb_prep_notes'       => 'sanitize_textarea_field',
+            'cb_new_practice'     => 'sanitize_text_field',
+            'cb_methods'          => 'sanitize_text_field',
+            'cb_familiarity'      => function($val) {
+                // multiple checkboxes → array
+                return array_map('sanitize_text_field', (array)$val);
+            },
+
+            // Spiritual companionship
+            'cb_experience'       => 'sanitize_textarea_field',
+
+            // QHHT session
+            'cb_qhht_questions'   => 'sanitize_textarea_field',
         ];
-    
+
         foreach ($fields as $key => $callback) {
             if (!empty($_POST[$key])) {
-                // wp_unslash() removes slashes added by WP
                 $raw_value = wp_unslash($_POST[$key]);
-                $cart_item_data[$key] = call_user_func($callback, $raw_value);
+                if (is_callable($callback)) {
+                    $cart_item_data[$key] = call_user_func($callback, $raw_value);
+                } else {
+                    $cart_item_data[$key] = $callback($raw_value);
+                }
             }
         }
-    
-        
+
         return $cart_item_data;
     }
 
@@ -72,58 +113,109 @@ class CB_Checkout {
         return $value;
     }
 
-	public static function save_order_meta(\WC_Order $order, $data) {
-        $token = wp_generate_uuid4();
-        $order->update_meta_data('_cb_security_token', $token);
-		
-		// Meeting location (hidden field)
-		if (!empty($_POST['cb_meeting_location'])) {
-			$order->update_meta_data(
-				'_cb_meeting_location',
-				sanitize_text_field(wp_unslash($_POST['cb_meeting_location']))
-			);
-		}
+public static function save_order_meta(\WC_Order $order, $data) {
+    // Generate and store a security token
+    $token = wp_generate_uuid4();
+    $order->update_meta_data('_cb_security_token', $token);
 
-		// Meeting date (hidden field)
-		if (!empty($_POST['cb_meeting_date'])) {
-			$order->update_meta_data(
-				'_cb_meeting_date',
-				sanitize_text_field(wp_unslash($_POST['cb_meeting_date']))
-			);
-		}
+    // Meeting location
+    if (!empty($_POST['cb_meeting_location'])) {
+        $order->update_meta_data(
+            '_cb_meeting_location',
+            sanitize_text_field(wp_unslash($_POST['cb_meeting_location']))
+        );
+    }
 
-		// Meeting time (hidden field)
-		if (!empty($_POST['cb_meeting_time'])) {
-			$order->update_meta_data(
-				'_cb_meeting_time',
-				sanitize_text_field(wp_unslash($_POST['cb_meeting_time']))
-			);
-		}
+    // Meeting date
+    if (!empty($_POST['cb_meeting_date'])) {
+        $order->update_meta_data(
+            '_cb_meeting_date',
+            sanitize_text_field(wp_unslash($_POST['cb_meeting_date']))
+        );
+    }
 
-		// Meeting intro question (hidden field)
-		if (!empty($_POST['cb_hier_intro'])) {
-			$order->update_meta_data(
-				'_cb_hier_intro',
-				sanitize_text_field(wp_unslash($_POST['cb_hier_intro']))
-			);
-		}
+    // Meeting time
+    if (!empty($_POST['cb_meeting_time'])) {
+        $order->update_meta_data(
+            '_cb_meeting_time',
+            sanitize_text_field(wp_unslash($_POST['cb_meeting_time']))
+        );
+    }
 
-		// Meeting notes: persist "Nil" if empty
-		$notes = !empty($_POST['order_comments'])
-			? sanitize_textarea_field(wp_unslash($_POST['order_comments']))
-			: 'Nil';
+    // Initial consultation intro
+    if (!empty($_POST['cb_hier_intro'])) {
+        $order->update_meta_data(
+            '_cb_hier_intro',
+            sanitize_textarea_field(wp_unslash($_POST['cb_hier_intro']))
+        );
+    }
 
-		$order->update_meta_data('_cb_meeting_notes', $notes);
+    // Meditation prep notes
+    if (!empty($_POST['cb_prep_notes'])) {
+        $order->update_meta_data(
+            '_cb_prep_notes',
+            sanitize_textarea_field(wp_unslash($_POST['cb_prep_notes']))
+        );
+    }
 
-		// Do not set customer note if Nil (prevents it showing in emails/invoices)
-		if ($notes !== 'Nil') {
-			$order->set_customer_note($notes);
-		}
-		
-		
+    // Meditation new practice
+    if (!empty($_POST['cb_new_practice'])) {
+        $order->update_meta_data(
+            '_cb_new_practice',
+            sanitize_text_field(wp_unslash($_POST['cb_new_practice']))
+        );
+    }
 
-	}
-	
+    // Meditation methods
+    if (!empty($_POST['cb_methods'])) {
+        $order->update_meta_data(
+            '_cb_methods',
+            sanitize_text_field(wp_unslash($_POST['cb_methods']))
+        );
+    }
+
+    // Meditation familiarity checkboxes
+    if (!empty($_POST['cb_familiarity']) && is_array($_POST['cb_familiarity'])) {
+        $familiarity = array_map('sanitize_text_field', wp_unslash($_POST['cb_familiarity']));
+        $order->update_meta_data('_cb_familiarity', implode(', ', $familiarity));
+    }
+
+    // Meditation "Other" text
+    if (!empty($_POST['cb_other_text'])) {
+        $order->update_meta_data(
+            '_cb_other_text',
+            sanitize_text_field(wp_unslash($_POST['cb_other_text']))
+        );
+    }
+
+    // Spiritual companionship experience
+    if (!empty($_POST['cb_experience'])) {
+        $order->update_meta_data(
+            '_cb_experience',
+            sanitize_textarea_field(wp_unslash($_POST['cb_experience']))
+        );
+    }
+
+    // QHHT questions
+    if (!empty($_POST['cb_qhht_questions'])) {
+        $order->update_meta_data(
+            '_cb_qhht_questions',
+            sanitize_textarea_field(wp_unslash($_POST['cb_qhht_questions']))
+        );
+    }
+
+    // Meeting notes: persist "Nil" if empty
+    $notes = !empty($_POST['order_comments'])
+        ? sanitize_textarea_field(wp_unslash($_POST['order_comments']))
+        : 'Nil';
+
+    $order->update_meta_data('_cb_meeting_notes', $notes);
+
+    // Do not set customer note if Nil (prevents it showing in emails/invoices)
+    if ($notes !== 'Nil') {
+        $order->set_customer_note($notes);
+    }
+}
 	/**
      * Ensure a customer account exists and attach the order.
      * If new, send activation email.
@@ -194,12 +286,13 @@ class CB_Checkout {
         return $user->ID;
     }
 
-
+/* TODO: Add questions_and_answers to the invitee creation payload, 
+ * including the "Have you experienced a sound/vibration session before?" question.
+ */
     public static function create_calendly_invitee() {
 		$order_id = absint(get_query_var('order-received'));
 
         $api_key    = (string) get_option(CB_Constants::OPT_API_TOKEN, '');
-        $user_uuid  = (string) get_option(CB_Constants::OPT_USER_UUID, '');
         
         $order = wc_get_order( $order_id );
         if ( ! $order ) {
@@ -227,10 +320,14 @@ class CB_Checkout {
                 'name'  => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
                 'timezone' => wp_timezone_string(),
             ],
+
             'location'   => [
                 'kind'     => $order->get_meta('_cb_meeting_location') === 1 ? 'zoom' : 'physical',
                 'location' => $order->get_meta('_cb_meeting_location') === 1 ? 'Zoom' : "HIER Life - Skeete's Road Jackmans, St. Michael",
             ],
+
+            
+
             'questions_and_answers' => [
                 [
                     'question' => 'Order ID (see payment)',
@@ -476,11 +573,11 @@ public static function maybe_override_thankyou(): void {
     remove_all_actions( 'woocommerce_order_details_before_order_table' );
 
     // Add our custom renderer at highest priority so it runs first
-    add_action( 'woocommerce_thankyou', [ __CLASS__, 'render_meeting_thankyou' ], 1, 1 );
+    //add_action( 'woocommerce_thankyou', [ __CLASS__, 'render_meeting_thankyou' ], 1, 1 );
 
     // If you need to create the Calendly invitee immediately after rendering,
     // attach it with a later priority so rendering happens first:
-    // add_action('woocommerce_thankyou', [__CLASS__, 'create_calendly_invitee'], 20, 1);
+    add_action('woocommerce_thankyou', [__CLASS__, 'create_calendly_invitee'], 1, 1);
 }
 
 
