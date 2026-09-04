@@ -107,7 +107,7 @@ switch ($slug) {
         <span class="avia_checkbox">
           <input type="checkbox" id="cb_other" name="cb_familiarity[]" value="Other">
           <label for="cb_other">Other</label>
-          <input type="text" id="cb_other_text" name="cb_other_text" placeholder="Please specify if other">
+          <input type="text" id="cb_other_text" name="cb_familiarity[]" placeholder="Please specify if other">
         </span>
       </div>
     </div>
