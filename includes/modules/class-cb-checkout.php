@@ -109,24 +109,46 @@ public static function prefill_checkout($value, $input) {
     return $value;
 }
 
-public static function prefill_checkout($value, $input) {
-    $cart = WC()->cart;
-    if (!$cart) {
-        return $value;
-    }
+public static function save_order_meta(\WC_Order $order, $data) {
+    // Security token
+    $token = wp_generate_uuid4();
+    $order->update_meta_data('_cb_security_token', $token);
 
-    foreach ($cart->get_cart() as $item) {
-        if (isset($item[$input])) {
-            return $item[$input];
+    $fields = [
+        'cb_meeting_location' => ['_cb_meeting_location', 'sanitize_text_field'],
+        'cb_meeting_date'     => ['_cb_meeting_date', 'sanitize_text_field'],
+        'cb_meeting_time'     => ['_cb_meeting_time', 'sanitize_text_field'],
+        'cb_hier_intro'       => ['_cb_hier_intro', 'sanitize_textarea_field'],
+        'cb_prep_notes'       => ['_cb_prep_notes', 'sanitize_textarea_field'],
+        'cb_new_practice'     => ['_cb_new_practice', 'sanitize_text_field'],
+        'cb_methods'          => ['_cb_methods', 'sanitize_text_field'],
+        'cb_other_text'       => ['_cb_other_text', 'sanitize_text_field'],
+        'cb_experience'       => ['_cb_experience', 'sanitize_textarea_field'],
+        'cb_qhht_questions'   => ['_cb_qhht_questions', 'sanitize_textarea_field'],
+    ];
+
+    foreach ($fields as $post_key => [$meta_key, $callback]) {
+        if (!empty($_POST[$post_key])) {
+            $order->update_meta_data($meta_key, call_user_func($callback, wp_unslash($_POST[$post_key])));
         }
     }
 
-    // Fallback: check posted data
-    if (!empty($_POST[$input])) {
-        return sanitize_text_field(wp_unslash($_POST[$input]));
+    // Familiarity checkboxes
+    if (!empty($_POST['cb_familiarity']) && is_array($_POST['cb_familiarity'])) {
+        $familiarity = array_map('sanitize_text_field', wp_unslash($_POST['cb_familiarity']));
+        $order->update_meta_data('_cb_familiarity', implode(', ', $familiarity));
     }
 
-    return $value;
+    // Meeting notes (persist "Nil" if empty)
+    $notes = !empty($_POST['order_comments'])
+        ? sanitize_textarea_field(wp_unslash($_POST['order_comments']))
+        : 'Nil';
+
+    $order->update_meta_data('_cb_meeting_notes', $notes);
+
+    if ($notes !== 'Nil') {
+        $order->set_customer_note($notes);
+    }
 }
 
 /**
