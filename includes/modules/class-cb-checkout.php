@@ -93,20 +93,25 @@ public static function capture_form_data($cart_item_data, $product_id, $variatio
             }
         }
     }
-
     return $cart_item_data;
 }
-
 public static function prefill_checkout($value, $input) {
     $cart = WC()->cart;
     if (!$cart) {
         return $value;
     }
+
     foreach ($cart->get_cart() as $item) {
         if (isset($item[$input])) {
             return $item[$input];
         }
     }
+
+    // Fallback: check posted data (if coming directly from form)
+    if (!empty($_POST[$input])) {
+        return sanitize_text_field(wp_unslash($_POST[$input]));
+    }
+
     return $value;
 }
 
