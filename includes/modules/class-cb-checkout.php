@@ -8,29 +8,39 @@ use Calendly_Bookings\Utils\CB_Timezone_Converter;
 
 class CB_Checkout {
 
-    public static function register(): void {
-        // Checkout fields
-        add_action('woocommerce_after_order_notes', [__CLASS__, 'add_checkout_fields']);
-        add_action('woocommerce_checkout_create_order', [__CLASS__, 'save_order_meta'], 10, 2);
+public static function register(): void {
+    // Capture custom fields when Add to Cart is clicked
+    add_filter('woocommerce_add_cart_item_data', [__CLASS__, 'capture_form_data'], 10, 3);
 
-        // Prefill checkout from cart
-        add_filter('woocommerce_add_cart_item_data', [__CLASS__, 'capture_form_data'], 10, 3);
-        add_filter('woocommerce_checkout_get_value', [__CLASS__, 'prefill_checkout'], 10, 2);
-        
-        //create new Account
-        add_action('woocommerce_payment_complete', [__CLASS__, 'attach_order_to_account']);
-        #add_action('woocommerce_payment_complete', [__CLASS__, 'create_calendly_invitee']);
+    // Prefill checkout fields from cart/session
+    add_filter('woocommerce_checkout_get_value', [__CLASS__, 'prefill_checkout'], 10, 2);
 
-        // Display in emails, My Account, admin
-        add_action('woocommerce_email_order_meta', [__CLASS__, 'add_to_emails'], 10, 4);
-        add_action('woocommerce_order_details_after_order_table', [__CLASS__, 'add_to_my_account']);
-        add_filter('manage_edit-shop_order_columns', [__CLASS__, 'add_admin_column']);
-        add_action('manage_shop_order_posts_custom_column', [__CLASS__, 'render_admin_column'], 10, 2);
-        
-        // Override Thank You page
-        add_action('template_redirect', [__CLASS__, 'maybe_override_thankyou'], 1);
-		add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_calendly_embed']);
-    }
+    // Render hidden inputs on checkout page
+    add_action('woocommerce_after_order_notes', [__CLASS__, 'add_checkout_fields']);
+
+    // Save custom fields into order meta
+    add_action('woocommerce_checkout_create_order', [__CLASS__, 'save_order_meta'], 10, 2);
+
+    // Attach order to account after payment
+    add_action('woocommerce_payment_complete', [__CLASS__, 'attach_order_to_account']);
+    // Optionally: create Calendly invitee after payment
+    // add_action('woocommerce_payment_complete', [__CLASS__, 'create_calendly_invitee']);
+
+    // Display custom fields in emails, My Account, and admin
+    add_action('woocommerce_email_order_meta', [__CLASS__, 'add_to_emails'], 10, 4);
+    add_action('woocommerce_order_details_after_order_table', [__CLASS__, 'add_to_my_account']);
+    add_filter('manage_edit-shop_order_columns', [__CLASS__, 'add_admin_column']);
+    add_action('manage_shop_order_posts_custom_column', [__CLASS__, 'render_admin_column'], 10, 2);
+
+    // Show custom fields in cart and checkout review
+    add_filter('woocommerce_get_item_data', [__CLASS__, 'display_cart_item_data'], 10, 2);
+
+    // Override Thank You page
+    add_action('template_redirect', [__CLASS__, 'maybe_override_thankyou']);
+
+    // Enqueue Calendly embed script
+    add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_calendly_embed']);
+}
 
 public static function add_checkout_fields($checkout) {
     $fields = [
