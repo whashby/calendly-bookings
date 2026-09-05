@@ -33,68 +33,62 @@ class CB_Checkout {
     }
 
 public static function add_checkout_fields($checkout) {
-    // Common fields
-    echo '<input type="hidden" name="cb_meeting_location" value="' . esc_attr($checkout->get_value('cb_meeting_location')) . '" />';
-    echo '<input type="hidden" name="cb_meeting_date" value="' . esc_attr($checkout->get_value('cb_meeting_date')) . '" />';
-    echo '<input type="hidden" name="cb_meeting_time" value="' . esc_attr($checkout->get_value('cb_meeting_time')) . '" />';
+    $fields = [
+        'cb_meeting_location',
+        'cb_meeting_date',
+        'cb_meeting_time',
+        'cb_hier_intro',
+        'cb_prep_notes',
+        'cb_new_practice',
+        'cb_methods',
+        'cb_other_text',
+        'cb_experience',
+        'cb_qhht_questions',
+        'order_comments',
+    ];
 
-    // Initial Consultation
-    echo '<input type="hidden" name="cb_hier_intro" value="' . esc_attr($checkout->get_value('cb_hier_intro')) . '" />';
+    foreach ($fields as $field) {
+        echo '<input type="hidden" name="' . esc_attr($field) . '" value="' . esc_attr($checkout->get_value($field)) . '" />';
+    }
 
-    // Meditation Session
-    echo '<input type="hidden" name="cb_prep_notes" value="' . esc_attr($checkout->get_value('cb_prep_notes')) . '" />';
-    echo '<input type="hidden" name="cb_new_practice" value="' . esc_attr($checkout->get_value('cb_new_practice')) . '" />';
-    echo '<input type="hidden" name="cb_methods" value="' . esc_attr($checkout->get_value('cb_methods')) . '" />';
+    // Familiarity checkboxes (array → join)
     $familiarity = $checkout->get_value('cb_familiarity');
     if (!empty($familiarity) && is_array($familiarity)) {
         echo '<input type="hidden" name="cb_familiarity" value="' . esc_attr(implode(',', $familiarity)) . '" />';
     }
-    echo '<input type="hidden" name="cb_other_text" value="' . esc_attr($checkout->get_value('cb_other_text')) . '" />';
-
-    // Spiritual Companionship
-    echo '<input type="hidden" name="cb_experience" value="' . esc_attr($checkout->get_value('cb_experience')) . '" />';
-
-    // QHHT Session
-    echo '<input type="hidden" name="cb_qhht_questions" value="' . esc_attr($checkout->get_value('cb_qhht_questions')) . '" />';
 }
     
 public static function capture_form_data($cart_item_data, $product_id, $variation_id) {
     $fields = [
-        // Common
         'cb_meeting_location' => 'sanitize_text_field',
         'cb_meeting_date'     => 'sanitize_text_field',
         'cb_meeting_time'     => 'sanitize_text_field',
         'cb_hier_intro'       => 'sanitize_textarea_field',
-        'order_comments'      => 'sanitize_textarea_field',
-
-        // Meditation
         'cb_prep_notes'       => 'sanitize_textarea_field',
         'cb_new_practice'     => 'sanitize_text_field',
         'cb_methods'          => 'sanitize_text_field',
-        'cb_familiarity'      => function($val) {
-            return array_map('sanitize_text_field', (array)$val);
-        },
         'cb_other_text'       => 'sanitize_text_field',
-
-        // Spiritual Companionship
         'cb_experience'       => 'sanitize_textarea_field',
-
-        // QHHT
         'cb_qhht_questions'   => 'sanitize_textarea_field',
+        'order_comments'      => 'sanitize_textarea_field',
     ];
 
     foreach ($fields as $key => $callback) {
         if (!empty($_POST[$key])) {
             $raw_value = wp_unslash($_POST[$key]);
-            if (is_callable($callback)) {
-                $cart_item_data[$key] = call_user_func($callback, $raw_value);
-            } else {
-                $cart_item_data[$key] = $callback($raw_value);
-            }
+            $cart_item_data[$key] = call_user_func($callback, $raw_value);
         }
     }
+
+    // Familiarity checkboxes (array)
+    if (!empty($_POST['cb_familiarity'])) {
+        $raw = wp_unslash($_POST['cb_familiarity']);
+        $cart_item_data['cb_familiarity'] = array_map('sanitize_text_field', (array) $raw);
+    }
+
     return $cart_item_data;
 }
+
 public static function prefill_checkout($value, $input) {
     $cart = WC()->cart;
     if (!$cart) {
@@ -115,108 +109,24 @@ public static function prefill_checkout($value, $input) {
     return $value;
 }
 
-public static function save_order_meta(\WC_Order $order, $data) {
-    // Generate and store a security token
-    $token = wp_generate_uuid4();
-    $order->update_meta_data('_cb_security_token', $token);
-
-    // Meeting location
-    if (!empty($_POST['cb_meeting_location'])) {
-        $order->update_meta_data(
-            '_cb_meeting_location',
-            sanitize_text_field(wp_unslash($_POST['cb_meeting_location']))
-        );
+public static function prefill_checkout($value, $input) {
+    $cart = WC()->cart;
+    if (!$cart) {
+        return $value;
     }
 
-    // Meeting date
-    if (!empty($_POST['cb_meeting_date'])) {
-        $order->update_meta_data(
-            '_cb_meeting_date',
-            sanitize_text_field(wp_unslash($_POST['cb_meeting_date']))
-        );
+    foreach ($cart->get_cart() as $item) {
+        if (isset($item[$input])) {
+            return $item[$input];
+        }
     }
 
-    // Meeting time
-    if (!empty($_POST['cb_meeting_time'])) {
-        $order->update_meta_data(
-            '_cb_meeting_time',
-            sanitize_text_field(wp_unslash($_POST['cb_meeting_time']))
-        );
+    // Fallback: check posted data
+    if (!empty($_POST[$input])) {
+        return sanitize_text_field(wp_unslash($_POST[$input]));
     }
 
-    // Initial consultation intro
-    if (!empty($_POST['cb_hier_intro'])) {
-        $order->update_meta_data(
-            '_cb_hier_intro',
-            sanitize_textarea_field(wp_unslash($_POST['cb_hier_intro']))
-        );
-    }
-
-    // Meditation prep notes
-    if (!empty($_POST['cb_prep_notes'])) {
-        $order->update_meta_data(
-            '_cb_prep_notes',
-            sanitize_textarea_field(wp_unslash($_POST['cb_prep_notes']))
-        );
-    }
-
-    // Meditation new practice
-    if (!empty($_POST['cb_new_practice'])) {
-        $order->update_meta_data(
-            '_cb_new_practice',
-            sanitize_text_field(wp_unslash($_POST['cb_new_practice']))
-        );
-    }
-
-    // Meditation methods
-    if (!empty($_POST['cb_methods'])) {
-        $order->update_meta_data(
-            '_cb_methods',
-            sanitize_text_field(wp_unslash($_POST['cb_methods']))
-        );
-    }
-
-    // Meditation familiarity checkboxes
-    if (!empty($_POST['cb_familiarity']) && is_array($_POST['cb_familiarity'])) {
-        $familiarity = array_map('sanitize_text_field', wp_unslash($_POST['cb_familiarity']));
-        $order->update_meta_data('_cb_familiarity', implode(', ', $familiarity));
-    }
-
-    // Meditation "Other" text
-    if (!empty($_POST['cb_other_text'])) {
-        $order->update_meta_data(
-            '_cb_other_text',
-            sanitize_text_field(wp_unslash($_POST['cb_other_text']))
-        );
-    }
-
-    // Spiritual companionship experience
-    if (!empty($_POST['cb_experience'])) {
-        $order->update_meta_data(
-            '_cb_experience',
-            sanitize_textarea_field(wp_unslash($_POST['cb_experience']))
-        );
-    }
-
-    // QHHT questions
-    if (!empty($_POST['cb_qhht_questions'])) {
-        $order->update_meta_data(
-            '_cb_qhht_questions',
-            sanitize_textarea_field(wp_unslash($_POST['cb_qhht_questions']))
-        );
-    }
-
-    // Meeting notes: persist "Nil" if empty
-    $notes = !empty($_POST['order_comments'])
-        ? sanitize_textarea_field(wp_unslash($_POST['order_comments']))
-        : 'Nil';
-
-    $order->update_meta_data('_cb_meeting_notes', $notes);
-
-    // Do not set customer note if Nil (prevents it showing in emails/invoices)
-    if ($notes !== 'Nil') {
-        $order->set_customer_note($notes);
-    }
+    return $value;
 }
 
 /**
