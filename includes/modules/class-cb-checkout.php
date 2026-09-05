@@ -85,45 +85,69 @@ public static function capture_form_data($cart_item_data, $product_id, $variatio
 
     foreach ($fields as $key => $callback) {
         if (!empty($_POST[$key])) {
-            $raw_value = wp_unslash($_POST[$key]);
-            $cart_item_data[$key] = call_user_func($callback, $raw_value);
+            $cart_item_data[$key] = call_user_func($callback, wp_unslash($_POST[$key]));
         }
     }
 
-    // Familiarity checkboxes (array)
     if (!empty($_POST['cb_familiarity'])) {
-        $raw = wp_unslash($_POST['cb_familiarity']);
-        $cart_item_data['cb_familiarity'] = array_map('sanitize_text_field', (array) $raw);
+        $cart_item_data['cb_familiarity'] = array_map('sanitize_text_field', (array) wp_unslash($_POST['cb_familiarity']));
     }
 
     return $cart_item_data;
 }
 
-public static function prefill_checkout($value, $input) {
-    $cart = WC()->cart;
-    if (!$cart) {
-        return $value;
-    }
+public static function display_cart_item_data($item_data, $cart_item) {
+    $keys = [
+        'cb_meeting_date'     => __('Meeting Date', 'calendly-bookings'),
+        'cb_meeting_time'     => __('Meeting Time', 'calendly-bookings'),
+        'cb_meeting_location' => __('Location', 'calendly-bookings'),
+        'cb_hier_intro'       => __('Intro', 'calendly-bookings'),
+        'cb_prep_notes'       => __('Preparation Notes', 'calendly-bookings'),
+        'cb_new_practice'     => __('New Practice', 'calendly-bookings'),
+        'cb_methods'          => __('Methods', 'calendly-bookings'),
+        'cb_other_text'       => __('Other Practice', 'calendly-bookings'),
+        'cb_experience'       => __('Experience', 'calendly-bookings'),
+        'cb_qhht_questions'   => __('QHHT Questions', 'calendly-bookings'),
+        'order_comments'      => __('Notes', 'calendly-bookings'),
+    ];
 
-    foreach ($cart->get_cart() as $item) {
-        if (isset($item[$input])) {
-            return $item[$input];
+    foreach ($keys as $key => $label) {
+        if (!empty($cart_item[$key])) {
+            $item_data[] = [
+                'key'   => $label,
+                'value' => wc_clean($cart_item[$key]),
+            ];
         }
     }
 
-    // Fallback: check posted data (if coming directly from form)
+    if (!empty($cart_item['cb_familiarity'])) {
+        $item_data[] = [
+            'key'   => __('Familiarity', 'calendly-bookings'),
+            'value' => is_array($cart_item['cb_familiarity'])
+                ? implode(', ', array_map('wc_clean', $cart_item['cb_familiarity']))
+                : wc_clean($cart_item['cb_familiarity']),
+        ];
+    }
+
+    return $item_data;
+}
+
+public static function prefill_checkout($value, $input) {
+    $cart = WC()->cart;
+    if ($cart) {
+        foreach ($cart->get_cart() as $item) {
+            if (isset($item[$input])) {
+                return $item[$input];
+            }
+        }
+    }
     if (!empty($_POST[$input])) {
         return sanitize_text_field(wp_unslash($_POST[$input]));
     }
-
     return $value;
 }
 
 public static function save_order_meta(\WC_Order $order, $data) {
-    // Security token
-    $token = wp_generate_uuid4();
-    $order->update_meta_data('_cb_security_token', $token);
-
     $fields = [
         'cb_meeting_location' => ['_cb_meeting_location', 'sanitize_text_field'],
         'cb_meeting_date'     => ['_cb_meeting_date', 'sanitize_text_field'],
@@ -143,19 +167,16 @@ public static function save_order_meta(\WC_Order $order, $data) {
         }
     }
 
-    // Familiarity checkboxes
-    if (!empty($_POST['cb_familiarity']) && is_array($_POST['cb_familiarity'])) {
-        $familiarity = array_map('sanitize_text_field', wp_unslash($_POST['cb_familiarity']));
+    if (!empty($_POST['cb_familiarity'])) {
+        $familiarity = array_map('sanitize_text_field', (array) wp_unslash($_POST['cb_familiarity']));
         $order->update_meta_data('_cb_familiarity', implode(', ', $familiarity));
     }
 
-    // Meeting notes (persist "Nil" if empty)
     $notes = !empty($_POST['order_comments'])
         ? sanitize_textarea_field(wp_unslash($_POST['order_comments']))
         : 'Nil';
 
     $order->update_meta_data('_cb_meeting_notes', $notes);
-
     if ($notes !== 'Nil') {
         $order->set_customer_note($notes);
     }
