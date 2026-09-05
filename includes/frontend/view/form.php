@@ -81,10 +81,6 @@ switch ($slug) {
   case "meditation-session":
     ?>
     <div class="cb-field">
-      <label for="cb_order_id"><?php esc_html_e('Order ID', 'calendly-bookings'); ?></label>
-      <input type="text" id="cb_order_id" name="cb_order_id" required>
-    </div>
-    <div class="cb-field">
       <label for="cb_prep_notes"><?php esc_html_e('Please share anything that will help prepare for our meeting.', 'calendly-bookings'); ?></label>
       <textarea id="cb_prep_notes" name="cb_prep_notes"></textarea>
     </div>
@@ -116,10 +112,6 @@ switch ($slug) {
 
   case "spiritual-companionship":
     ?>
-    <div class="cb-field">
-      <label for="cb_order_id"><?php esc_html_e('Order ID', 'calendly-bookings'); ?></label>
-      <input type="text" id="cb_order_id" name="cb_order_id" required>
-    </div>
     <div class="cb-field">
       <label for="cb_experience"><?php esc_html_e('Since your previous session is there any experience or thought that you would want to raise in the coming session?', 'calendly-bookings'); ?></label>
       <textarea id="cb_experience" name="cb_experience"></textarea>
