@@ -20,11 +20,13 @@ public static function register(): void {
 
     // Save custom fields into order meta
     add_action('woocommerce_checkout_create_order', [__CLASS__, 'save_order_meta'], 10, 2);
+    // Persist the complete booking snapshot on the order line item. This is the
+    // authoritative hand-off from the product/cart form to checkout and does not
+    // depend on checkout-page hidden inputs being serialized by the browser.
+    add_action('woocommerce_checkout_create_order_line_item', [__CLASS__, 'save_booking_item_meta'], 10, 4);
 
     // Attach order to account after payment
     add_action('woocommerce_payment_complete', [__CLASS__, 'attach_order_to_account']);
-    // Optionally: create Calendly invitee after payment
-    // add_action('woocommerce_payment_complete', [__CLASS__, 'create_calendly_invitee']);
 
     // Display custom fields in emails, My Account, and admin
     add_action('woocommerce_email_order_meta', [__CLASS__, 'add_to_emails'], 10, 4);
@@ -38,15 +40,20 @@ public static function register(): void {
     // Override Thank You page
     add_action('template_redirect', [__CLASS__, 'maybe_override_thankyou']);
 
-    // Enqueue Calendly embed script
-    add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_calendly_embed']);
 }
 
 public static function add_checkout_fields($checkout) {
+    $booking = self::get_cart_booking_snapshot();
+
     $fields = [
         'cb_meeting_location',
         'cb_meeting_date',
         'cb_meeting_time',
+        'cb_meeting_start_iso',
+        'cb_event_uuid',
+        'cb_event_type_uri',
+        'cb_meeting_location_details',
+        'cb_meeting_location_detail_text',
         'cb_hier_intro',
         'cb_prep_notes',
         'cb_new_practice',
@@ -58,21 +65,87 @@ public static function add_checkout_fields($checkout) {
     ];
 
     foreach ($fields as $field) {
-        echo '<input type="hidden" name="' . esc_attr($field) . '" value="' . esc_attr($checkout->get_value($field)) . '" />';
+        $value = array_key_exists($field, $booking) ? $booking[$field] : $checkout->get_value($field);
+        if (is_array($value)) {
+            $value = implode(', ', array_map('sanitize_text_field', $value));
+        }
+        echo '<input type="hidden" name="' . esc_attr($field) . '" value="' . esc_attr((string) $value) . '" />';
     }
 
-    // Familiarity checkboxes (array → join)
-    $familiarity = $checkout->get_value('cb_familiarity');
-    if (!empty($familiarity) && is_array($familiarity)) {
-        echo '<input type="hidden" name="cb_familiarity" value="' . esc_attr(implode(',', $familiarity)) . '" />';
+    $answers = isset($booking['cb_calendly_answers']) && is_array($booking['cb_calendly_answers'])
+        ? $booking['cb_calendly_answers']
+        : [];
+    echo '<input type="hidden" name="cb_calendly_answers_json" value="' . esc_attr(wp_json_encode($answers)) . '" />';
+
+    $familiarity = $booking['cb_familiarity'] ?? $checkout->get_value('cb_familiarity');
+    if (is_array($familiarity)) {
+        $familiarity = implode(',', array_map('sanitize_text_field', $familiarity));
+    }
+    if ($familiarity !== '' && $familiarity !== null) {
+        echo '<input type="hidden" name="cb_familiarity" value="' . esc_attr((string) $familiarity) . '" />';
     }
 }
-    
+
+/**
+ * Return the first meeting-booking cart item as a normalized snapshot.
+ * The cart item is the authoritative source because it is created directly
+ * from the product-page booking form and is persisted by WooCommerce in the
+ * customer session through checkout.
+ */
+private static function get_cart_booking_snapshot(): array {
+    if (!function_exists('WC') || !WC()->cart) {
+        return [];
+    }
+
+    foreach (WC()->cart->get_cart() as $cart_item) {
+        if (empty($cart_item['cb_event_uuid']) && empty($cart_item['cb_meeting_start_iso'])) {
+            continue;
+        }
+
+        $snapshot = $cart_item;
+        $snapshot['cb_calendly_answers'] = self::sanitize_answers($cart_item['cb_calendly_answers'] ?? []);
+        if (isset($snapshot['cb_familiarity']) && is_array($snapshot['cb_familiarity'])) {
+            $snapshot['cb_familiarity'] = array_values(array_filter(array_map('sanitize_text_field', $snapshot['cb_familiarity']), 'strlen'));
+        }
+        return $snapshot;
+    }
+
+    return [];
+}
+
+private static function sanitize_answers($answers): array {
+    if (!is_array($answers)) {
+        return [];
+    }
+
+    $clean = [];
+    foreach ($answers as $key => $value) {
+        $key = sanitize_key((string) $key);
+        if ($key === '') {
+            continue;
+        }
+        if (is_array($value)) {
+            $clean[$key] = array_values(array_filter(array_map('sanitize_text_field', $value), 'strlen'));
+        } else {
+            $clean[$key] = sanitize_textarea_field((string) $value);
+        }
+    }
+    return $clean;
+}
+
 public static function capture_form_data($cart_item_data, $product_id, $variation_id) {
     $fields = [
         'cb_meeting_location' => 'sanitize_text_field',
         'cb_meeting_date'     => 'sanitize_text_field',
         'cb_meeting_time'     => 'sanitize_text_field',
+        'cb_meeting_start_iso'=> 'sanitize_text_field',
+        'cb_event_uuid'       => 'sanitize_text_field',
+        'cb_event_type_uri'   => 'esc_url_raw',
+        'cb_meeting_location_details' => 'sanitize_text_field',
+        'cb_meeting_location_detail_text' => 'sanitize_text_field',
+        'billing_first_name'  => 'sanitize_text_field',
+        'billing_last_name'   => 'sanitize_text_field',
+        'billing_email'       => 'sanitize_email',
         'cb_hier_intro'       => 'sanitize_textarea_field',
         'cb_prep_notes'       => 'sanitize_textarea_field',
         'cb_new_practice'     => 'sanitize_text_field',
@@ -91,6 +164,35 @@ public static function capture_form_data($cart_item_data, $product_id, $variatio
 
     if (!empty($_POST['cb_familiarity'])) {
         $cart_item_data['cb_familiarity'] = array_map('sanitize_text_field', (array) wp_unslash($_POST['cb_familiarity']));
+    }
+
+    $answers = [];
+    if (isset($_POST['cb_calendly_answers']) && is_array($_POST['cb_calendly_answers'])) {
+        foreach (wp_unslash($_POST['cb_calendly_answers']) as $key => $value) {
+            $key = sanitize_key($key);
+            if (is_array($value)) {
+                $answers[$key] = array_values(array_filter(array_map('sanitize_text_field', $value), 'strlen'));
+            } else {
+                $answers[$key] = sanitize_textarea_field($value);
+            }
+        }
+    }
+    if (isset($_POST['cb_calendly_answers_other']) && is_array($_POST['cb_calendly_answers_other'])) {
+        foreach (wp_unslash($_POST['cb_calendly_answers_other']) as $key => $value) {
+            $key = sanitize_key($key);
+            $value = sanitize_text_field($value);
+            if ($key !== '' && $value !== '') {
+                $answers[$key . '_other'] = $value;
+            }
+        }
+    }
+    if ($answers) {
+        $cart_item_data['cb_calendly_answers'] = $answers;
+    }
+
+    // Make identical submissions unique in the cart while preserving the captured booking data.
+    if (!empty($cart_item_data['cb_meeting_start_iso'])) {
+        $cart_item_data['cb_booking_key'] = hash('sha256', $product_id . '|' . $cart_item_data['cb_meeting_start_iso'] . '|' . ($cart_item_data['billing_email'] ?? ''));
     }
 
     return $cart_item_data;
@@ -129,6 +231,8 @@ public static function display_cart_item_data($item_data, $cart_item) {
         ];
     }
 
+    // Dynamic Calendly answers are intentionally not rendered here by question text;
+    // the order retains the exact keyed payload for the Scheduling API.
     return $item_data;
 }
 
@@ -142,16 +246,52 @@ public static function prefill_checkout($value, $input) {
         }
     }
     if (!empty($_POST[$input])) {
-        return sanitize_text_field(wp_unslash($_POST[$input]));
+        return is_array($_POST[$input]) ? array_map('sanitize_text_field', wp_unslash($_POST[$input])) : sanitize_text_field(wp_unslash($_POST[$input]));
     }
     return $value;
 }
 
 public static function save_order_meta(\WC_Order $order, $data) {
+    // Prefer the persisted cart/line-item booking snapshot. Checkout POST values
+    // remain a compatibility fallback, but they are never the only source.
+    $booking = [];
+    foreach ($order->get_items('line_item') as $item) {
+        $event_uuid = (string) $item->get_meta('_cb_booking_event_uuid', true);
+        $start_iso  = (string) $item->get_meta('_cb_booking_start_iso', true);
+        if ($event_uuid || $start_iso) {
+            $booking = [
+                'cb_meeting_location' => (string) $item->get_meta('_cb_booking_location', true),
+                'cb_meeting_date' => (string) $item->get_meta('_cb_booking_date', true),
+                'cb_meeting_time' => (string) $item->get_meta('_cb_booking_time', true),
+                'cb_meeting_start_iso' => $start_iso,
+                'cb_event_uuid' => $event_uuid,
+                'cb_event_type_uri' => (string) $item->get_meta('_cb_booking_event_type_uri', true),
+                'cb_meeting_location_details' => (string) $item->get_meta('_cb_booking_location_details', true),
+                'cb_meeting_location_detail_text' => (string) $item->get_meta('_cb_booking_location_detail_text', true),
+                'cb_hier_intro' => (string) $item->get_meta('_cb_booking_hier_intro', true),
+                'cb_prep_notes' => (string) $item->get_meta('_cb_booking_prep_notes', true),
+                'cb_new_practice' => (string) $item->get_meta('_cb_booking_new_practice', true),
+                'cb_methods' => (string) $item->get_meta('_cb_booking_methods', true),
+                'cb_other_text' => (string) $item->get_meta('_cb_booking_other_text', true),
+                'cb_experience' => (string) $item->get_meta('_cb_booking_experience', true),
+                'cb_qhht_questions' => (string) $item->get_meta('_cb_booking_qhht_questions', true),
+                'cb_familiarity' => (string) $item->get_meta('_cb_booking_familiarity', true),
+                'cb_calendly_answers' => self::sanitize_answers(json_decode((string) $item->get_meta('_cb_booking_answers', true), true)),
+                'order_comments' => (string) $item->get_meta('_cb_booking_order_comments', true),
+            ];
+            break;
+        }
+    }
+
     $fields = [
         'cb_meeting_location' => ['_cb_meeting_location', 'sanitize_text_field'],
         'cb_meeting_date'     => ['_cb_meeting_date', 'sanitize_text_field'],
         'cb_meeting_time'     => ['_cb_meeting_time', 'sanitize_text_field'],
+        'cb_meeting_start_iso'=> ['_cb_meeting_start_iso', 'sanitize_text_field'],
+        'cb_event_uuid'       => ['_cb_event_uuid', 'sanitize_text_field'],
+        'cb_event_type_uri'   => ['_cb_event_type_uri', 'esc_url_raw'],
+        'cb_meeting_location_details' => ['_cb_meeting_location_details', 'sanitize_text_field'],
+        'cb_meeting_location_detail_text' => ['_cb_meeting_location_detail_text', 'sanitize_text_field'],
         'cb_hier_intro'       => ['_cb_hier_intro', 'sanitize_textarea_field'],
         'cb_prep_notes'       => ['_cb_prep_notes', 'sanitize_textarea_field'],
         'cb_new_practice'     => ['_cb_new_practice', 'sanitize_text_field'],
@@ -162,23 +302,102 @@ public static function save_order_meta(\WC_Order $order, $data) {
     ];
 
     foreach ($fields as $post_key => [$meta_key, $callback]) {
-        if (!empty($_POST[$post_key])) {
-            $order->update_meta_data($meta_key, call_user_func($callback, wp_unslash($_POST[$post_key])));
+        $value = array_key_exists($post_key, $booking) ? $booking[$post_key] : ($_POST[$post_key] ?? '');
+        if ($value !== '' && $value !== null) {
+            $order->update_meta_data($meta_key, call_user_func($callback, is_string($value) ? wp_unslash($value) : $value));
         }
     }
 
-    if (!empty($_POST['cb_familiarity'])) {
-        $familiarity = array_map('sanitize_text_field', (array) wp_unslash($_POST['cb_familiarity']));
-        $order->update_meta_data('_cb_familiarity', implode(', ', $familiarity));
+    $familiarity = array_key_exists('cb_familiarity', $booking) ? $booking['cb_familiarity'] : ($_POST['cb_familiarity'] ?? '');
+    if (is_array($familiarity)) {
+        $familiarity = implode(', ', array_map('sanitize_text_field', $familiarity));
+    } elseif ($familiarity !== '') {
+        $familiarity = sanitize_text_field(wp_unslash((string) $familiarity));
+    }
+    if ($familiarity !== '') {
+        $order->update_meta_data('_cb_familiarity', $familiarity);
     }
 
-    $notes = !empty($_POST['order_comments'])
-        ? sanitize_textarea_field(wp_unslash($_POST['order_comments']))
-        : 'Nil';
+    $answers = [];
+    if (isset($booking['cb_calendly_answers']) && is_array($booking['cb_calendly_answers'])) {
+        $answers = self::sanitize_answers($booking['cb_calendly_answers']);
+    } elseif (!empty($_POST['cb_calendly_answers_json'])) {
+        $decoded = json_decode(wp_unslash($_POST['cb_calendly_answers_json']), true);
+        if (is_array($decoded)) {
+            $answers = self::sanitize_answers($decoded);
+        }
+    }
+    if ($answers) {
+        $order->update_meta_data('_cb_calendly_answers', wp_json_encode($answers));
+    }
 
+    $notes = array_key_exists('order_comments', $booking) ? $booking['order_comments'] : ($_POST['order_comments'] ?? '');
+    $notes = $notes !== '' ? sanitize_textarea_field(wp_unslash((string) $notes)) : 'Nil';
     $order->update_meta_data('_cb_meeting_notes', $notes);
     if ($notes !== 'Nil') {
         $order->set_customer_note($notes);
+    }
+
+    if ($booking) {
+        $snapshot = $booking;
+        unset($snapshot['data'], $snapshot['key'], $snapshot['product_id'], $snapshot['variation_id']);
+        $snapshot['cb_calendly_answers'] = $answers;
+        $order->update_meta_data('_cb_booking_snapshot', wp_json_encode($snapshot));
+        $order->update_meta_data('_cb_booking_data_version', '2');
+        $order->add_order_note('Calendly booking data persisted from the product booking form.');
+    }
+}
+
+/**
+ * Persist booking fields directly on the WooCommerce order line item.
+ * This survives the cart -> checkout transition independently of browser POST
+ * serialization and is later promoted to order meta by save_order_meta().
+ */
+public static function save_booking_item_meta($item, $cart_item_key, $values, $order): void {
+    if (!is_array($values) || empty($values['cb_event_uuid']) || empty($values['cb_meeting_start_iso'])) {
+        return;
+    }
+
+    $map = [
+        'cb_event_uuid' => '_cb_booking_event_uuid',
+        'cb_event_type_uri' => '_cb_booking_event_type_uri',
+        'cb_meeting_location' => '_cb_booking_location',
+        'cb_meeting_date' => '_cb_booking_date',
+        'cb_meeting_time' => '_cb_booking_time',
+        'cb_meeting_start_iso' => '_cb_booking_start_iso',
+        'cb_meeting_location_details' => '_cb_booking_location_details',
+        'cb_meeting_location_detail_text' => '_cb_booking_location_detail_text',
+        'cb_hier_intro' => '_cb_booking_hier_intro',
+        'cb_prep_notes' => '_cb_booking_prep_notes',
+        'cb_new_practice' => '_cb_booking_new_practice',
+        'cb_methods' => '_cb_booking_methods',
+        'cb_other_text' => '_cb_booking_other_text',
+        'cb_experience' => '_cb_booking_experience',
+        'cb_qhht_questions' => '_cb_booking_qhht_questions',
+        'cb_familiarity' => '_cb_booking_familiarity',
+        'order_comments' => '_cb_booking_order_comments',
+    ];
+
+    foreach ($map as $source => $meta_key) {
+        if (!array_key_exists($source, $values) || $values[$source] === '' || $values[$source] === null) {
+            continue;
+        }
+        $value = $values[$source];
+        if (is_array($value)) {
+            $value = implode(', ', array_map('sanitize_text_field', $value));
+        } elseif ($source === 'cb_event_type_uri') {
+            $value = esc_url_raw((string) $value);
+        } elseif (in_array($source, ['cb_hier_intro','cb_prep_notes','cb_experience','cb_qhht_questions','order_comments'], true)) {
+            $value = sanitize_textarea_field((string) $value);
+        } else {
+            $value = sanitize_text_field((string) $value);
+        }
+        $item->add_meta_data($meta_key, $value, true);
+    }
+
+    $answers = self::sanitize_answers($values['cb_calendly_answers'] ?? []);
+    if ($answers) {
+        $item->add_meta_data('_cb_booking_answers', wp_json_encode($answers), true);
     }
 }
 
@@ -244,158 +463,8 @@ public static function attach_order_to_account($order_id) {
     return $user->ID;
 }
 
-public static function create_calendly_invitee() {
-    $order_id = absint(get_query_var('order-received'));
-    $api_key  = (string) get_option(CB_Constants::OPT_API_TOKEN, '');
-    $order    = wc_get_order($order_id);
-
-    if (!$order) {
-        echo "Order not found: $order_id";
-        return;
-    }
-
-    $token = $order->get_meta('_cb_security_token');
-    if (!$token) {
-        echo "Security token not found for order: $order_id";
-        return;
-    }
-
-    $event_type = "https://api.calendly.com/event_types/" . self::get_event_uuid_from_order($order_id);
-
-    $payload = [
-        'event_type' => $event_type,
-        'start_time' => $order->get_meta('_cb_meeting_time'),
-        'invitee' => [
-            'email'      => $order->get_billing_email(),
-            'first_name' => $order->get_billing_first_name(),
-            'last_name'  => $order->get_billing_last_name(),
-            'name'       => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
-            'timezone'   => wp_timezone_string(),
-        ],
-        'location' => [
-            'kind'     => $order->get_meta('_cb_meeting_location') === '1' ? 'zoom' : 'physical',
-            'location' => $order->get_meta('_cb_meeting_location') === '1'
-                ? 'Zoom'
-                : "HIER Life - Skeete's Road Jackmans, St. Michael",
-        ],
-    ];
-
-    $questions = [];
-    $slug = get_post_field('post_name', $order->get_product_id());
-
-    switch ($slug) {
-        case 'initial-consultation':
-            $questions[] = [
-                'question' => 'Order ID (see payment)',
-                'answer'   => (string) $order_id,
-                'position' => 0,
-            ];
-            $questions[] = [
-                'question' => 'Please let me know how you became aware of HIER Life.',
-                'answer'   => (string) $order->get_meta('_cb_hier_intro'),
-                'position' => 1,
-            ];
-            break;
-
-        case 'meditation-session':
-            $questions[] = [
-                'question' => 'Order ID',
-                'answer'   => (string) $order_id,
-                'position' => 0,
-            ];
-            $questions[] = [
-                'question' => 'Please share anything that will help prepare for our meeting.',
-                'answer'   => (string) $order->get_meta('_cb_prep_notes'),
-                'position' => 1,
-            ];
-            $questions[] = [
-                'question' => 'Are you new to formal practice of meditation?',
-                'answer'   => (string) $order->get_meta('_cb_new_practice'),
-                'position' => 2,
-            ];
-            $questions[] = [
-                'question' => 'If you have practiced before, what methods have you explored? If none respond - N/A',
-                'answer'   => (string) $order->get_meta('_cb_methods'),
-                'position' => 3,
-            ];
-            $questions[] = [
-                'question' => 'Do you have any familiarity with the following? Whether you have employed them or not',
-                'answer'   => (string) $order->get_meta('_cb_familiarity'),
-                'position' => 4,
-            ];
-            if ($order->get_meta('_cb_other_text')) {
-                $questions[] = [
-                    'question' => 'Other practice specified',
-                    'answer'   => (string) $order->get_meta('_cb_other_text'),
-                    'position' => 5,
-                ];
-            }
-            break;
-
-        case 'spiritual-companionship':
-            $questions[] = [
-                'question' => 'Order ID',
-                'answer'   => (string) $order_id,
-                'position' => 0,
-            ];
-            $questions[] = [
-                'question' => 'Since your previous session is there any experience or thought that you would want to raise in the coming session?',
-                'answer'   => (string) $order->get_meta('_cb_experience'),
-                'position' => 1,
-            ];
-            break;
-
-        case 'reconnective-healing':
-            $questions[] = [
-                'question' => 'Order ID',
-                'answer'   => (string) $order_id,
-                'position' => 0,
-            ];
-            $questions[] = [
-                'question' => 'Please share anything that will help prepare for our meeting.',
-                'answer'   => (string) $order->get_meta('_cb_prep_notes'),
-                'position' => 1,
-            ];
-            break;
-
-        case 'qhht-session':
-            $questions[] = [
-                'question' => 'Please share anything that will help prepare for our meeting.',
-                'answer'   => (string) $order->get_meta('_cb_prep_notes'),
-                'position' => 0,
-            ];
-            $questions[] = [
-                'question' => 'Write 6 questions you would want answers for during the session.',
-                'answer'   => (string) $order->get_meta('_cb_qhht_questions'),
-                'position' => 1,
-            ];
-            break;
-    }
-
-    $payload['questions_and_answers'] = $questions;
-
-    $response = wp_remote_post('https://api.calendly.com/invitees', [
-        'headers' => [
-            'Authorization' => 'Bearer ' . $api_key,
-            'Content-Type'  => 'application/json',
-        ],
-        'body' => wp_json_encode($payload),
-    ]);
-
-    if (is_wp_error($response)) {
-        $order->add_order_note('Calendly API error: ' . $response->get_error_message());
-    } elseif (wp_remote_retrieve_response_code($response) !== 201) {
-        $order->add_order_note('Calendly API failed. Response: ' . wp_remote_retrieve_body($response));
-    }
-
-    if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 201) {
-        $order->delete_meta_data('_cb_security_token');
-        $order->save();
-    }
-}
-
-/**
- * Get the event UUID from product meta via order ID.
+    /**
+     * Get the event UUID from product meta via order ID.
  *
  * @param int $order_id WooCommerce order ID
  * @return string|null Event UUID or null if not found
@@ -422,87 +491,34 @@ public static function get_event_uuid_from_order($order_id) {
     return null; // No UUID found
 }
 
+public static function get_confirmation_url(
+    \WC_Order $order
+): string {
+    $token = (string) $order->get_meta('_cb_meeting_confirmation_token', true);
+    if (!$token) {
+        $token = wp_generate_password(32, false, false);
+        $order->update_meta_data('_cb_meeting_confirmation_token', $token);
+        $order->save();
+    }
+    return add_query_arg(['token' => $token], home_url('/meeting-scheduled/'));
+}
+
 public static function add_to_emails($order, $sent_to_admin, $plain_text, $email) {
-    $date     = (string) $order->get_meta('_cb_meeting_date');
-    $time     = CB_Timezone_Converter::to_site_time($order->get_meta('_cb_meeting_time'), 'H:i A');
-    $location = (string) $order->get_meta('_cb_meeting_location');
-    $intro    = (string) $order->get_meta('_cb_hier_intro');
-    $notes    = (string) $order->get_meta('_cb_meeting_notes');
-
-    // Map location codes to labels
-    $location_label = '';
-    if ($location === '1') {
-        $location_label = __('Zoom - Web conferencing details provided upon confirmation.', 'calendly-bookings');
-    } elseif ($location === '2') {
-        $location_label = __("HIER Life - Skeete's Road Jackmans, St. Michael", 'calendly-bookings');
-    }
-
-    // Collect scheduling URLs from products in the order
-    $meeting_links = [];
-    foreach ($order->get_items() as $item) {
-        $product_id = $item->get_product_id();
-        if (!$product_id) continue;
-
-        $base_url = get_post_meta($product_id, '_cb_scheduling_url', true);
-        if (!$base_url) continue;
-
-        // Build scheduling URL with date/time
-        $scheduling_url = trailingslashit($base_url) . $date . 'T' . $time . 'Z';
-
-        // Shared params for Calendly prefill
-        $params = [
-            'name'     => $order->get_formatted_billing_full_name(),
-            'email'    => $order->get_billing_email(),
-            'location' => $location_label,
-            'a1'       => $order->get_order_number(),
-            'a2'       => $intro,
-        ];
-
-        // Build confirmation URL (WordPress handles encoding)
-        $confirmation_url = add_query_arg($params, $scheduling_url);
-
-        $meeting_links[] = [
-            'product_name'     => $item->get_name(),
-            'confirmation_url' => $confirmation_url,
-        ];
-    }
-
-    if (empty($meeting_links)) return;
+    $status = (string) $order->get_meta('_cb_calendly_booking_status', true);
+    $page_url = self::get_confirmation_url($order);
 
     if ($plain_text) {
-        echo "\n" . __('Meeting Details', 'calendly-bookings') . "\n";
+        echo "\n" . __('Calendly Session', 'calendly-bookings') . "\n";
         echo "--------------------------\n";
-        if ($date) echo __('Date:', 'calendly-bookings') . ' ' . sanitize_text_field($date) . "\n";
-        if ($time) echo __('Time:', 'calendly-bookings') . ' ' . sanitize_text_field($time) . "\n";
-        if ($location_label) echo __('Location:', 'calendly-bookings') . ' ' . sanitize_text_field($location_label) . "\n";
-        if ($intro) echo __('Intro:', 'calendly-bookings') . ' ' . sanitize_text_field($intro) . "\n";
-        if ($notes && $notes !== 'Nil') echo __('Notes:', 'calendly-bookings') . ' ' . sanitize_textarea_field($notes) . "\n";
-
-        foreach ($meeting_links as $link) {
-            echo __('Product:', 'calendly-bookings') . ' ' . $link['product_name'] . "\n";
-            echo __('Confirmation URL:', 'calendly-bookings') . ' ' . esc_url($link['confirmation_url']) . "\n";
-        }
-    } else {
-        echo '<h3>' . esc_html__('Meeting Details', 'calendly-bookings') . '</h3><ul>';
-        if ($date) printf('<li><strong>%s</strong> %s</li>', esc_html__('Date:', 'calendly-bookings'), esc_html($date));
-        if ($time) printf('<li><strong>%s</strong> %s</li>', esc_html__('Time:', 'calendly-bookings'), esc_html($time));
-        if ($location_label) printf('<li><strong>%s</strong> %s</li>', esc_html__('Location:', 'calendly-bookings'), esc_html($location_label));
-        if ($intro) printf('<li><strong>%s</strong> %s</li>', esc_html__('Intro:', 'calendly-bookings'), esc_html($intro));
-        if ($notes && $notes !== 'Nil') {
-            printf('<li><strong>%s</strong> %s</li>', esc_html__('Notes:', 'calendly-bookings'), nl2br(esc_html($notes)));
-        }
-
-        foreach ($meeting_links as $link) {
-            printf('<li><strong>%s</strong> %s<br><strong>%s</strong> <a href="%s" target="_blank">%s</a></li>',
-                esc_html__('Product:', 'calendly-bookings'),
-                esc_html($link['product_name']),
-                esc_html__('Confirmation URL:', 'calendly-bookings'),
-                esc_url($link['confirmation_url']),
-                esc_html($link['confirmation_url'])
-            );
-        }
-        echo '</ul>';
+        echo __('Booking status:', 'calendly-bookings') . ' ' . sanitize_text_field($status ?: 'pending') . "\n";
+        echo __('View confirmation:', 'calendly-bookings') . ' ' . esc_url($page_url) . "\n";
+        return;
     }
+
+    echo '<h3>' . esc_html__('Calendly Session', 'calendly-bookings') . '</h3><ul>';
+    echo '<li><strong>' . esc_html__('Booking status:', 'calendly-bookings') . '</strong> ' . esc_html($status ?: 'pending') . '</li>';
+    echo '<li><a href="' . esc_url($page_url) . '">' . esc_html__('View session confirmation', 'calendly-bookings') . '</a></li>';
+    echo '</ul>';
 }
 
 public static function add_to_my_account($order) {
@@ -583,218 +599,42 @@ public static function render_admin_column($column, $post_id) {
         echo !empty($summary_parts) ? esc_html(implode(' ', $summary_parts)) : '—';
     }
 }
-    /*
-    public static function maybe_override_thankyou() {
-        if (!is_order_received_page()) return;
-
-        $order_id = absint(get_query_var('order-received'));
-        $order    = wc_get_order($order_id);
-		$status = $order->get_status();
-		if (!$order) return;
-		
-		$total = (float) $order->get_total();
-		if($total > 0){
-			$approval_code = (string) $order->get_meta('approval_code');
-			if (stripos($approval_code, 'DECLINED') !== false) {
-				
-				return;
-			}
-		}
-		
-        if (self::order_has_meeting($order)) {
-			remove_all_actions('woocommerce_thankyou');
-			remove_action('woocommerce_thankyou', 'woocommerce_thankyou_order_received_text', 10);
-			remove_all_actions('woocommerce_order_details_after_order_table');
-			
-			add_action('woocommerce_thankyou', [__CLASS__, 'render_meeting_thankyou'], 10, 1);
-			#add_action('woocommerce_thankyou', [__CLASS__, 'create_calendly_invitee'], 10, 1);
-
-			
-        }
-    }
-*/
 
 public static function maybe_override_thankyou(): void {
-    // Only run on the order received page
-    if (!is_order_received_page()) {
-        return;
-    }
-
-    // Get order id from query var
+    if (!is_order_received_page()) return;
     $order_id = absint(get_query_var('order-received'));
-    if (!$order_id) {
-        return;
-    }
+    $order = $order_id ? wc_get_order($order_id) : false;
+    if (!$order instanceof \WC_Order || !self::order_has_meeting($order)) return;
 
-    // Load order and validate
-    $order = wc_get_order($order_id);
-    if (!$order instanceof \WC_Order) {
-        return;
-    }
-
-    // If order total > 0, check approval code for declines
-    $total = (float) $order->get_total();
-    if ($total > 0) {
-        $approval_code = (string) $order->get_meta('approval_code', true);
-        if ($approval_code !== '' && stripos($approval_code, 'DECLINED') !== false) {
-            // Payment declined — do not override
-            $order->add_order_note(__('Calendly invite not created: payment declined.', 'calendly-bookings'));
-            return;
-        }
-    }
-
-    // If order does not contain a meeting product, do nothing
-    if (!self::order_has_meeting($order)) {
-        return;
-    }
-
-    // Remove default thankyou actions so our custom renderer is the first thing shown.
     remove_all_actions('woocommerce_thankyou');
     remove_all_actions('woocommerce_order_details_after_order_table');
     remove_all_actions('woocommerce_order_details_before_order_table');
 
-    // Add our custom renderer first
     add_action('woocommerce_thankyou', [__CLASS__, 'render_meeting_thankyou'], 1, 1);
-
-    // Run post-payment processes (Calendly invite, etc.) after rendering
     add_action('woocommerce_thankyou', [__CLASS__, 'run_after_payment_processes'], 20, 1);
 }
 
-public static function run_after_payment_processes($order_id) {
-    $order = wc_get_order($order_id);
-    if (!$order) {
-        return;
-    }
-
-    // Create Calendly invitee
-    self::create_calendly_invitee();
-
-    // Attach order to account if needed
-    self::attach_order_to_account($order_id);
-
-    // Add any other post-payment tasks here (logging, notifications, etc.)
-}
-
-public static function render_meeting_thankyou($order_id) {
+public static function run_after_payment_processes($order_id): void {
     $order = wc_get_order($order_id);
     if (!$order) return;
 
-    $date     = (string) $order->get_meta('_cb_meeting_date');
-    $time     = (string) $order->get_meta('_cb_meeting_time');
-    $location = (string) $order->get_meta('_cb_meeting_location');
-    $intro    = (string) $order->get_meta('_cb_hier_intro');
-    $notes    = (string) ($order->get_customer_note() ?: 'Nil');
-
-    // Collect scheduling URLs from products in the order
-    $meeting_links = [];
-    foreach ($order->get_items() as $item) {
-        $product_id = $item->get_product_id();
-        if (!$product_id) continue;
-
-        $base_url = get_post_meta($product_id, '_cb_scheduling_url', true);
-        if (!$base_url) continue;
-
-        $url = trailingslashit($base_url) . $date . 'T' . $time . 'Z';
-        $meeting_links[] = [
-            'product_name'   => $item->get_name(),
-            'scheduling_url' => $url,
-            'slug'           => get_post_field('post_name', $product_id),
-        ];
-    }
-
-    if (empty($meeting_links)) return;
-
-    $first_link     = $meeting_links[0];
-    $scheduling_url = $time ? trailingslashit(rawurldecode($first_link['scheduling_url'])) : $first_link['scheduling_url'];
-    $slug           = $first_link['slug'];
-
-    // Shared params
-    $params = [
-        'name'     => $order->get_formatted_billing_full_name(),
-        'email'    => $order->get_billing_email(),
-        'location' => $location,
-        'a1'       => $order->get_order_number(),
-    ];
-
-    // Add dynamic fields based on product slug
-    switch ($slug) {
-        case 'initial-consultation':
-            $params['a2'] = $intro;
-            break;
-
-        case 'meditation-session':
-            $params['prep_notes']   = $order->get_meta('_cb_prep_notes');
-            $params['new_practice'] = $order->get_meta('_cb_new_practice');
-            $params['methods']      = $order->get_meta('_cb_methods');
-            $params['familiarity']  = $order->get_meta('_cb_familiarity');
-            $params['other_text']   = $order->get_meta('_cb_other_text');
-            break;
-
-        case 'spiritual-companionship':
-            $params['experience'] = $order->get_meta('_cb_experience');
-            break;
-
-        case 'reconnective-healing':
-            $params['prep_notes'] = $order->get_meta('_cb_prep_notes');
-            break;
-
-        case 'qhht-session':
-            $params['prep_notes']     = $order->get_meta('_cb_prep_notes');
-            $params['qhht_questions'] = $order->get_meta('_cb_qhht_questions');
-            break;
-    }
-
-    // Build confirmation URL
-    $confirmation_url = add_query_arg(array_map('urlencode', $params), $scheduling_url);
-    ?>
-    <!-- Calendly embed -->
-    <div id="calendly-wrapper" style="margin-top:2rem;">
-        <p>
-            <?php echo esc_html__('Please confirm the details below before scheduling this event. If you do not see the session details, click on the confirmation link provided.', 'calendly-bookings'); ?>
-            <br>
-            <a href="<?php echo esc_url($confirmation_url); ?>" target="_blank">
-                <?php echo esc_html($confirmation_url); ?>
-            </a>
-        </p>
-        <div id="calendly-embed" style="min-width:320px;height:700px;"></div>
-    </div>
-
-    <script>
-    document.addEventListener("DOMContentLoaded", function() {
-        var wrapper = document.getElementById("calendly-wrapper");
-        var embed   = document.getElementById("calendly-embed");
-        var params  = <?php echo wp_json_encode($params); ?>;
-        var schedulingUrl = "<?php echo esc_js($scheduling_url); ?>";
-
-        var url = schedulingUrl + "?hide_event_type_details=1&hide_gdpr_banner=1";
-        Object.keys(params).forEach(function(key) {
-            url += "&" + encodeURIComponent(key) + "=" + encodeURIComponent(params[key]);
-        });
-
-        wrapper.style.display = "block";
-        wrapper.scrollIntoView({ behavior: "smooth" });
-
-        Calendly.initInlineWidget({
-            url: url,
-            text: 'Confirm Booking',
-            parentElement: embed,
-            prefill: params,
-            utm: {},
-            resize: true,
-        });
-    });
-    </script>
-    <?php
+    CB_Booking_Reconciliation::enqueue((int) $order_id, 0, 'thankyou-retry');
+    self::attach_order_to_account((int) $order_id);
 }
-	
-public static function enqueue_calendly_embed() {
-    wp_enqueue_script(
-        'calendly-widget',
-        'https://assets.calendly.com/assets/external/widget.js',
-        ['jquery'], // ensure jQuery is loaded first
-        null,
-        true // load in footer
-    );
+
+public static function render_meeting_thankyou($order_id): void {
+    $order = wc_get_order($order_id);
+    if (!$order) return;
+    $status = (string) $order->get_meta('_cb_calendly_booking_status', true);
+    $page_url = self::get_confirmation_url($order);
+    ?>
+    <div class="cb-booking-thankyou" style="margin:2rem 0;">
+        <h2><?php esc_html_e('Session Booking', 'calendly-bookings'); ?></h2>
+        <p><?php esc_html_e('Your WooCommerce order has been received. Calendly will confirm the appointment and the confirmation page will display only the information received from Calendly.', 'calendly-bookings'); ?></p>
+        <p><strong><?php esc_html_e('Booking status:', 'calendly-bookings'); ?></strong> <?php echo esc_html($status ?: 'pending'); ?></p>
+        <p><a class="button" href="<?php echo esc_url($page_url); ?>"><?php esc_html_e('View Session Confirmation', 'calendly-bookings'); ?></a></p>
+    </div>
+    <?php
 }
 
 public static function order_has_meeting($order): bool {

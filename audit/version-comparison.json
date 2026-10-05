@@ -1,0 +1,314 @@
+[
+  {
+    "Path": "calendly-bookings.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/assets/cb-admin-audit-log.css",
+    "Status": "Removed"
+  },
+  {
+    "Path": "includes/admin/assets/cb-admin-audit-log.js",
+    "Status": "Removed"
+  },
+  {
+    "Path": "includes/admin/assets/cb-admin-maintenance.js",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/assets/cb-admin-products.js",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/assets/cb-admin-scheduled-events.css",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/assets/cb-admin-scheduled-events.js",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/assets/cb-admin-settings.css",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/assets/cb-admin-settings.js",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/assets/cb-admin.css",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/assets/cb-admin.js",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/assets/control-panel.js",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/assets/dashboard-charts.js",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/admin/assets/dashboard-widgets.css",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/admin/assets/dashboard-widgets.js",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/views/audit-log/filters.php",
+    "Status": "Removed"
+  },
+  {
+    "Path": "includes/admin/views/audit-log/index.php",
+    "Status": "Removed"
+  },
+  {
+    "Path": "includes/admin/views/audit-log/pagination.php",
+    "Status": "Removed"
+  },
+  {
+    "Path": "includes/admin/views/audit-log/table.php",
+    "Status": "Removed"
+  },
+  {
+    "Path": "includes/admin/views/control-panel/index.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/views/maintenance/index.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/admin/views/products/index.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/views/scheduled-events/filters.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/views/scheduled-events/index.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/admin/views/scheduled-events/pagination.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/admin/views/scheduled-events/table.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/views/settings/credentials.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/views/settings/email.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/views/settings/index.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/admin/views/settings/reports.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/admin/views/settings/sync.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/bootstrap.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/constants.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/frontend/assets/cb-frontend.css",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/frontend/assets/cb-frontend.js",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/frontend/assets/cb-icon-dark.svg",
+    "Status": "Removed"
+  },
+  {
+    "Path": "includes/frontend/assets/cb-icon.svg",
+    "Status": "Removed"
+  },
+  {
+    "Path": "includes/frontend/view/form.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/frontend/view/index.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/frontend/view/login-modal.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/frontend/view/upsell.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/frontend/view/validation-messages.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/installer.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-account-dashboard.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/modules/class-cb-admin-ajax.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-admin-rest.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-admin.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-api-proxy.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-api.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-audit-log.php",
+    "Status": "Removed"
+  },
+  {
+    "Path": "includes/modules/class-cb-checkout.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-dashboard-rest.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-dashboard.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/modules/class-cb-debug.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/modules/class-cb-email.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-frontend-rest.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-frontend.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-maintenance-ajax.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/modules/class-cb-maintenance-rest.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/modules/class-cb-maintenance.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/modules/class-cb-plugin.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-reports.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-rest-dashboard.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-scheduled-events.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-shortcodes.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-wc-sync.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/modules/class-cb-webhooks.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/templates/meeting-scheduled.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/updater.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/utils/class-cb-encryption.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/utils/class-cb-mail.php",
+    "Status": "Unchanged"
+  },
+  {
+    "Path": "includes/utils/class-cb-timezone-converter.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/utils/functions.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "readme.txt",
+    "Status": "Changed"
+  },
+  {
+    "Path": "uninstall.php",
+    "Status": "Changed"
+  },
+  {
+    "Path": "version.txt",
+    "Status": "Changed"
+  },
+  {
+    "Path": "includes/modules/class-cb-action-scheduler.php",
+    "Status": "Added"
+  },
+  {
+    "Path": "includes/modules/class-cb-booking-reconciliation.php",
+    "Status": "Added"
+  }
+]

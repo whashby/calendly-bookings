@@ -7,7 +7,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class CB_Constants {
-    public const VERSION = '6.9.251';
+    public const VERSION = '6.12.7';
     public const OPT_GROUP = 'calendly_bookings';
 
     public const OPT_API_TOKEN = 'cb_api_token';
@@ -39,6 +39,9 @@ final class CB_Constants {
     public const OPT_REPORT_TEMPLATE = 'cb_report_template';
     public const OPT_REPORT_FILETYPE = 'cb_report_filetype';
     public const OPT_REPORT_SCHEDULE = 'cb_report_schedule';
+    public const OPT_EMAIL_TEMPLATES = 'cb_email_templates';
+    public const OPT_EMAIL_SETTINGS_VERSION = 'cb_email_settings_version';
+    public const REPORT_TABLE = 'cb_reports';
 
     public const OPT_GITHUB_TOKEN = 'cb_github_token';
 

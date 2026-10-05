@@ -26,11 +26,11 @@ final class CB_Admin_Rest {
         register_rest_route($ns, '/scheduled-events/locations', [
             'methods'             => 'GET',
             'callback'            => [__CLASS__, 'cb_get_locations'],
-            'permission_callback' => '__return_true', // adjust if you want auth
+            'permission_callback' => [__CLASS__, 'can_manage'],
         ]);
 
         // Fetch single event
-        register_rest_route($ns, '/scheduled-events/(?P<uuid>[a-z0-9\-]+)', [
+        register_rest_route($ns, '/scheduled-events/(?P<uuid>(?!(?:locations|invitee-history-by-email|bulk-update)$)[a-z0-9\-]+)', [
             'methods'             => 'GET',
             'callback'            => [__CLASS__, 'get_event'],
             'permission_callback' => [__CLASS__, 'can_manage'],
@@ -39,11 +39,11 @@ final class CB_Admin_Rest {
         register_rest_route($ns, '/scheduled-events/view/(?P<uuid>[a-z0-9\-]+)', [
             'methods'             => 'GET',
             'callback'            => [__CLASS__, 'get_event'],
-            'permission_callback' => '__return_true',
+            'permission_callback' => [__CLASS__, 'can_manage'],
         ]);
 
         // Update single event
-        register_rest_route($ns, '/scheduled-events/(?P<uuid>[a-z0-9\-]+)', [
+        register_rest_route($ns, '/scheduled-events/(?P<uuid>(?!(?:locations|invitee-history-by-email|bulk-update)$)[a-z0-9\-]+)', [
             'methods'             => 'POST',
             'callback'            => [__CLASS__, 'update_event'],
             'permission_callback' => [__CLASS__, 'can_manage'],
@@ -66,7 +66,14 @@ final class CB_Admin_Rest {
         register_rest_route($ns, '/scheduled-events/invitee-history/(?P<invitee>[\p{L}0-9\.\-\_%\s]+)', [
             'methods'             => 'GET',
             'callback'            => [__CLASS__, 'get_invitee_history'],
-            'permission_callback' => '__return_true',
+            'permission_callback' => [__CLASS__, 'can_manage'],
+        ]);
+
+        register_rest_route($ns, '/scheduled-events/invitee-history-by-email', [
+            'methods'             => 'GET',
+            'callback'            => [__CLASS__, 'get_invitee_history_by_email'],
+            'permission_callback' => [__CLASS__, 'can_manage'],
+            'args'                => ['email' => ['required' => true, 'type' => 'string']],
         ]);
 
         // WooCommerce linking/sync
@@ -92,6 +99,36 @@ final class CB_Admin_Rest {
 			],
         ]);
 
+        register_rest_route($ns, '/wc/link', [
+            'methods' => 'POST',
+            'callback' => [__CLASS__, 'rest_wc_link'],
+            'permission_callback' => [__CLASS__, 'can_manage'],
+        ]);
+
+        register_rest_route($ns, '/wc/delete-product', [
+            'methods' => 'POST',
+            'callback' => [__CLASS__, 'rest_wc_delete_product'],
+            'permission_callback' => [__CLASS__, 'can_manage'],
+        ]);
+
+        register_rest_route($ns, '/wc/unlink-product', [
+            'methods' => 'POST',
+            'callback' => [__CLASS__, 'rest_wc_unlink_product'],
+            'permission_callback' => [__CLASS__, 'can_manage'],
+        ]);
+
+        register_rest_route($ns, '/wc/create-all', [
+            'methods' => 'POST',
+            'callback' => [__CLASS__, 'rest_wc_create_all'],
+            'permission_callback' => [__CLASS__, 'can_manage'],
+        ]);
+
+        register_rest_route($ns, '/wc/delete-all', [
+            'methods' => 'POST',
+            'callback' => [__CLASS__, 'rest_wc_delete_all'],
+            'permission_callback' => [__CLASS__, 'can_manage'],
+        ]);
+
 
     }
 
@@ -109,7 +146,7 @@ final class CB_Admin_Rest {
     public static function cb_get_locations(WP_REST_Request $request) {
         // Example: fetch from DB or config
         $locations = CB_Scheduled_Events::instance()->get_locations();
-        return $locations ?: ['success' => false, self::error('No locations found', 404)];
+        return $locations ?: self::error('No locations found', 404);
     }
 
     /**
@@ -118,7 +155,7 @@ final class CB_Admin_Rest {
     public static function get_event(WP_REST_Request $request) {
         $uuid = sanitize_text_field($request->get_param('uuid'));
         $event = CB_Scheduled_Events::instance()->get_event($uuid);
-        return $event ?: ['success' => false, self::error('Event not found', 404)];
+        return $event ?: self::error('Event not found', 404);
     }
 
     /**
@@ -127,7 +164,16 @@ final class CB_Admin_Rest {
     public static function get_invitee_history(\WP_REST_Request $request) {
         $invitee = sanitize_text_field($request->get_param('invitee'));
         $response = CB_Scheduled_Events::instance()->get_invitee_history($invitee);
-        return $response ?: ['success' => false, 'error' => self::error('History not found', 404)];
+        return $response ?: ['success' => true, 'data' => []];
+    }
+
+    public static function get_invitee_history_by_email(\WP_REST_Request $request) {
+        $email = sanitize_email((string) $request->get_param('email'));
+        if (!$email) {
+            return self::error('Invalid invitee email', 400);
+        }
+        $response = CB_Scheduled_Events::instance()->get_invitee_history_by_email($email);
+        return ['success' => true, 'data' => $response ?: []];
     }
 
 
@@ -158,14 +204,19 @@ final class CB_Admin_Rest {
         $status = sanitize_text_field($request->get_param('status'));
         $completed = $status === 'completed' ? 1 : 0;
 
+        $allowed_statuses = ['active', 'scheduled', 'rescheduled', 'canceled', 'completed', 'pending'];
         if (empty($uuids) || empty($status)) {
             return self::error('Missing uuids or status');
         }
+        if (!in_array($status, $allowed_statuses, true)) {
+            return self::error('Invalid status value');
+        }
+        $uuids = array_values(array_unique(array_filter(array_map('sanitize_text_field', $uuids))));
 
         foreach ($uuids as $uuid) {
             $uuid = sanitize_text_field($uuid);
             $ok = CB_Scheduled_Events::instance()->update_event($uuid, [
-                'status'    => $status,
+                'status'    => $status === 'scheduled' ? 'active' : $status,
                 'completed' => $completed,
             ]);
             if (!$ok) {
@@ -182,7 +233,7 @@ final class CB_Admin_Rest {
      */
     public static function rest_wc_create_product( \WP_REST_Request $req ): \WP_REST_Response {
         global $wpdb;
-        $uuid  = sanitize_text_field( $req->get_param( 'event_uuid' ) );
+        $uuid  = sanitize_text_field((string) ($req->get_param('event_uuid') ?: $req->get_param('uuid')));
         $table = $wpdb->prefix . 'cb_event_types';
 
         // Get event
@@ -304,6 +355,60 @@ final class CB_Admin_Rest {
 
 		return new \WP_REST_Response(['success' => true, 'message' => 'Linked successfully.', 'product_id' => $product_id], 200);
 	}
+
+    public static function rest_wc_unlink_product(\WP_REST_Request $req): \WP_REST_Response {
+        global $wpdb;
+        $uuid = sanitize_text_field((string) $req->get_param('uuid'));
+        if (!$uuid || !preg_match('/^[a-f0-9-]{36}$/i', $uuid)) {
+            return new \WP_REST_Response(['success'=>false,'message'=>'Invalid event UUID.'], 400);
+        }
+        $table = $wpdb->prefix . 'cb_event_types';
+        $event = $wpdb->get_row($wpdb->prepare("SELECT product_id FROM {$table} WHERE uuid=%s", $uuid));
+        if (!$event) return new \WP_REST_Response(['success'=>false,'message'=>'Event not found.'], 404);
+        $ok = $wpdb->update($table, ['product_id'=>null], ['uuid'=>$uuid], ['%d'], ['%s']);
+        if ($ok === false) return new \WP_REST_Response(['success'=>false,'message'=>'Unable to unlink product.'], 500);
+        return new \WP_REST_Response(['success'=>true,'message'=>'Product unlinked successfully.','product_id'=>absint($event->product_id)], 200);
+    }
+
+    public static function rest_wc_delete_product(\WP_REST_Request $req): \WP_REST_Response {
+        global $wpdb;
+        $uuid = sanitize_text_field((string) $req->get_param('uuid'));
+        $table = $wpdb->prefix . 'cb_event_types';
+        $event = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE uuid=%s", $uuid));
+        if (!$event) return new \WP_REST_Response(['success'=>false,'message'=>'Event not found.'], 404);
+        $product_id = absint($event->product_id);
+        if ($product_id && get_post($product_id)) {
+            wp_delete_post($product_id, true);
+        }
+        $wpdb->update($table, ['product_id'=>null], ['uuid'=>$uuid], ['%d'], ['%s']);
+        return new \WP_REST_Response(['success'=>true,'message'=>'Linked product deleted.'], 200);
+    }
+
+    public static function rest_wc_create_all(\WP_REST_Request $req): \WP_REST_Response {
+        global $wpdb;
+        $rows = $wpdb->get_results("SELECT uuid FROM {$wpdb->prefix}cb_event_types WHERE (product_id IS NULL OR product_id = 0) ORDER BY name ASC", ARRAY_A);
+        $created = 0; $errors = [];
+        foreach ($rows as $row) {
+            $fake = new \WP_REST_Request('POST');
+            $fake->set_param('event_uuid', $row['uuid']);
+            $response = self::rest_wc_create_product($fake);
+            $data = $response->get_data();
+            if (!empty($data['success'])) $created++; else $errors[] = $data['message'] ?? 'Unknown error';
+        }
+        return new \WP_REST_Response(['success'=>empty($errors),'created_count'=>$created,'errors'=>$errors], empty($errors)?200:207);
+    }
+
+    public static function rest_wc_delete_all(\WP_REST_Request $req): \WP_REST_Response {
+        global $wpdb;
+        $rows = $wpdb->get_results("SELECT uuid, product_id FROM {$wpdb->prefix}cb_event_types WHERE product_id IS NOT NULL AND product_id <> 0", ARRAY_A);
+        $deleted=0; $errors=[];
+        foreach ($rows as $row) {
+            if (!empty($row['product_id']) && get_post((int)$row['product_id'])) wp_delete_post((int)$row['product_id'], true);
+            $ok=$wpdb->update($wpdb->prefix.'cb_event_types',['product_id'=>null],['uuid'=>$row['uuid']],['%d'],['%s']);
+            if ($ok !== false) $deleted++; else $errors[]=$row['uuid'];
+        }
+        return new \WP_REST_Response(['success'=>empty($errors),'deleted_count'=>$deleted,'errors'=>$errors], empty($errors)?200:207);
+    }
 
     /* Helper method to standardize error responses */
 	private static function error(string $message, int $status = 400) {

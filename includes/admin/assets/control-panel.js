@@ -4,14 +4,14 @@ jQuery(function($) {
   function postJSON(url, body) {
     return fetch(url, {
       method: 'POST',
-      headers: { 'X-WP-Nonce': CB_Rest.nonce, 'Content-Type': 'application/json' },
+      headers: { 'X-WP-Nonce': CB_REST.nonce, 'Content-Type': 'application/json' },
       body: JSON.stringify(body || {})
     }).then(r => r.json());
   }
 
   function getJSON(url) {
     return fetch(url, {
-      headers: { 'X-WP-Nonce': CB_Rest.nonce }
+      headers: { 'X-WP-Nonce': CB_REST.nonce }
     }).then(r => r.json());
   }
 	
@@ -26,7 +26,7 @@ jQuery(function($) {
   $root.on('click', '.cb-bulk-create', function() {
     if (!confirm('Create products for ALL events without a linked product?')) return;
     const $n = showNotice('Creating all products...');
-    postJSON(`${CB_Rest.root}wc/create-all`)
+    postJSON(`${CB_REST.root}wc/create-all`)
       .then(res => {
         $n.remove();
         alert(res.success ? `Created ${res.created_count} products` : res.message);
@@ -38,7 +38,7 @@ jQuery(function($) {
   $root.on('click', '.cb-bulk-delete', function() {
     if (!confirm('Delete ALL linked products? This cannot be undone.')) return;
     const $n = showNotice('Deleting all products...');
-    postJSON(`${CB_Rest.root}wc/delete-all`)
+    postJSON(`${CB_REST.root}wc/delete-all`)
       .then(res => {
         $n.remove();
         alert(res.success ? `Deleted ${res.deleted_count} products` : res.message);
@@ -50,7 +50,7 @@ jQuery(function($) {
   $root.on('click', '.cb-sync', function() {
     const uuid = $(this).data('uuid');
     const $n = showNotice(`Syncing event ${uuid}...`);
-    getJSON(`${CB_Rest.root}event-types?uuid=${encodeURIComponent(uuid)}`)
+    getJSON(`${CB_REST.root}event-types?uuid=${encodeURIComponent(uuid)}`)
       .then(res => {
         $n.remove();
         alert(res.success ? 'Event synced' : res.message);
@@ -71,9 +71,9 @@ $root.on('click', '.cb-link', function() {
     alert('Enter a valid Product ID');
     return;
   }
-  fetch(`${CB_Rest.root}wc/link`, {
+  fetch(`${CB_REST.root}wc/link`, {
     method: 'POST',
-    headers: { 'X-WP-Nonce': CB_Rest.nonce, 'Content-Type': 'application/json' },
+    headers: { 'X-WP-Nonce': CB_REST.nonce, 'Content-Type': 'application/json' },
     body: JSON.stringify({ uuid, product_id: pid })
   })
   .then(r => r.json())
@@ -86,10 +86,10 @@ $root.on('click', '.cb-link', function() {
 // Create product
 $root.on('click', '.cb-create', function() {
   const uuid = $(this).data('uuid');
-  fetch(`${CB_Rest.root}wc/create-product`, {
+  fetch(`${CB_REST.root}wc/create-product`, {
     method: 'POST',
-    headers: { 'X-WP-Nonce': CB_Rest.nonce, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ uuid })
+    headers: { 'X-WP-Nonce': CB_REST.nonce, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event_uuid: uuid })
   })
   .then(r => r.json())
   .then(res => {
@@ -102,10 +102,10 @@ $root.on('click', '.cb-create', function() {
 $root.on('click', '.cb-delete', function() {
   const uuid = $(this).data('uuid');
   if (!confirm('Delete the linked product for this event? This cannot be undone.')) return;
-  fetch(`${CB_Rest.root}wc/delete-product`, {
+  fetch(`${CB_REST.root}wc/delete-product`, {
     method: 'POST',
-    headers: { 'X-WP-Nonce': CB_Rest.nonce, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ uuid })
+    headers: { 'X-WP-Nonce': CB_REST.nonce, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event_uuid: uuid })
   })
   .then(r => r.json())
   .then(res => {

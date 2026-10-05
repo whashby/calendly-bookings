@@ -1,348 +1,144 @@
 (function ($) {
   'use strict';
-
+  const rest = window.CB_REST || {};
+  const root = rest.root || '';
+  const $form = $('#cb-calendly-form');
+  const uuid = rest.uuid || $form.data('event-uuid') || '';
+  // Calendly availability requires the full Event Type URI. The UUID remains the
+  // canonical product mapping and is converted to the URI exactly as required by
+  // GET /event_type_available_times.
+  const eventTypeUri = $form.data('event-type-uri') || rest.event_type_uri || (uuid ? 'https://api.calendly.com/event_types/' + uuid : '');
+  const nonce = rest.nonce || '';
+  const siteTimezone = (window.CB_TZ_DATA && CB_TZ_DATA.site_timezone) || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   let availabilityByDate = {};
+  let datePicker = null;
 
-  const $timeContainer = $('#cb_meeting_time'); // tile container
-  const $timeHidden = $('#cb_meeting_time_value'); // hidden input
-
-  // --- Initialize Date Picker ---
-  const datePicker = flatpickr("#cb_meeting_date", {
-    dateFormat: "Y-m-d",
-    minDate: "today",
-    enable: [],
-    onChange: function(selectedDates, dateStr) {
-      populateTimes(dateStr);
-    }
-  });
-
-  // --- Populate times as tiles ---
-function populateTimes(dateStr) {
-  $timeContainer.empty();
-  $timeHidden.val('');
-
-  if (availabilityByDate[dateStr]) {
-    availabilityByDate[dateStr].forEach(slot => {
-      // Parse the ISO time string into a Date
-      const dt = new Date(`${dateStr}T${slot.time}:00Z`);
-
-      // Format as 12‑hour with AM/PM
-      const formatted = dt.toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      });
-
-      const $tile = $('<div>', {
-        class: 'cb-time-tile',
-        text: formatted
-      }).data('slot', slot);
-
+  function displayTime(iso) {
+    return new Intl.DateTimeFormat(undefined, {hour:'numeric', minute:'2-digit', hour12:true, timeZone:siteTimezone, timeZoneName:'short'}).format(new Date(iso));
+  }
+  function localDateKey(iso) {
+    const parts = new Intl.DateTimeFormat('en-CA', {year:'numeric', month:'2-digit', day:'2-digit', timeZone:siteTimezone}).formatToParts(new Date(iso));
+    const o = {}; parts.forEach(p => o[p.type] = p.value);
+    return `${o.year}-${o.month}-${o.day}`;
+  }
+  function setAddToCartState(enabled) {
+    const $button = $('form.cart .single_add_to_cart_button');
+    if (!$button.length) return;
+    $button.prop('disabled', !enabled);
+    $button.attr('aria-disabled', enabled ? 'false' : 'true');
+    $button.toggleClass('cb-booking-disabled', !enabled);
+  }
+  function showAvailabilityMessage(message) {
+    const $container = $('#cb_meeting_time');
+    if ($container.length) $container.html('<p class="cb-no-times">' + $('<div>').text(message || 'No available times were found.').html() + '</p>');
+  }
+  function populateTimes(dateKey) {
+    const $container = $('#cb_meeting_time');
+    $container.empty();
+    $('#cb_meeting_time_value, #cb_meeting_start_iso').val('');
+    const slots = availabilityByDate[dateKey] || [];
+    if (!slots.length) { $container.append('<p class="cb-no-times">No available times.</p>'); setAddToCartState(false); return; }
+    slots.sort((a,b) => new Date(a.start_time) - new Date(b.start_time));
+    slots.forEach(slot => {
+      const $tile = $('<button type="button" class="cb-time-tile"></button>');
+      $tile.text(displayTime(slot.start_time));
       $tile.on('click', function() {
-        $timeContainer.find('.cb-time-tile').removeClass('selected');
+        $container.find('.cb-time-tile').removeClass('selected');
         $(this).addClass('selected');
-        $timeHidden.val(slot.time);
-        $timeHidden.attr('data-url', slot.scheduling_url);
+        $('#cb_meeting_time_value').val(slot.start_time);
+        $('#cb_meeting_start_iso').val(slot.start_time);
+        setAddToCartState(true);
       });
-
-      $timeContainer.append($tile);
+      $container.append($tile);
     });
   }
-}
-
-
-  // --- Load availability into pickers ---
-  function loadAvailability(apiData) {
+  function loadAvailability(items) {
     availabilityByDate = {};
-
-    apiData.forEach(item => {
-      if (item.status !== 'available') return;
-
-      const dt = new Date(item.start_time);
-      const date = dt.toISOString().split('T')[0];
-      const time = dt.toISOString().split('T')[1].substring(0,5); // HH:mm
-
-      if (!availabilityByDate[date]) {
-        availabilityByDate[date] = [];
-      }
-      availabilityByDate[date].push({
-        time,
-        scheduling_url: item.scheduling_url
-      });
+    (items || []).forEach(item => {
+      if (!item || (item.status && item.status !== 'available')) return;
+      const iso = item.start_time;
+      if (!iso) return;
+      const key = localDateKey(iso);
+      if (!availabilityByDate[key]) availabilityByDate[key] = [];
+      availabilityByDate[key].push(item);
     });
-
-    // Enable only available dates in datepicker
-    datePicker.set('enable', Object.keys(availabilityByDate));
+    if (datePicker) datePicker.set('enable', Object.keys(availabilityByDate));
+    setAddToCartState(false);
+    if (Object.keys(availabilityByDate).length) showAvailabilityMessage('Select an available date to see meeting times.');
+    else showAvailabilityMessage('No available dates were returned by Calendly.');
   }
-
-  // --- Fetch availability via admin-ajax ---
   function fetchAvailability(startIso) {
-    $.ajax({
-      url: cb_ajax_object.ajaxurl,
-      method: 'POST',
-      dataType: 'json',
-      data: {
-        action: 'cb_get_event_availability',
-        uuid: CB_REST.uuid,
-        start_iso: startIso,
-        _ajax_nonce: CB_REST.nonce
-      },
-      success: function(response) {
-        if (response && response.success && Array.isArray(response.data)) {
-          loadAvailability(response.data);
-        } else {
-          loadAvailability([]);
-        }
-      },
-      error: function(xhr) {
-        console.error("Failed to fetch availability", xhr);
+    setAddToCartState(false);
+    if (!root || (!uuid && !eventTypeUri)) {
+      showAvailabilityMessage('This meeting is not currently connected to a Calendly Event Type.');
+      return;
+    }
+    const request = $.ajax({
+      url: root + 'event-availability', method:'GET', dataType:'json',
+      data:{event_type_uri:eventTypeUri, uuid:uuid, start_iso:startIso}, headers:{'X-WP-Nonce':nonce}
+    });
+    request.done(function(response){
+      if (response && response.success) loadAvailability(response.data || []);
+      else {
         loadAvailability([]);
+        showAvailabilityMessage((response && response.message) || 'Calendly availability could not be loaded.');
       }
     });
-  }
-
-    // --- Hesychia Submit ---
-$('#hesychia-submit').on('click', function(e) {
-  e.preventDefault();
-
-  const payload = {
-    first_name: $('#cb_firstname').val(),
-    last_name: $('#cb_lastname').val(),
-    email: $('#cb_email').val(),
-    location: $('#cb_meeting_location').val(),
-    date: $('#cb_meeting_date').val(),
-    time: $('#cb_meeting_time_value').val(),
-    uuid: CB_REST.uuid,
-    product_id: CB_REST.product
-  };
-
-  $.ajax({
-    url: CB_REST.root + 'schedule-hesychia',
-    method: 'POST',
-    data: payload,
-    headers: { 'X-WP-Nonce': CB_REST.nonce },
-    success: function(response) {
-      if (response.success) {
-        alert('Session booked successfully!');
-        window.location.href = response.redirect;
-      } else {
-        alert('Error: ' + (response.message || 'Unknown error'));
-      }
-    },
-    error: function(xhr) {
-      console.error("Failed to schedule Hesychia session", xhr);
-      alert('An unexpected error occurred.');
-    }
-  });
-});
-
-  // --- Initialize ---
-  const startIso = new Date().toISOString();
-  fetchAvailability(startIso);
-
-})(jQuery);
-
-
-
-/*(function ($) {
-  'use strict';
-
-  const uuid = CB_REST.uuid;
-  const siteTimezone = CB_REST.site_timezone || 'America/Barbados';
-  const $dateSelect = $('#cb_meeting_date');
-  const $timeSelect = $('#cb_meeting_time');
-  const $locationSelect = $('#cb_meeting_location');
-  const $emailField = $('#cb_email');
-
-  let availabilityByDate = {};
-
-  function isValidEmail(email) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  }
-
-  // Email check
-  $emailField.on('blur', function () {
-    const email = $(this).val();
-    if (!isValidEmail(email)) return;
-
-    $.post(CB_REST.root + 'check-user-email', {
-      email: email,
-      _wpnonce: CB_REST.nonce
-    }, function (response) {
-      if (response.exists) {
-        $('#cb-login-modal').fadeIn();
-        $('#cb-login-modal input[name="log"]').val(email);
-      }
-    });
-  });
-
-  // Login form
-  $('#cb-login-form').on('submit', function (e) {
-    e.preventDefault();
-    $.post(cb_ajax_object.ajaxurl, $(this).serialize() + '&action=cb_login&redirect_to=' + encodeURIComponent(window.location.href), function (response) {
-      if (response.success) {
-        $('#cb-login-modal').fadeOut();
-        window.location.href = response.data.redirect;
-      } else {
-        alert(response.data.message);
-      }
-    });
-  });
-
-  // Modal close handlers
-  $(document).on('click', '.cb-close', () => $('#cb-login-modal').fadeOut());
-  $(document).on('click', e => { if ($(e.target).is('#cb-login-modal')) $('#cb-login-modal').fadeOut(); });
-  $(document).on('keyup', e => { if (e.key === "Escape") $('#cb-login-modal').fadeOut(); });
-
-  // Helpers (timezone-aware)
-function formatDateLabel(iso) {
-  // Remove time portion if present
-  const dateOnly = iso.split('T')[0];
-
-  // Create a Date object using only the date part
-  const d = new Date(dateOnly + 'T00:00:00');
-
-  // Format naturally in the site’s timezone
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'short',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: CB_REST.site_timezone // e.g., 'America/Barbados'
-  }).format(d);
-}
-  function formatTimeLabel(iso) {
-    const d = new Date(iso);
-    return new Intl.DateTimeFormat('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: siteTimezone
-    }).format(d);
-  }
-
-  function renderDates(dates) {
-    $dateSelect.empty();
-    $timeSelect.prop('disabled', true);
-
-    if (!dates.length) {
-      $dateSelect.append('<option value="">No available dates</option>');
-      renderTimes([]);
-      return;
-    }
-
-    $dateSelect.append('<option value="">Select a date</option>');
-    dates.forEach(dateIso => {
-      $dateSelect.append($('<option>', { value: dateIso, text: formatDateLabel(dateIso) }));
-    });
-  }
-
-  function renderTimes(slots) {
-    $timeSelect.empty();
-    if (!Array.isArray(slots) || slots.length === 0) {
-      $timeSelect.append('<option value="">No available times</option>');
-      return;
-    }
-    $timeSelect.append('<option value="">Select a time</option>');
-    const sorted = [...slots].sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
-    sorted.forEach(slot => {
-      $timeSelect.append($('<option>', { value: slot.start_time, text: formatTimeLabel(slot.start_time) }));
-    });
-  }
-
-  function loadAvailability() {
-    if (!uuid) return;
-    const startIso = new Date().toISOString();
-
-    fetch(`/wp-json/calendly-bookings/v1/event-availability?uuid=${uuid}&start_iso=${startIso}`, { credentials: 'same-origin' })
-      .then(res => res.json())
-      .then(response => {
-        if (!(response && response.success && Array.isArray(response.data))) {
-          renderDates([]);
-          return;
+    request.fail(function(xhr){
+      // Compatibility fallback for sites that block the WordPress REST API on the frontend.
+      $.ajax({
+        url: (window.cb_ajax_object && cb_ajax_object.ajaxurl) || '',
+        method:'POST', dataType:'json',
+        data:{action:'cb_get_event_availability', uuid:uuid, start_iso:startIso, _ajax_nonce:nonce}
+      }).done(function(response){
+        if (response && response.success) loadAvailability(response.data || []);
+        else {
+          loadAvailability([]);
+          showAvailabilityMessage((response && response.data && response.data.message) || 'Calendly availability could not be loaded.');
         }
-        availabilityByDate = {};
-        for (const slot of response.data) {
-          const iso = slot.start_time;
-          if (!iso) continue;
-          const key = new Date(iso).toISOString().slice(0, 10);
-          if (!availabilityByDate[key]) availabilityByDate[key] = [];
-          availabilityByDate[key].push(slot);
-        }
-        const dates = Object.keys(availabilityByDate).sort((a, b) => new Date(a) - new Date(b));
-        renderDates(dates);
-        if (dates.length) renderTimes(availabilityByDate[dates[0]]);
-
-        applyPrefill(); // apply once after rendering
-      })
-      .catch(err => {
-        console.error('Availability request failed:', err);
-        renderDates([]);
+      }).fail(function(fallbackXhr){
+        console.error('Calendly availability request failed', xhr, fallbackXhr);
+        let message = 'Calendly availability could not be loaded.';
+        if (fallbackXhr.responseJSON && fallbackXhr.responseJSON.data && fallbackXhr.responseJSON.data.message) message = fallbackXhr.responseJSON.data.message;
+        else if (xhr.responseJSON && xhr.responseJSON.message) message = xhr.responseJSON.message;
+        showAvailabilityMessage(message);
+        if (datePicker) datePicker.set('enable', []);
       });
+    });
   }
 
-  $dateSelect.on('change', function () {
-    const key = $(this).val();
-    if (!key) {
-      renderTimes([]);
-      $timeSelect.prop('disabled', true);
-      return;
-    }
-    renderTimes(availabilityByDate[key] || []);
-    $timeSelect.prop('disabled', false);
-  });
+  $(function() {
+    const $date = $('#cb_meeting_date');
+    if (!$date.length) return;
+    setAddToCartState(false);
+    datePicker = flatpickr($date[0], {
+      dateFormat:'Y-m-d', minDate:'today', enable:[], disableMobile:true,
+      onChange:function(_, dateStr){ populateTimes(dateStr); }
+    });
+    fetchAvailability(new Date().toISOString());
 
-  // Prefill logic
-  function applyPrefill() {
-    if (typeof CB_FOLLOWUP === 'undefined') return;
-    const { firstname, lastname, email, date, time, location } = CB_FOLLOWUP;
+    $(document).on('change', '#cb_meeting_location', function(){
+      const idx = $(this).find(':selected').data('location-index');
+      $('#cb_meeting_location_details').val(idx == null ? '' : String(idx));
+    });
 
-    if (firstname) $('#cb_firstname').val(firstname);
-    if (lastname) $('#cb_lastname').val(lastname);
-    if (email) $('#cb_email').val(email);
-
-    if (date && availabilityByDate[date]) {
-      $dateSelect.val(date);
-      $dateSelect.find(`option[value="${date}"]`).attr('selected', 'selected');
-      renderTimes(availabilityByDate[date]);
-      $timeSelect.prop('disabled', false);
-    }
-    if (time) {
-      $timeSelect.val(time);
-      $timeSelect.find(`option[value="${time}"]`).attr('selected', 'selected');
-    }
-    if (location) {
-      $locationSelect.val(location);
-      $locationSelect.find(`option[value="${location}"]`).attr('selected', 'selected');
-    }
-  }
-
-  // Validation
-  $('#calendly-booking-form').on('submit', function (e) {
-    e.preventDefault();
-    const name = $('#cb_firstname').val() + ' ' + $('#cb_lastname').val();
-    const email = $('#cb_email').val();
-
-    $.post(CB_REST.root + 'validate-invitee', {
-      name: name,
-      email: email,
-      _wpnonce: CB_REST.nonce
-    }, function (response) {
-      if (response.account_exists && !response.logged_in) {
-        alert(CB_MESSAGES.account_exists);
-        return;
+    $(document).on('submit', 'form.cart', function(e){
+      if (!$form.length) return;
+      const startIso = $('#cb_meeting_start_iso').val();
+      if (!startIso) {
+        e.preventDefault();
+        alert('Please select an available meeting time before continuing.');
+        return false;
       }
-      if (response.has_meeting_order) {
-        alert(CB_MESSAGES.meeting_blocked + ' ' + CB_MESSAGES.upsell);
-        return;
-      }
-      e.currentTarget.submit();
+      const $button = $(this).find('.single_add_to_cart_button');
+      // Do not disable the submit button synchronously here. WooCommerce uses the
+      // button's name/value during form submission; disabling it before the browser
+      // serializes the form can remove add-to-cart from the request and cause a
+      // silent page refresh instead of adding the meeting. A hidden add-to-cart
+      // fallback is present in the form, and we only mark the button busy after the
+      // native submit has been initiated.
+      $button.attr('aria-disabled', 'true').addClass('loading');
+      window.setTimeout(function(){ $button.prop('disabled', true); }, 50);
     });
   });
-
-  $(function () {
-    loadAvailability();
-  });
-
 })(jQuery);
-*/

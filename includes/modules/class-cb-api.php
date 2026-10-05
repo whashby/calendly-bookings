@@ -54,8 +54,30 @@ final class CB_API {
         ];
     }
 
+    /** Shared token-specific cooldown for Calendly's Retry-After response. */
+    private function rate_limit_key(): string { return 'cb_api_rate_' . md5($this->token); }
+    public function retry_after(): int { return max(0, (int) get_transient($this->rate_limit_key()) - time()); }
+    private function record_rate_limit($response): int {
+        $raw = (string) wp_remote_retrieve_header($response, 'retry-after');
+        $delay = ctype_digit($raw) ? (int) $raw : max(0, (int) strtotime($raw) - time());
+        $delay = max(1, $delay ?: 60);
+        set_transient($this->rate_limit_key(), time() + $delay, $delay);
+        return $delay;
+    }
+
+    private static function api_error_message(array $error, string $fallback): string {
+        $message = sanitize_text_field((string) ($error['message'] ?? $fallback));
+        $details = [];
+        foreach ((array) ($error['details'] ?? []) as $detail) {
+            if (!is_array($detail) || empty($detail['message'])) continue;
+            $parameter = sanitize_text_field((string) ($detail['parameter'] ?? ''));
+            $details[] = ($parameter ? $parameter . ': ' : '') . sanitize_text_field((string) $detail['message']);
+        }
+        return $message . ($details ? ' ' . implode('; ', $details) : '');
+    }
+
     private function cache_key(string $url): string {
-        return 'cb_api_' . md5($url);
+        return 'cb_api_' . md5($this->token . '|' . $url);
     }
 
     private function get_cached(string $url): ?array {
@@ -101,6 +123,7 @@ final class CB_API {
 			return $hit;
 		}
 
+        if ($delay = $this->retry_after()) return ['error' => true, 'status' => 429, 'message' => 'Calendly rate limit: retry later.', 'retry_after' => $delay];
 		$t0  = microtime(true);
 
 		$res = wp_remote_get($url, ['headers' => $this->headers(), 'timeout' => 20]);
@@ -117,10 +140,12 @@ final class CB_API {
 		
 
 		if ($code !== 200) {
-			return ['error' => true, 'status' => $code, 'body' => $body];
+			$error = json_decode($body, true);
+            return ['error' => true, 'status' => $code, 'message' => self::api_error_message(is_array($error) ? $error : [], 'Calendly API request failed.'), 'retry_after' => $code === 429 ? $this->record_rate_limit($res) : 0];
 		}
 
-		$data = json_decode($body, true) ?: [];
+		$data = json_decode($body, true);
+        if (!is_array($data)) return ['error' => true, 'message' => 'Invalid Calendly JSON response.'];
 		if (!empty($data) && $ttl > 0) {
 			$this->set_cached($url, $data, $ttl);
 		}
@@ -128,7 +153,7 @@ final class CB_API {
 	}
 	
         
-    public function sync(): array {
+    public function sync(?string $min_start_date = null, bool $full = true): array {
         $results = [
             'locations'                  => [],
             'scheduled_events'           => [],
@@ -141,9 +166,9 @@ final class CB_API {
         try {
             // Core syncs
             $results['locations']                  = $this->sync_locations();
-            $results['scheduled_events']           = $this->sync_scheduled_events();
+            $results['event_types'] = $this->sync_event_types();
+            $results['scheduled_events'] = $this->sync_scheduled_events(null, $min_start_date);
             $results['scheduled_event_invitees']   = $this->sync_scheduled_event_invitees();
-            $results['event_types']                = $this->sync_event_types();
             $results['event_type_available_times'] = $this->sync_event_type_available_times();
 
             // Collect errors from each sync
@@ -154,31 +179,46 @@ final class CB_API {
             }
 
             // Update global sync timestamp
-            update_option(CB_Constants::OPT_LAST_SYNC_ALL, current_time('timestamp'));
+            if (empty($results['errors'])) update_option(CB_Constants::OPT_LAST_SYNC_ALL, current_time('timestamp'));
 
         } catch (\Throwable $e) {
             $results['errors'][] = $e->getMessage();
 
         }
 
-        return [
+        return CB_Sync_Status::record('master', [
             'success'   => empty($results['errors']),
             'last_sync' => current_time('mysql'),
             'results'   => $results,
             'errors'    => $results['errors'],
-        ];
+        ]);
     }
 
 
+    /** Fetch all pages; API errors must remain distinct from an empty collection. */
+    private function collection(string $path, array $query = [], bool $remove_user = false, ?int $limit = null): array {
+        $query['count'] = min(100, max(1, $limit ?? 100));
+        $rows = []; $seen = [];
+        do {
+            $res = $this->get($path, $query, $remove_user, 0);
+            if (!empty($res['error'])) {
+                throw new \RuntimeException((string) ($res['message'] ?? 'Calendly API request failed.') . ' (HTTP ' . ($res['status'] ?? 0) . ')');
+            }
+            if (!isset($res['collection']) || !is_array($res['collection'])) throw new \RuntimeException('Invalid Calendly collection response.');
+            $rows = array_merge($rows, $res['collection']);
+            $cursor = $res['pagination']['next_page_token'] ?? null;
+            if (!$cursor && !empty($res['pagination']['next_page'])) {
+                parse_str((string) wp_parse_url($res['pagination']['next_page'], PHP_URL_QUERY), $next);
+                $cursor = $next['page_token'] ?? null;
+            }
+            if ($cursor && isset($seen[$cursor])) throw new \RuntimeException('Repeated Calendly pagination cursor.');
+            if ($cursor) { $seen[$cursor] = true; $query['page_token'] = $cursor; }
+        } while ($cursor && ($limit === null || count($rows) < $limit));
+        return $limit === null ? $rows : array_slice($rows, 0, $limit);
+    }
+
     public function query_event_types(): array {
-        try {
-            $res = $this->get('/event_types', ['count' => 100], false, 120);
-            $result = $res['collection'] ?? [];
-            return $result;
-        } catch (\Throwable $e) {
-            
-            return [];
-        }
+        return $this->collection('/event_types');
     }
 
     public function set_event_types(array $event_types): int {
@@ -220,7 +260,55 @@ final class CB_API {
         }
     }
 
-    public function get_event_types(): array {
+    /** Retrieve a single Calendly event type from the live API. */
+    public function get_event_type(string $uuid): array {
+        $uuid = preg_replace('/[^a-zA-Z0-9-]/', '', $uuid);
+        if ($uuid === '') return ['error' => true, 'message' => 'Invalid event type UUID.'];
+        return $this->get('/event_types/' . rawurlencode($uuid), [], true, 0);
+    }
+
+    /** Retrieve a live Calendly resource by URI or API path. */
+    public function get_resource(string $uri): array {
+        $parsed = wp_parse_url($uri);
+        if (!$parsed || empty($parsed['host'])) {
+            return $this->get($uri, [], true, 0);
+        }
+        if ($parsed['host'] !== 'api.calendly.com') {
+            return ['error' => true, 'message' => 'Refused non-Calendly API URI.'];
+        }
+        $path = $parsed['path'] ?? '/';
+        $query = [];
+        if (!empty($parsed['query'])) parse_str($parsed['query'], $query);
+        return $this->get($path, $query, true, 0);
+    }
+
+    /** Create an invitee through Calendly's Scheduling API. */
+    public function create_invitee(array $payload): array {
+        if ($this->token === '') return ['error' => true, 'status' => 401, 'message' => 'Calendly API token is not configured.'];
+        if ($delay = $this->retry_after()) return ['error' => true, 'status' => 429, 'message' => 'Calendly rate limit: retry later.', 'retry_after' => $delay];
+        $response = wp_remote_post(self::API_BASE . '/invitees', [
+            'headers' => $this->headers(),
+            'body' => wp_json_encode($payload),
+            'timeout' => 25,
+        ]);
+        if (is_wp_error($response)) {
+            return ['error' => true, 'status' => 0, 'message' => $response->get_error_message()];
+        }
+        $status = wp_remote_retrieve_response_code($response);
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        if ($status < 200 || $status >= 300) {
+            return [
+                'error' => true,
+                'status' => $status,
+                'message' => (string) ($body['message'] ?? 'Calendly scheduling request failed.'),
+                'body' => $body,
+                'retry_after' => $status === 429 ? $this->record_rate_limit($response) : 0,
+            ];
+        }
+        return is_array($body) ? $body : ['resource' => []];
+    }
+
+    public function get_event_types($unused = null, $unused2 = null): array {
         try {
             global $wpdb;
             $result = $wpdb->get_results(
@@ -250,7 +338,7 @@ final class CB_API {
         try {
             $types = $this->query_event_types();
             if (empty($types)) {
-                $results['errors'][] = 'No event types returned from Calendly';
+                // An empty collection is valid.
             } else {
                 $results['upserted'] = $this->set_event_types($types);
             }
@@ -262,70 +350,20 @@ final class CB_API {
         if (!empty($results['errors'])) {
             
         }
-        return [
+        return CB_Sync_Status::record('event_types', [
             'success'   => empty($results['errors']),
             'last_sync' => current_time('mysql'),
             'upserted'  => $results['upserted'],
             'errors'    => $results['errors'],
-        ];
+        ]);
     }
 
 
     public function query_event_type_available_times(string $event_type_uuid): array {
-        try {
-            // Current UTC time
-            $nowObj = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
-
-            // Round to next half-hour slot
-            $minutes = (int) $nowObj->format('i');
-            $seconds = (int) $nowObj->format('s');
-
-            // Total minutes past the hour
-            $totalMinutes = $minutes + ($seconds > 0 ? 1 : 0);
-
-            // Compute next slot: either :30 or next hour
-            $roundedMinutes = $totalMinutes <= 30 ? 30 : 0;
-            $roundedHour    = $totalMinutes <= 30 ? (int) $nowObj->format('H') : (int) $nowObj->format('H') + 1;
-
-            $rounded = $nowObj->setTime($roundedHour % 24, $roundedMinutes, 0);
-
-            $start_time = $rounded;
-            $end_time = $rounded->modify('+7 days');
-
-            // ISO‑8601 UTC window
-            $start_utc_iso = $rounded->format('Y-m-d\TH:i:s\Z');
-            $end_utc_iso   = $rounded->modify('+7 days')->format('Y-m-d\TH:i:s\Z');
-
-            // Build event_type URI
-            $event_type = self::API_BASE . '/event_types/' . $event_type_uuid;
-            $result = [];
-            $counter = 0;
-
-            do {
-                // Call Calendly API
-                $res = $this->get('/event_type_available_times', [
-                    'event_type' => $event_type,
-                    'start_time' => $start_utc_iso,
-                    'end_time'   => $end_utc_iso,
-                ], true, 60);
-
-
-                $result = array_merge($result, $res['collection'] ?? []);
-
-                $start_time = $end_time->modify('+1 second'); // Avoid overlap by adding 1 second
-                $end_time = $start_time->modify('+7 days');
-
-                $start_utc_iso = $start_time->format('Y-m-d\TH:i:s\Z');
-                $end_utc_iso   = $end_time->format('Y-m-d\TH:i:s\Z');
-
-                $counter++;
-            } while ($counter < 4); // Limit to 4 iterations (1 month) to prevent infinite loops in case of API issues
-
-            return $result;
-        } catch (\Throwable $e) {
-            
-            return [];
-        }
+        if (!preg_match('/^[A-Za-z0-9-]+$/', $event_type_uuid)) throw new \InvalidArgumentException('Invalid event type UUID.');
+        $res = $this->get_event_type_availability(self::API_BASE . '/event_types/' . rawurlencode($event_type_uuid), gmdate('c'));
+        if (!empty($res['error'])) throw new \RuntimeException((string) ($res['message'] ?? 'Availability request failed.') . ' (HTTP ' . ($res['status'] ?? 0) . ')');
+        return $res['collection'];
     }
 
     public function set_event_type_available_times(string $event_type_uuid, array $slots): int {
@@ -456,8 +494,14 @@ final class CB_API {
         try {
             global $wpdb;
             $event_types = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_event_types WHERE active=1");
-            // Purge slots once before looping
+            // Replace each event type cache only after its request succeeds.
             foreach ($event_types as $uuid) {
+                try {
+                    $slots = $this->query_event_type_available_times($uuid);
+                } catch (\Throwable $error) {
+                    $results['errors'][] = 'Event type ' . $uuid . ': ' . $error->getMessage();
+                    continue;
+                }
                 $wpdb->query($wpdb->prepare(
                     "DELETE FROM {$wpdb->prefix}cb_event_type_available_times
                         WHERE event_type_id = (SELECT id FROM {$wpdb->prefix}cb_event_types WHERE uuid=%s)
@@ -465,10 +509,8 @@ final class CB_API {
                     $uuid
                 ));
 
-                $slots = $this->query_event_type_available_times($uuid);
-
                 if (empty($slots)) {
-                    $results['errors'][] = "No available times for event_type {$uuid}";
+                    // No available slots is a valid response.
                     continue;
                 }
 
@@ -476,53 +518,24 @@ final class CB_API {
                 $results['upserted'] += $count;
             }
 
-            update_option(CB_Constants::OPT_LAST_SYNC_EVENT_TYPE_AVAILABLE_TIMES, current_time('timestamp'));
+            if (empty($results['errors'])) update_option(CB_Constants::OPT_LAST_SYNC_EVENT_TYPE_AVAILABLE_TIMES, current_time('timestamp'));
         } catch (\Throwable $e) {
             $results['errors'][] = $e->getMessage();
         }
 
-        if (!empty($results['errors'])) {
-            
-        }
-        return [
+        return CB_Sync_Status::record('availability', [
             'success'   => empty($results['errors']),
             'last_sync' => current_time('mysql'),
             'upserted'  => $results['upserted'],
             'errors'    => $results['errors'],
-        ];
+        ]);
     }
 
 
     public function query_scheduled_events(?int $count = null, ?string $min_start_date = null): array {
-        try {
-            $params = [];
-            if ($count !== null) {
-                $params['count'] = $count;
-            }
-            if ($min_start_date) {
-                $params['min_start_time'] = gmdate('Y-m-d\TH:i:s\Z', strtotime($min_start_date));
-            }
-
-            $allEvents = [];
-            $cursor = null;
-
-            do {
-                if ($cursor) {
-                    $params['cursor'] = $cursor;
-                }
-
-                $res = $this->get('/scheduled_events', $params, false, 120);
-                $batch = $res['collection'] ?? [];
-                $allEvents = array_merge($allEvents, $batch);
-
-                $cursor = $res['pagination']['next_page'] ?? null;
-            } while ($count === null && $cursor);
-
-            return $allEvents;
-        } catch (\Throwable $e) {
-            
-            return [];
-        }
+        $params = [];
+        if ($min_start_date) $params['min_start_time'] = gmdate('Y-m-d\TH:i:s\Z', strtotime($min_start_date));
+        return $this->collection('/scheduled_events', $params, false, $count);
     }
 
     public function set_scheduled_events(array $events): int {
@@ -534,6 +547,7 @@ final class CB_API {
             $table_locations= $wpdb->prefix . 'cb_meeting_locations';
 
             $count = 0;
+            $location_ids = $wpdb->get_results("SELECT id, type FROM {$table_locations}", ARRAY_A) ?: [];
 
             foreach ($events as $se) {
                 $uuid = basename($se['uri'] ?? '');
@@ -547,11 +561,10 @@ final class CB_API {
                     $wpdb->prepare("SELECT id FROM {$table_types} WHERE uuid=%s", $event_type_uuid)
                 );
 
-                // Resolve location_id
+                // Resolve location_id using one lookup for the whole sync.
                 $location_id = null;
-                $location_ids = $wpdb->get_results("SELECT id, type FROM {$table_locations}", ARRAY_A);
 
-                foreach ($location_ids as $key => $location) {
+                foreach ($location_ids as $location) {
                     $loc = $se['location'] ?? [];
                     if ($loc && $loc['type'] === $location['type']) {
                         $location_id = $location['id'];
@@ -569,7 +582,7 @@ final class CB_API {
                     if (!empty($payload['status'])) {
                         $raw_payload_status = $payload['status'];
                         $status = strtolower($payload['status']) === 'canceled'
-                            ? 'cancelled'
+                            ? 'canceled'
                             : sanitize_text_field($payload['status']);
                     }
 
@@ -625,7 +638,7 @@ final class CB_API {
                     "INSERT INTO $table_events (uuid, order_id, event_type_id, location_id, name, start_time, end_time, status, uri, reschedule_url, cancel_url, payload, created_ts, updated_ts)
                     VALUES (%s, %s, %d, %d, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
                     ON DUPLICATE KEY UPDATE
-                    order_id=VALUES(order_id),
+                    order_id=COALESCE(NULLIF(VALUES(order_id), ''), order_id),
                     event_type_id=VALUES(event_type_id),
                     location_id=VALUES(location_id),
                     name=VALUES(name),
@@ -633,15 +646,15 @@ final class CB_API {
                     end_time=VALUES(end_time),
                     status=VALUES(status),
                     uri=VALUES(uri),
-                    reschedule_url=VALUES(reschedule_url),
-                    cancel_url=VALUES(cancel_url),
+                    reschedule_url=COALESCE(NULLIF(VALUES(reschedule_url), ''), reschedule_url),
+                    cancel_url=COALESCE(NULLIF(VALUES(cancel_url), ''), cancel_url),
                     payload=VALUES(payload),
                     updated_ts=NOW()",
                     $uuid,
                     $order_id, // now sourced from invitee payload
                     $event_type_id ?: 0,
                     $location_id,
-                    sanitize_text_field(!$se['name'] == "Initial meeting"? $se['name'] : "Initial Consultation"),
+                    sanitize_text_field((string)($se['name'] ?? '')),
                     gmdate('Y-m-d H:i:s', strtotime($se['start_time'] ?? 'now')),
                     gmdate('Y-m-d H:i:s', strtotime($se['end_time'] ?? 'now')),
                     $status,
@@ -686,14 +699,23 @@ final class CB_API {
                     break;
 
                 case 'my-account':
-                    // Logged-in user’s events (based on contact email)
+                    // Logged-in user’s events (based on invitee email). Respect the
+                    // requested status so upcoming and historical cards both work.
                     $user = wp_get_current_user();
                     if ($user && $user->user_email) {
-                        $where[] = "se.start_time >= UTC_TIMESTAMP()";
                         $where[] = "inv.email = %s";
                         $params[] = $user->user_email;
+                        if (!empty($filters['status'])) {
+                            $where[] = "se.status = %s";
+                            $params[] = $filters['status'];
+                            if ($filters['status'] === 'completed') {
+                                $where[] = "se.end_time < UTC_TIMESTAMP()";
+                            } elseif (in_array($filters['status'], ['active','scheduled','rescheduled','pending'], true)) {
+                                $where[] = "se.start_time >= UTC_TIMESTAMP()";
+                            }
+                        }
                     } else {
-                        return []; // no user context
+                        return [];
                     }
                     break;
 
@@ -737,21 +759,13 @@ final class CB_API {
 
             $events = [];
             foreach ($rows as $row) {
-                $order_id = '-';
+                // WooCommerce order_id is generated after checkout and is stored
+                // locally; it is intentionally not collected as a Calendly question.
+                $order_id = !empty($row['order_id']) ? (string) $row['order_id'] : '-';
                 $invitee_payload = [];
 
-                if( !empty($row['invitee_payload']) ) {
-                    $invitee_payload = json_decode($row['invitee_payload'], true);
-                }
-
-                if(!empty($invitee_payload)) {
-                    $qna = $invitee_payload['questions_and_answers'];
-
-                        foreach($qna as $idx => $arr) {
-                            if($arr['question'] == 'Order ID') {
-                                $order_id = $arr['answer'];
-                            }
-                        }
+                if (!empty($row['invitee_payload'])) {
+                    $invitee_payload = json_decode($row['invitee_payload'], true) ?: [];
                 }
 
                 $events[] = [
@@ -783,13 +797,12 @@ final class CB_API {
         try {
             $events = self::query_scheduled_events($count, $min_start_date);
 
-            if (empty($events)) {
-                $results['errors'][] = 'No scheduled events returned from Calendly';
-            } else {
+            if (!empty($events)) {
                 $this->normalize_event_statuses($events);
                 $results['upserted'] = $this->set_scheduled_events($events);
             }
 
+            // An empty collection is a valid Calendly response, not an API failure.
             $this->update_sync_state_success();
             update_option(CB_Constants::OPT_LAST_SYNC_SCHEDULED_EVENTS, current_time('timestamp'));
         } catch (\Throwable $e) {
@@ -800,24 +813,17 @@ final class CB_API {
         if (!empty($results['errors'])) {
             
         }
-        return [
+        return CB_Sync_Status::record('scheduled_events', [
             'success'   => empty($results['errors']),
             'last_sync' => current_time('mysql'),
             'upserted'  => $results['upserted'],
             'errors'    => $results['errors'],
-        ];
+        ]);
     }
 
 
     public function query_scheduled_event_invitees(string $scheduled_event_uuid): array {
-        try {
-            $res = $this->get('/scheduled_events/' . $scheduled_event_uuid . '/invitees', [], false, 60);
-            $result = $res['collection'] ?? [];
-            return $result;
-        } catch (\Throwable $e) {
-            
-            return [];
-        }
+        return $this->collection('/scheduled_events/' . rawurlencode($scheduled_event_uuid) . '/invitees', [], true);
     }
 
     public function set_scheduled_event_invitees(string $scheduled_event_uuid, array $invitees): int {
@@ -869,13 +875,13 @@ final class CB_API {
 
         try {
             global $wpdb;
-            $scheduled_events = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_scheduled_events");
+            $scheduled_events = $wpdb->get_col("SELECT uuid FROM {$wpdb->prefix}cb_scheduled_events WHERE uri LIKE 'https://api.calendly.com/scheduled_events/%'");
 
             foreach ($scheduled_events as $uuid) {
                 $invitees = $this->query_scheduled_event_invitees($uuid);
 
                 if (empty($invitees)) {
-                    $results['errors'][] = "No invitees for scheduled_event {$uuid}";
+                    // Empty invitee collections are valid.
                     continue;
                 }
 
@@ -891,23 +897,16 @@ final class CB_API {
         if (!empty($results['errors'])) {
             
         }
-        return [
+        return CB_Sync_Status::record('invitees', [
             'success'   => empty($results['errors']),
             'last_sync' => current_time('mysql'),
             'upserted'  => $results['upserted'],
             'errors'    => $results['errors'],
-        ];
+        ]);
     }
 
     public function query_locations(): array {
-        try {
-            $res = $this->get('/locations', ['count' => 100], false, 120);
-            $result = $res['collection'] ?? [];
-            return $result;
-        } catch (\Throwable $e) {
-            
-            return [];
-        }
+        return $this->collection('/locations');
     }
 
     public function set_locations(array $locations): int {
@@ -991,7 +990,7 @@ final class CB_API {
             $locations = $this->query_locations();
 
             if (empty($locations)) {
-                $results['errors'][] = 'No locations returned from Calendly';
+                // An empty collection is valid.
             } else {
                 $results['upserted'] = $this->set_locations($locations);
             }
@@ -1005,12 +1004,12 @@ final class CB_API {
             
         }
         
-        return [
+        return CB_Sync_Status::record('locations', [
             'success'   => empty($results['errors']),
             'last_sync' => current_time('mysql'),
             'upserted'  => $results['upserted'],
             'errors'    => $results['errors'],
-        ];
+        ]);
     }
 
     private function normalize_event_statuses(array &$events): void {
@@ -1172,7 +1171,7 @@ final class CB_API {
                     if (!empty($payload['status'])) {
                         $raw_payload_status = $payload['status'];
                         $status = strtolower($payload['status']) === 'canceled'
-                            ? 'cancelled'
+                            ? 'canceled'
                             : sanitize_text_field($payload['status']);
                     }
 
@@ -1235,7 +1234,7 @@ final class CB_API {
 			return ['success' => false, 'error' => $types['error']];
 		}
 
-		$collection = $types['collection'] ?? [];
+		$collection = $types;
 		$byUuid = [];
 		foreach ($collection as $t) {
 			$uuid = $t['uuid'] ?? basename((string)($t['uri'] ?? ''));
@@ -1332,21 +1331,40 @@ final class CB_API {
 
 
     public function get_event_type_availability(string $event_type_uri, string $start_iso): array {
-        try { $dt = new \DateTimeImmutable($start_iso); } catch (\Exception $e) { $dt = new \DateTimeImmutable('now'); }
-        $utc = $dt->setTimezone(new \DateTimeZone('UTC'));
-        $m = (int) $utc->format('i'); $s = (int) $utc->format('s');
-        if ($m === 0 && $s === 0) { $rounded = $utc->setTime((int) $utc->format('H'), 30, 0); }
-        elseif ($m < 30) { $rounded = $utc->setTime((int) $utc->format('H'), 30, 0); }
-        else { $rounded = $utc->modify('+1 hour')->setTime((int) $utc->modify('+1 hour')->format('H'), 0, 0); }
+        // Calendly requires the Event Type URI, a future start_time/end_time, and a
+        // maximum 31-day range for GET /event_type_available_times.
+        if (!preg_match('~^https://api\.calendly\.com/event_types/[A-Za-z0-9-]+$~', $event_type_uri)) {
+            return ['error' => true, 'message' => __('Invalid Calendly Event Type URI.', 'calendly-bookings'), 'status' => 400];
+        }
 
-        $start_utc_iso = $rounded->format('Y-m-d\TH:i:s\Z');
-        $end_utc_iso   = $rounded->modify('+7 days')->format('Y-m-d\TH:i:s\Z');
+        try {
+            $requested = new \DateTimeImmutable($start_iso ?: 'now', new \DateTimeZone('UTC'));
+        } catch (\Exception $e) {
+            $requested = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        }
 
-        print_r( $this->get('/event_type_available_times', [
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        // Keep at least two minutes of lead time for clock skew and request latency.
+        // Rounding must move forward, never back toward the current minute.
+        $minimum_timestamp = (int) (ceil(($now->getTimestamp() + 120) / 60) * 60);
+        $minimum = $now->setTimestamp($minimum_timestamp);
+        $window_start = $requested > $minimum ? $requested : $minimum;
+        $window_start = $window_start->setTimezone(new \DateTimeZone('UTC'));
+
+        // A 30-day window stays safely within Calendly's documented 31-day maximum.
+        $window_end = $window_start->modify('+30 days');
+
+        $res = $this->get('/event_type_available_times', [
             'event_type' => $event_type_uri,
-            'start_time' => $start_utc_iso,
-            'end_time'   => $end_utc_iso,
-        ], true, 60));
+            'start_time' => $window_start->format('Y-m-d\TH:i:s\Z'),
+            'end_time'   => $window_end->format('Y-m-d\TH:i:s\Z'),
+        ], true, 60);
+
+        if (!empty($res['error'])) {
+            return $res;
+        }
+
+        return ['collection' => is_array($res['collection'] ?? null) ? $res['collection'] : []];
     }
 
 }

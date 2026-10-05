@@ -1,0 +1,9 @@
+# Availability parameter fix — 6.12.7
+
+The live Calendly response identified start_time as invalid because it must be in the future. The old background calculation rounded to the next minute, leaving only 1–60 seconds of lead time. Calendly's response Date header was approximately 33 seconds ahead of the local server during diagnosis. All seven active event types returned that same parameter error. A direct request with a two-minute margin succeeded.
+
+Background and frontend availability now share one request builder. Its minimum start is at least 120 seconds ahead, rounded forward to a minute boundary. Later requested starts are retained. Both timestamps use UTC; the range remains 30 days. This follows the [official availability requirements](https://developer.calendly.com/api-docs/calendly-api/event-types/list-event-type-available-times). API errors retain sanitized parameter-specific details. Availability sync continues after an individual event type failure and preserves that type's cache. The last-success marker advances only when the whole availability sync succeeds.
+
+Validation: all seven active event types returned HTTP 200 after the fix. The actual master sync completed successfully at 2026-10-04T21:59:34Z (5:59 pm America/Barbados), with empty master and availability errors. The administrator dashboard health endpoint returned HTTP 200, Last sync succeeded, no errors, and the enabled Every 5 Minutes master schedule. No Calendly bookings or cancellations were created.
+
+Eleven focused availability checks, twenty existing API/webhook/export checks, twenty-three dashboard PHP checks and ten client widget checks passed (64 total). The modified API source passed PHP lint. Release ZIP contains 1,291 entries, matches local release sources byte-for-byte and contains no audit or environment/debug token files. Full visual browser interaction and an independently fired background cron run were not performed in this patch validation.

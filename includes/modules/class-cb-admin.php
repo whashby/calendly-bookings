@@ -20,16 +20,6 @@ final class CB_Admin {
         add_action('admin_notices', [__CLASS__, 'show_admin_notices']);
         
         add_action('admin_init', function() {
-            register_setting(CB_Constants::OPT_GROUP, 'cb_report_fields');
-            register_setting(CB_Constants::OPT_GROUP, 'cb_report_filetype');
-            register_setting(CB_Constants::OPT_GROUP, 'cb_report_start');
-            register_setting(CB_Constants::OPT_GROUP, 'cb_report_end');
-            register_setting(CB_Constants::OPT_GROUP, 'cb_product_start');
-            register_setting(CB_Constants::OPT_GROUP, 'cb_product_end');
-            register_setting(CB_Constants::OPT_GROUP, 'cb_discount_start');
-            register_setting(CB_Constants::OPT_GROUP, 'cb_discount_end');
-            register_setting(CB_Constants::OPT_GROUP, 'cb_stats_start');
-            register_setting(CB_Constants::OPT_GROUP, 'cb_stats_end');
         });
 
     }
@@ -141,6 +131,13 @@ final class CB_Admin {
                 ]) . ';',
                 'before'
             );
+            wp_localize_script('cb-admin', 'cb_admin', [
+                'nonce' => wp_create_nonce('cb_admin_nonce'),
+                'ajaxurl' => admin_url('admin-ajax.php'),
+                'rest_nonce' => wp_create_nonce('wp_rest'),
+                'timezone' => wp_timezone()->getName(),
+                'utc_offset' => wp_timezone()->getOffset(new \DateTimeImmutable('now')) / 60,
+            ]);
 
             wp_enqueue_style(
                 'cb-admin',
@@ -167,11 +164,16 @@ final class CB_Admin {
                     );
                 }
                 wp_localize_script("cb-admin-{$page}", 'cb_admin', [
-                    'nonce'   => wp_create_nonce('cb_admin_nonce'),
-                    'ajaxurl' => admin_url('admin-ajax.php'),
+                    'nonce'      => wp_create_nonce('cb_admin_nonce'),
+                    'ajaxurl'    => admin_url('admin-ajax.php'),
+                    'rest_nonce' => wp_create_nonce('wp_rest'),
+                'timezone' => wp_timezone()->getName(),
+                'utc_offset' => wp_timezone()->getOffset(new \DateTimeImmutable('now')) / 60,
                 ]);
-                wp_enqueue_script('thickbox');
-                wp_enqueue_style('thickbox');
+                if (in_array($page, ['scheduled-events', 'products'], true)) {
+                    wp_enqueue_script('thickbox');
+                    wp_enqueue_style('thickbox');
+                }
 
                 if (file_exists(CB_Constants::path($style_path))) {
                     wp_enqueue_style(
@@ -182,22 +184,6 @@ final class CB_Admin {
                     );
                 }
 
-                // Flatpickr CSS
-                wp_enqueue_style(
-                    'flatpickr',
-                    'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css',
-                    [],
-                    null
-                );
-
-                // Flatpickr JS
-                wp_enqueue_script(
-                    'flatpickr',
-                    'https://cdn.jsdelivr.net/npm/flatpickr',
-                    ['jquery'], // depends on jQuery
-                    null,
-                    true // load in footer
-                );
             }
         }
     }

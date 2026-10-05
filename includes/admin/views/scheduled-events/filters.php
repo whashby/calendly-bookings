@@ -1,4 +1,4 @@
-<form method="get" class="cb-filters">
+<form method="get" id="cb-filter-form" class="cb-filters">
   <input type="hidden" name="page" value="calendly-bookings-scheduled-events" />
   <input type="text" id="filter-name" name="name" value="<?php echo esc_attr($filters['name'] ?? ''); ?>" 
          placeholder="<?php esc_attr_e('Search invitee or event name', 'calendly-bookings'); ?>" />
@@ -16,7 +16,7 @@
   <input type="date" name="start_date" value="<?php echo esc_attr($filters['start_date'] ?? ''); ?>" />
   <input type="date" name="end_date" value="<?php echo esc_attr($filters['end_date'] ?? ''); ?>" />
 
-  <button class="button"><?php esc_html_e('Filter', 'calendly-bookings'); ?></button>
+  <button class="button"><?php esc_html_e('Filter', 'calendly-bookings'); ?></button> <button type="button" class="button" id="cb-refresh-scheduled-events"><?php esc_html_e('Refresh from Calendly', 'calendly-bookings'); ?></button>
   <div>
       <p>
           <button type="button" class="button cb-bulk-update"><?php esc_html_e('Bulk Update Status', 'calendly-bookings'); ?></button> | 

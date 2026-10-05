@@ -1,53 +1,21 @@
-
-function apiFetch(endpoint) {
-  return fetch(CB_REST.root + endpoint, {
-    headers: {
-      'X-WP-Nonce': CB_REST.nonce
-    }
-  }).then(res => res.json());
-}
-
 let trendsChart;
-
-function renderTrendsWidget(months = 1) {
-  apiFetch(`dashboard/trends?months=${months}`).then(data => {
-    const ctx = document.getElementById('cb-widget-trends-chart').getContext('2d');
-    const labels = data.map(item => item.day);
-    const counts = data.map(item => item.count);
-
+function renderTrendsWidget(months = cbDashboardPeriods.trends) {
+  cbDashboardPeriods.trends = months;
+  const canvas = document.getElementById('cb-widget-trends-chart'); if (!canvas) return Promise.resolve();
+  return apiFetch('dashboard/trends?months=' + months).then(data => {
+    if (typeof Chart !== 'function') throw new Error('The booking chart library could not be loaded.');
     if (trendsChart) trendsChart.destroy();
-
-    trendsChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: labels,
-        datasets: [{
-          label: `Bookings (${months} month${months > 1 ? 's' : ''})`,
-          data: counts,
-          borderColor: '#2271b1',
-          backgroundColor: 'rgba(34,113,177,0.2)',
-          fill: true,
-          tension: 0.3
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { title: { display: true, text: 'Date' } },
-          y: { title: { display: true, text: 'Bookings' }, beginAtZero: true }
-        }
-      }
+    trendsChart = new Chart(canvas.getContext('2d'), {
+      type: 'line', data: { labels: data.map(row => row.day), datasets: [{ label: 'Bookings (' + months + 'M)', data: data.map(row => Number(row.count)), borderColor: '#2271b1', backgroundColor: 'rgba(34,113,177,0.2)', fill: true, tension: 0.3 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: 'Meeting date (' + (CB_REST.timezone || 'UTC') + ')' } }, y: { title: { display: true, text: 'Bookings' }, beginAtZero: true, ticks: { precision: 0 } } } }
     });
+    canvas.parentElement.querySelector('.cb-chart-error')?.remove();
+  }).catch(error => {
+    let message = canvas.parentElement.querySelector('.cb-chart-error');
+    if (!message) { message = document.createElement('p'); message.className = 'cb-chart-error'; canvas.after(message); }
+    message.textContent = error.message;
   });
 }
-
 document.addEventListener('DOMContentLoaded', () => {
-  renderTrendsWidget(1);
-
-  document.getElementById('cb-trends-1m').addEventListener('click', () => renderTrendsWidget(1));
-  document.getElementById('cb-trends-3m').addEventListener('click', () => renderTrendsWidget(3));
-  document.getElementById('cb-trends-6m').addEventListener('click', () => renderTrendsWidget(6));
-  document.getElementById('cb-trends-12m').addEventListener('click', () => renderTrendsWidget(12));
+  [1,3,6,12].forEach(month => document.getElementById('cb-trends-' + month + 'm')?.addEventListener('click', () => renderTrendsWidget(month)));
 });

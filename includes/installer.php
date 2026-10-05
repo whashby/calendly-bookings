@@ -20,6 +20,16 @@ final class CB_Installer
     /**
      * Run on plugin activation.
      */
+    public static function deactivate(): void
+    {
+        wp_clear_scheduled_hook('cb_sync_master_cron');
+        wp_clear_scheduled_hook('cb_booking_process_order_fallback');
+        if (function_exists('as_unschedule_all_actions')) {
+            as_unschedule_all_actions('cb_booking_process_order', [], 'calendly-bookings');
+            as_unschedule_all_actions('cb_booking_reconcile_pending', [], 'calendly-bookings');
+        }
+    }
+
     public static function activate(): void
     {
         self::create_roles();
@@ -133,6 +143,8 @@ final class CB_Installer
                 "`created_ts` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
                 "`updated_ts` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
                 "`notes` TEXT DEFAULT NULL",
+                "`webhook_event` VARCHAR(100) DEFAULT NULL",
+                "`webhook_received_at` DATETIME DEFAULT NULL",
             ],
             'keys' => [
                 "PRIMARY KEY (`id`)",
@@ -177,6 +189,33 @@ final class CB_Installer
             'keys' => [
                 "PRIMARY KEY (`id`)",
                 "UNIQUE KEY `uniq_domain` (`domain`)",
+            ],
+        ]);
+
+        self::migrate_table('cb_reports', [
+            'columns' => [
+                "`id` BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT",
+                "`uuid` CHAR(36) NOT NULL",
+                "`type` VARCHAR(64) NOT NULL",
+                "`format` VARCHAR(16) NOT NULL",
+                "`status` ENUM('queued','processing','completed','failed','expired') NOT NULL DEFAULT 'queued'",
+                "`start_date` DATE NOT NULL",
+                "`end_date` DATE NOT NULL",
+                "`fields` LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`fields`))",
+                "`row_count` BIGINT(20) UNSIGNED NOT NULL DEFAULT 0",
+                "`file_path` TEXT DEFAULT NULL",
+                "`file_name` VARCHAR(255) DEFAULT NULL",
+                "`error_message` TEXT DEFAULT NULL",
+                "`created_by` BIGINT(20) UNSIGNED NOT NULL DEFAULT 0",
+                "`created_ts` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+                "`completed_ts` DATETIME DEFAULT NULL",
+            ],
+            'keys' => [
+                "PRIMARY KEY (`id`)",
+                "UNIQUE KEY `uuid` (`uuid`)",
+                "KEY `idx_status` (`status`)",
+                "KEY `idx_created` (`created_ts`)",
+                "KEY `idx_date_range` (`start_date`,`end_date`)",
             ],
         ]);
     }
@@ -354,6 +393,10 @@ private static function create_meeting_page(): void {
 
     // If option points to a valid page, stop
     if ($existing_id && get_post($existing_id)) {
+        $page = get_post($existing_id);
+        if ($page && trim((string) $page->post_content) === '') {
+            wp_update_post(['ID' => $existing_id, 'post_content' => '[cb_scheduled_meeting_details]']);
+        }
         return;
     }
 
@@ -370,7 +413,7 @@ private static function create_meeting_page(): void {
         'post_name'    => self::PAGE_SLUG,
         'post_status'  => 'publish',
         'post_type'    => 'page',
-        'post_content' => '',
+        'post_content' => '[cb_scheduled_meeting_details]',
     ]);
 
     if (!is_wp_error($page_id)) {

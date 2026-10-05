@@ -36,6 +36,7 @@ final class CB_Plugin{
         register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_EMAIL_FROM);
         register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_EMAIL_REPLY_TO);
         register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_EMAIL_BCC);
+        register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_EMAIL_TEMPLATES, ['type' => 'array']);
 
         register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_REPORT_TEMPLATE);
         register_setting(CB_Constants::OPT_GROUP, CB_Constants::OPT_REPORT_FILETYPE);

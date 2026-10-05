@@ -2,7 +2,6 @@ jQuery(document).ready(function($) {
   $('.cb-maintenance-btn').on('click', function() {
     const subaction = $(this).data('action');
     const $btn = $(this);
-alert(); return;
     // Disable button while running
     $btn.prop('disabled', true);
     $('#cb-sync-status').text('Running ' + subaction + '...');
@@ -12,6 +11,7 @@ alert(); return;
       method: 'POST',
       data: {
         action: 'cb_maintenance_action',
+        nonce: cb_admin.nonce,
         subaction: subaction
       },
       success: function(response) {

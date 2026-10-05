@@ -263,3 +263,12 @@ div.product_cat-meetings form div.quantity {
     margin: 0.25em 0;
   }
 }
+
+.cb-webhook-confirmation{max-width:820px;margin:0 auto}.cb-webhook-confirmation section{padding:1.25rem 0;border-bottom:1px solid #e5e5e5}.cb-confirmation-eyebrow{text-transform:uppercase;letter-spacing:.08em;font-size:.8rem;opacity:.7}.cb-confirmation-status{display:inline-block;padding:.35rem .7rem;border-radius:999px;background:#eef6ee}.cb-map-wrapper{position:relative;width:100%;aspect-ratio:16/9;margin:1rem 0;overflow:hidden;border-radius:8px}.cb-map-wrapper iframe{width:100%;height:100%;border:0}.cb-choice-list{display:grid;gap:.5rem}.cb-choice-list label{font-weight:400}.cb-time-tile{appearance:none;border:1px solid #ccc;border-radius:4px;padding:.65rem 1rem;cursor:pointer;background:#f9f9f9}.cb-time-tile.selected{background:#476d46;color:#fff;border-color:#476d46}
+
+.cb-booking-disabled { opacity: .55 !important; cursor: not-allowed !important; }
+.cb-meeting-book-link { text-decoration: none; }
+
+.cb-booking-intro { margin: 0 0 1.25rem; }
+.cb-booking-intro h3 { margin: 0 0 .4rem; }
+.cb-booking-intro p { margin: 0; opacity: .85; }

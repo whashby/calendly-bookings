@@ -8,7 +8,16 @@ function canEdit(start_time, status)  {
     return !!(eventDate > now || ((now - eventDate) <= twoWeeksMs && (status === 'active' || status === 'completed')));
 }
 
+function cbAdminEscape(value) {
+    return jQuery('<div>').text(value == null ? '' : String(value)).html().replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 jQuery(document).ready(function($) {
+  $(document).on('click', '#cb-refresh-scheduled-events', function(e) {
+      e.preventDefault(); const $button=$(this); $button.prop('disabled',true).text('Refreshing…');
+      $.post(cb_admin.ajaxurl,{action:'cb_sync_scheduled_events_now',nonce:cb_admin.nonce},function(r){ if(r&&r.success) window.location.reload(); else alert((r&&r.data&&r.data.message)||'Unable to refresh scheduled events.'); },'json').fail(function(){ alert('Unable to refresh scheduled events.'); }).always(function(){ $button.prop('disabled',false).text('Refresh from Calendly'); });
+  });
+
 
     /**
      * Clear filter name
@@ -33,8 +42,11 @@ jQuery(document).ready(function($) {
         e.preventDefault();
         
         const invitee  = $(this).data('invitee');
+        const email = $(this).data('email') || '';
         const uuid  = $(this).data('uuid');
-        const endpoint = '/wp-json/calendly-bookings/v1/scheduled-events/invitee-history/' + encodeURIComponent(invitee);
+        const endpoint = email
+            ? (CB_REST.root || '/wp-json/calendly-bookings/v1/') + 'scheduled-events/invitee-history-by-email?email=' + encodeURIComponent(email)
+            : (CB_REST.root || '/wp-json/calendly-bookings/v1/') + 'scheduled-events/invitee-history/' + encodeURIComponent(invitee);
         
         $('#cb-dynamic-history-modal').remove();
         
@@ -44,7 +56,7 @@ jQuery(document).ready(function($) {
         
         const $container = $modal.find('.cb-history-content');
         
-        $.get(endpoint, function(response) {
+        $.ajax({ url: endpoint, method: 'GET', headers: { 'X-WP-Nonce': CB_REST.nonce } }).done(function(response) {
             let content = '';
             
             if (response && response.success && response.data && response.data.length > 0) {
@@ -54,39 +66,41 @@ jQuery(document).ready(function($) {
                     
                     content += `
                     <div class="history-item">
-                        <p><strong>Date/Time:</strong> ${row.start_time}</p>
-                        <p><strong>Event:</strong> ${row.event_name}</p>
-                        <p><strong>Status:</strong> ${row.status}</p>
-                        <p><strong>Location:</strong> ${row.location}</p>
+                        <p><strong>Date/Time:</strong> ${cbAdminEscape(row.start_time)}</p>
+                        <p><strong>Event:</strong> ${cbAdminEscape(row.event_name)}</p>
+                        <p><strong>Status:</strong> ${cbAdminEscape(row.status)}</p>
+                        <p><strong>Location:</strong> ${cbAdminEscape(row.location)}</p>
                         <div class="notes-section">
-                            <p><strong>What was discussed:</strong> ${notes.discussed || ''}</p>
-                            <p><strong>Guidance provided:</strong> ${notes.guidance || ''}</p>
-                            <p><strong>Follow-up actions:</strong> ${notes.follow_up || ''}</p>`;
-                    if(canEdit(row.start_time, row.status)) {
-                        content+= `<p><strong>Admin notes:</strong> <span class="admin-notes-text">${notes.admin || ''}</span></p>`;
+                            <p><strong>What was discussed:</strong> ${cbAdminEscape(notes.discussed || '')}</p>
+                            <p><strong>Guidance provided:</strong> ${cbAdminEscape(notes.guidance || '')}</p>
+                            <p><strong>Follow-up actions:</strong> ${cbAdminEscape(notes.follow_up || '')}</p>`;
+                    if(canEdit(row.start_time_iso || row.start_time, row.status)) {
+                        content+= `<p><strong>Admin notes:</strong> <span class="admin-notes-text">${cbAdminEscape(notes.admin || '')}</span></p>`;
                     } else {
-                        content+= `<p><strong>Admin notes:</strong> ${notes.admin || ''}</p>`;
+                        content+= `<p><strong>Admin notes:</strong> ${cbAdminEscape(notes.admin || '')}</p>`;
                     }
                     content+= `
                         </div>
-                    </div>`;
+                    `;
                         
-                    if(canEdit(row.start_time, row.status)) {
+                    if(canEdit(row.start_time_iso || row.start_time, row.status)) {
                         content+= `
-                        <div id="admin-notes-url" class="admin-notes">
-                            <p><a href="#" class="cb-add-admin-notes" data-uuid="` + uuid + `">Add/Edit Notes</a></p>
+                        <div class="admin-notes">
+                            <p><a href="#" class="cb-add-admin-notes" data-uuid="${cbAdminEscape(row.event_id)}">Add/Edit Notes</a></p>
                         </div>`;
                     }
+                    content += '</div>';
                 });
             } else {
-                content = '<p>No history found for ' + invitee + '.</p>';
+                content = '<p>No history found for ' + cbAdminEscape(invitee) + '.</p>';
             }
             
             $container.html(content);
 
             tb_show('Invitee History: ' + invitee.replace(/_/g, ' '), '#TB_inline?inlineId=cb-dynamic-history-modal');
-        }).fail(function() {
-            $container.html('<p>Error loading history.</p>');
+        }).fail(function(xhr) {
+            $container.html('<p>' + cbAdminEscape(xhr.responseJSON?.message || 'Unable to load the record. Reload the page and try again.') + '</p>');
+            // $container.html('<p>Error loading history.</p>');
             tb_show('View Invitee History', '#TB_inline?inlineId=cb-dynamic-history-modal');
         });
     });
@@ -98,18 +112,18 @@ jQuery(document).ready(function($) {
     $(document).on('click', '.cb-add-admin-notes', function(e) {
         e.preventDefault();
 
-        const form = $(this).closest('.cb-thickbox-form');
+        const form = $(this).closest('.history-item');
         const uuid  = $(this).data('uuid');
         const notes = form.find('.admin-notes-text').text();
 
         $(this).hide();
-        $('#admin-notes-url').after(
+        form.find('.admin-notes').after(
         //tb_show('Add Admin Notes', '#TB_inline?inlineId=cb-admin-notes-content-modal')
-        `<div id="cb-admin-notes-content-modal" style="margin-bottom:30px;">
+        `<div class="cb-admin-notes-editor cb-thickbox-form" style="margin-bottom:30px;">
             <h2>Add Admin Notes</h2>
             <div class="cb-thickbox-form">
                 <label for="notes-admin">Thoughts for next session
-                <textarea id="notes-discussed" name="notes-admin" class="large-text" autofocus>${notes || ''}</textarea>
+                <textarea id="notes-discussed" name="notes-admin" class="large-text" autofocus>${cbAdminEscape(notes)}</textarea>
                 </label>
             </div>
             <div class="cb-thickbox-actions">
@@ -128,7 +142,7 @@ jQuery(document).ready(function($) {
         e.preventDefault();
         
         const uuid = $(this).data('uuid');
-        const endpoint = '/wp-json/calendly-bookings/v1/scheduled-events/view/' + encodeURIComponent(uuid);
+        const endpoint = (CB_REST.root || '/wp-json/calendly-bookings/v1/') + 'scheduled-events/view/' + encodeURIComponent(uuid);
     
         $('#cb-event-' + uuid + '-modal').remove();
     
@@ -138,7 +152,7 @@ jQuery(document).ready(function($) {
         
         const $container = $modal.find('.cb-event-content');
     
-        $.get(endpoint, function(response) {
+        $.ajax({ url: endpoint, method: 'GET', headers: { 'X-WP-Nonce': CB_REST.nonce } }).done(function(response) {
             let content = '';
         
             if (response && response.success && response.data) {
@@ -150,17 +164,17 @@ jQuery(document).ready(function($) {
 content = `
   <h2>Event Details</h2>
   <div class="cb-thickbox-form cb-event-details">
-    <p><strong>Invitee:</strong> ${row.invitee_name}</p>
-    <p><strong>Event:</strong> ${row.event_name}</p>
-    <p><strong>Date/Time:</strong> ${row.start_time}</p>
-    <p><strong>Location:</strong> ${row.location}</p>
-    <p><strong>Status:</strong> <span class="record-status" data-status="${row.status}">${row.status}</span></p>
+    <p><strong>Invitee:</strong> ${cbAdminEscape(row.invitee_name)}</p>
+    <p><strong>Event:</strong> ${cbAdminEscape(row.event_name)}</p>
+    <p><strong>Date/Time:</strong> ${cbAdminEscape(row.start_time)}</p>
+    <p><strong>Location:</strong> ${cbAdminEscape(row.location)}</p>
+    <p><strong>Status:</strong> <span class="record-status" data-status="${cbAdminEscape(row.status)}">${cbAdminEscape(row.status)}</span></p>
     
     <h3>Notes</h3>
-    <p><strong>What was discussed:</strong> <span class="note-text" data-field="discussed">${notes.discussed || ''}</span></p>
-    <p><strong>Guidance provided:</strong> <span class="note-text" data-field="guidance">${notes.guidance || ''}</span></p>
-    <p><strong>Follow-up actions:</strong> <span class="note-text" data-field="follow_up">${notes.follow_up || ''}</span></p>
-    <p><strong>Admin notes:</strong> <span class="note-text" data-field="admin">${notes.admin || ''}</span></p>
+    <p><strong>What was discussed:</strong> <span class="note-text" data-field="discussed">${cbAdminEscape(notes.discussed || '')}</span></p>
+    <p><strong>Guidance provided:</strong> <span class="note-text" data-field="guidance">${cbAdminEscape(notes.guidance || '')}</span></p>
+    <p><strong>Follow-up actions:</strong> <span class="note-text" data-field="follow_up">${cbAdminEscape(notes.follow_up || '')}</span></p>
+    <p><strong>Admin notes:</strong> <span class="note-text" data-field="admin">${cbAdminEscape(notes.admin || '')}</span></p>
     
     <input type="hidden" name="uuid" value="${uuid}">
     <div class="cb-thickbox-actions">
@@ -212,7 +226,7 @@ content = `
             const field = $(this).data('field');
             const value = $(this).text();
             $(this).replaceWith(
-                `<textarea name="notes-${field}">${value}</textarea>`
+                `<textarea name="notes-${field}">${cbAdminEscape(value)}</textarea>`
             );
         });
         
@@ -230,7 +244,8 @@ content = `
         const lastname = form.find('input[name="lastname"]').val();
         const email = form.find('input[name="email"]').val();
         const initialSession = form.find('#initial_session option:selected');
-        const start_time = form.find('#initial_date').val()+'T'+ form.find('#initial_time').val()+':00Z';
+        if (!form[0].reportValidity()) return;
+        const start_time = form.find('#initial_date').val()+'T'+ form.find('#initial_time').val()+':00';
         const location = form.find('#location option:selected');
         const notes = {
             discussed: form.find('textarea[name="notes-discussed"]').val(),
@@ -263,12 +278,13 @@ content = `
     
         $.post(ajaxurl, {
             action: 'cb_create_walk_in',
+            nonce: cb_admin.nonce,
             data: JSON.stringify(data)
         }, function(response) {
             if (response.success) {
                 alert('Walk-in created successfully');
                 tb_remove();
-                location.reload();
+                window.location.reload();
             } else {
                 alert('Error: ' + response.data.message);
             }
@@ -293,13 +309,14 @@ content = `
 
         $.post(ajaxurl, {
             action: 'calendly_bookings_bulk_update_scheduled_events',
+            nonce: cb_admin.nonce,
             uuids: uuids,
             status: bulk_status
         }, function(response) {
             if (response.success) {
                 alert('Events updated successfully.');
                 tb_remove();
-                location.reload();
+                window.location.reload();
             } else {
                 alert(response.data.message || 'Update failed.');
             }
@@ -310,7 +327,7 @@ content = `
      * Handle admin notes submission
      */
     function handleAdminNotesSubmit($button) {
-        const form = $button.closest('.cb-thickbox-form');
+        const form = $button.closest('.cb-admin-notes-editor');
         const uuid = $button.data('uuid');
 
         if (!uuid) {
@@ -326,12 +343,13 @@ content = `
         
         $.post(ajaxurl, {
             action: 'calendly_bookings_add_admin_notes',
+            nonce: cb_admin.nonce,
             uuid: uuid,
             notes: notes
         }, function(response) {
             if (response.success) {
                 alert('Changes saved.');
-                location.reload();
+                window.location.reload();
             } else {
                 alert('Error: ' + (response.data?.message || 'Save failed.'));
             }
@@ -352,17 +370,19 @@ content = `
             return;
         }
     
-        const status = $('input[name="event-status"]:checked').val();
+        const status = form.find('input[name="event-status"]:checked').val();
         const notes = {
             discussed: form.find('textarea[name="notes-discussed"]').val(),
             guidance: form.find('textarea[name="notes-guidance"]').val(),
-            follow_up: form.find('textarea[name="notes-follow_up"]').val()
+            follow_up: form.find('textarea[name="notes-follow_up"]').val(),
+            admin: form.find('textarea[name="notes-admin"]').val()
         };
     
         if (!confirm("Are you sure you want to save these changes?")) return;
     
         $.post(ajaxurl, {
             action: 'calendly_bookings_update_scheduled_event',
+            nonce: cb_admin.nonce,
             uuid: uuid,
             status: status,
             notes: notes
@@ -370,7 +390,7 @@ content = `
             if (response.success) {
                 alert('Changes saved.');
                 tb_remove();
-                location.reload();
+                window.location.reload();
             } else {
                 alert('Error: ' + (response.data?.message || 'Save failed.'));
             }
@@ -416,7 +436,7 @@ content = `
         $('#location').append(`<option value="">Select a location</option>`);
         
         // Fetch event types
-        $.get('/wp-json/calendly-bookings/v1/event-types', function(response) {
+        $.get((CB_REST.root || '/wp-json/calendly-bookings/v1/') + 'event-types', function(response) {
             if (response.success && response.data) {
                 response.data.forEach(type => {
                         $('#initial_session').append(`<option name="${type.name}" value="${type.name}" data-id="${type.id}" data-pid="${type.product_id}" data-uuid="${type.uuid}">${type.name}</option>`);
@@ -428,7 +448,7 @@ content = `
         });
     
         // Fetch meeting locations
-        $.get('/wp-json/calendly-bookings/v1/scheduled-events/locations', function(response) {
+        $.ajax({ url: (CB_REST.root || '/wp-json/calendly-bookings/v1/') + 'scheduled-events/locations', headers: { 'X-WP-Nonce': cb_admin.rest_nonce || CB_REST.nonce } }).done( function(response) {
             if (response.success && response.data) {
                 response.data.forEach(loc => {
                     $('#location').append(`<option value="${loc.uuid}" data-id="${loc.id}">${loc.name}</option>`);
@@ -446,7 +466,7 @@ content = `
         if (!uuid) return;
         const startIso = new Date().toISOString();
 
-        fetch(`/wp-json/calendly-bookings/v1/event-availability?uuid=${uuid}&start_iso=${startIso}`, {
+        fetch((CB_REST.root || '/wp-json/calendly-bookings/v1/') + `event-availability?uuid=${uuid}&start_iso=${encodeURIComponent(startIso)}`, {
             credentials: 'same-origin'
         })
         .then(res => res.json())
@@ -479,6 +499,7 @@ content = `
 
             // Auto-select earliest date
             const firstDate = Object.keys(grouped)[0];
+            if (!firstDate) { $('#next-available-slot').text('No available follow-up appointments.'); return; }
             $('#next-available-slot').text("First available date: " + firstDate);
 
             // Populate times for earliest date
@@ -505,7 +526,7 @@ content = `
         const selectedDateObj = new Date(selectedDateStr);
         const startIso = selectedDateObj.toISOString().split('T')[0]; // just the YYYY-MM-DD part
 
-        fetch(`/wp-json/calendly-bookings/v1/event-availability?uuid=${uuid}&start_iso=${startIso}`, {
+        fetch((CB_REST.root || '/wp-json/calendly-bookings/v1/') + `event-availability?uuid=${uuid}&start_iso=${encodeURIComponent(startIso)}`, {
             credentials: 'same-origin'
         })
         .then(res => res.json())
@@ -547,7 +568,7 @@ content = `
                 const field = $(this).attr('name').replace('notes-', '');
                 const value = $(this).val();
                 $(this).replaceWith(
-                    `<span class="note-text" data-field="${field}">${value}</span>`
+                    `<span class="note-text" data-field="${field}">${cbAdminEscape(value)}</span>`
                 );
             });
         
@@ -556,8 +577,8 @@ content = `
             form.find('.cb-cancel-btn').hide();
         } else {
 			if($(this).attr('id') === 'cb-admin-notes-cancel') {
-                $('#cb-admin-notes-content-modal').remove();
-                $('.cb-add-admin-notes').show();
+                $(this).closest('.history-item').find('.cb-add-admin-notes').show();
+                $(this).closest('.cb-admin-notes-editor').remove();
 			} else {
                 tb_remove();
 			}

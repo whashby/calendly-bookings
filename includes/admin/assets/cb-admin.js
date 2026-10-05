@@ -20,7 +20,7 @@ jQuery(document).ready(function($) {
   $(document).on('click', '.cb-update-notice .notice-dismiss', function() {
     $.post(ajaxurl, {
       action: 'cb_dismiss_update_notice',
-      nonce: cb_admin.nonce // ensure you localize this nonce in your PHP
+      nonce: cb_admin.nonce
     }, function(response) {
       if (response.success) {
         console.log('Update notice dismissed successfully.');

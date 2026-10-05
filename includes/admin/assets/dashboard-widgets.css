@@ -113,3 +113,6 @@
 #cb-widget-revenue li {
   padding: 4px 0;
 }
+
+.cb-widget-scroll { overflow-x: auto; }
+.cb-widget-error, .cb-chart-error { color: #b32d2e; }

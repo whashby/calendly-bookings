@@ -1,147 +1,57 @@
 <?php
-
+declare(strict_types=1);
 namespace Calendly_Bookings\Modules;
-
-if (!defined('ABSPATH')) {
-    exit;
-}
-
-use Calendly_Bookings\CB_Constants;
-use Calendly_Bookings\Utils\CB_Timezone_Converter;
+if (!defined('ABSPATH')) exit;
 final class CB_Shortcodes {
-
-    /**
-     * Initialize shortcode registration
-     */
-    public static function init(): void {
-        add_action('init', [__CLASS__, 'register_shortcodes']);
-    }
-
-    /**
-     * Register all plugin shortcodes
-     */
-    public static function register_shortcodes(): void {
-        add_shortcode('cb_scheduled_meeting_details', [__CLASS__, 'scheduled_meeting_details']);
-    }
-
-    /**
-     * Shortcode callback: [cb_scheduled_meeting_details]
-     */
+    public static function init(): void { add_action('init', [__CLASS__, 'register_shortcodes']); }
+    public static function register_shortcodes(): void { add_shortcode('cb_scheduled_meeting_details', [__CLASS__, 'scheduled_meeting_details']); }
     public static function scheduled_meeting_details($atts = [], $content = null): string {
-        global $wpdb;
-        $table = $wpdb->prefix . 'cb_scheduled_events';
-    
-
-       // Collect query parameters
-        $params = [
-            'host'        => isset($_GET['assigned_to']) ? sanitize_text_field($_GET['assigned_to']) : '',
-            'event_type_name'    => isset($_GET['event_type_name']) ? sanitize_text_field($_GET['event_type_name']) : '',
-            'event_start_time'   => isset($_GET['event_start_time']) ? sanitize_text_field($_GET['event_start_time']) : '',
-            'event_end_time'     => isset($_GET['event_end_time']) ? sanitize_text_field($_GET['event_end_time']) : '',
-            'invitee_full_name'  => isset($_GET['invitee_full_name']) ? sanitize_text_field($_GET['invitee_full_name']) : '',
-            'invitee_email'      => isset($_GET['invitee_email']) ? sanitize_email($_GET['invitee_email']) : '',
-            'event_type_uuid'         => isset($_GET['event_type_uuid']) ? sanitize_text_field($_GET['event_type_uuid']) : '',
-            'invitee_uuid'       => isset($_GET['invitee_uuid']) ? sanitize_text_field($_GET['invitee_uuid']) : '',
-            'order_id'           => isset($_GET['answer_1']) ? sanitize_text_field($_GET['answer_1']) : '',
-        ];
-    
-        // If no data, return nothing
-        if (empty(array_filter($params))) {
-            return '';
-        }
-    
-        $order_id = $params['order_id'] ?? '';
-        $start_iso = $params['event_start_time'] ?? '';
-        
-        if (empty($order_id) || empty($start_iso)) {
-            if (!current_user_can('administrator')) {
-                global $wp_query;
-                $wp_query->set_404();
-                status_header(404);
-                nocache_headers();
-                include get_404_template();
-                exit;
+        global $wpdb; $table=$wpdb->prefix.'cb_scheduled_events'; $token=sanitize_text_field((string)($_GET['token']??'')); $invitee_uuid=sanitize_text_field((string)($_GET['invitee_uuid']??'')); $order_id=absint($_GET['answer_1']??0); $row=null;
+        if($token) $order_id=absint($wpdb->get_var($wpdb->prepare("SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key='_cb_meeting_confirmation_token' AND meta_value=%s LIMIT 1",$token)));
+        // The order's raw webhook payload is the authoritative customer-facing source.
+        if($order_id) {
+            $order = wc_get_order($order_id);
+            if($order) {
+                $raw_order_webhook = (string)$order->get_meta('_cb_calendly_webhook_payload', true);
+                if($raw_order_webhook !== '') {
+                    $webhook = json_decode($raw_order_webhook, true);
+                    if(is_array($webhook)) $row = ['webhook_event'=>(string)$order->get_meta('_cb_calendly_webhook_event', true), 'name'=>''];
+                }
             }
         }
-    
-        $row = $wpdb->get_row(
-            $wpdb->prepare("SELECT * FROM $table WHERE order_id = %s", $order_id),
-            ARRAY_A
-        );
-
-        if (!$row) {
-            if (!current_user_can('administrator')) {
-                global $wp_query;
-                $wp_query->set_404();
-                status_header(404);
-                nocache_headers();
-                include get_404_template();
-                exit;
+        if(empty($webhook) && $order_id) $row=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE order_id=%d AND webhook_event LIKE 'invitee.%%' ORDER BY webhook_received_at DESC,id DESC LIMIT 1",$order_id),ARRAY_A);
+        if(empty($webhook) && $invitee_uuid) $row=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE payload LIKE %s AND webhook_event LIKE 'invitee.%%' ORDER BY webhook_received_at DESC,id DESC LIMIT 1",'%'.$wpdb->esc_like($invitee_uuid).'%'),ARRAY_A);
+        if(empty($webhook)) {
+            if(!$row||empty($row['webhook_event'])||empty($row['payload'])) return self::pending_confirmation();
+            $webhook=json_decode((string)$row['payload'],true);
+        }
+        if(!is_array($webhook)) return self::pending_confirmation(); $payload=is_array($webhook['payload']??null)?$webhook['payload']:[]; $invitee=is_array($payload['invitee']??null)?$payload['invitee']:$payload; $event=is_array($payload['event']??null)?$payload['event']:[];
+        // Deliberately do not query Calendly here. Customer-facing data comes only from the persisted webhook payload.
+        $event_name=sanitize_text_field((string)($webhook['event']??$row['webhook_event']));
+        $request_session = false;
+        if ($order_id) {
+            $confirmation_order = wc_get_order($order_id);
+            if ($confirmation_order) {
+                foreach ($confirmation_order->get_items() as $confirmation_item) {
+                    $confirmation_product = $confirmation_item->get_product();
+                    if ($confirmation_product instanceof \WC_Product && strtolower($confirmation_product->get_slug()) === 'hesychia') {
+                        $request_session = true;
+                        break;
+                    }
+                }
             }
         }
-
-        $meeting_details = json_decode($row['payload'], true);
-        $meeting_details['cancel_url'] = $row['cancel_url'] ?? '';
-        $meeting_details['reschedule_url'] = $row['reschedule_url'] ?? '';
-        // Build HTML output
-        ob_start();
-        ?>
-        <div class="cb-meeting-details">
-            <?php if ($params['event_type_name']) : ?>
-                <h2><?php echo esc_html($params['event_type_name']); ?></h2>
-            <?php endif; ?>
-    
-            <?php if ($start_iso) : 
-                $converter = new \Calendly_Bookings\Utils\CB_Timezone_Converter();
-            ?>
-                <p><strong>Date:</strong> <?php echo esc_html($converter->to_site_time($start_iso)); ?></p>
-            <?php endif; ?>
-    
-            <?php if ($params['host']) : ?>
-                <p><strong>Host:</strong> <?php echo esc_html($params['host']); ?></p>
-            <?php endif; ?>
-    
-            <?php if ($params['invitee_full_name']) : ?>
-                <p><strong>Invitee:</strong> <?php echo esc_html($params['invitee_full_name']); ?></p>
-            <?php endif; ?>
-    
-            <?php if ($params['invitee_email']) : ?>
-                <p><strong>Email:</strong> <?php echo esc_html($params['invitee_email']); ?></p>
-            <?php endif; ?>
-    
-            <?php if (!empty($meeting_details)) : ?>
-                <?php if (!empty($meeting_details['location']['type'])) : ?>
-                    <p><strong>Meeting Type:</strong> <?php echo esc_html(ucwords($meeting_details['location']['type'])); ?></p>
-                <?php endif; ?>
-    
-                <?php if (!empty($meeting_details['location']['join_url'])) : ?>
-                    <p><strong>Join Link:</strong> <a href="<?php echo esc_url($meeting_details['location']['join_url']); ?>" target="_blank">Join Meeting</a></p>
-                <?php endif; ?>
-    
-                <?php if (!empty($meeting_details['location']['password'])) : ?>
-                    <p><strong>Password:</strong> <?php echo esc_html($meeting_details['location']['password']); ?></p>
-                <?php endif; ?>
-  
-    <div class="cb-actions" style="display:flex;gap:15px;flex-wrap:wrap;">
-
-        <?php if (!empty($meeting_details['cancel_url'])): ?>
-            <a href="<?php echo esc_url($meeting_details['cancel_url']); ?>" class="button" style="background:#c62828;color:#fff;padding:10px 20px;border-radius:4px;text-decoration:none;">
-                Cancel Meeting
-            </a>
-        <?php endif; ?>
-
-        <?php if (!empty($meeting_details['reschedule_url'])): ?>
-            <a href="<?php echo esc_url($meeting_details['reschedule_url']); ?>" class="button" style="background:#0277bd;color:#fff;padding:10px 20px;border-radius:4px;text-decoration:none;">
-                Reschedule
-            </a>
-        <?php endif; ?>
-
-    </div>
-  
-            <?php endif; ?>
-
+        if (!$request_session && stripos($session ?? '', 'hesychia') !== false) $request_session = true;
+        $start=(string)($event['start_time']??$payload['start_time']??$invitee['start_time']??''); $end=(string)($event['end_time']??$payload['end_time']??$invitee['end_time']??''); $session=(string)($event['name']??$payload['event_name']??$row['name']??''); $location=is_array($event['location']??null)?$event['location']:(is_array($payload['location']??null)?$payload['location']:[]); $members=is_array($event['event_memberships']??null)?$event['event_memberships']:[]; $host=(string)($members[0]['user_name']??$members[0]['user_email']??''); $iname=(string)($invitee['name']??''); $iemail=(string)($invitee['email']??''); $join=(string)($location['join_url']??''); $password=(string)($location['password']??''); $loc=(string)($location['location']??$location['additional_info']??''); $kind=strtolower((string)($location['kind']??$location['type']??'')); $physical=in_array($kind,['physical','custom'],true)&&!$join; $status=($event_name==='invitee.canceled'||($invitee['status']??'')==='canceled')?'Canceled':'Confirmed by Calendly';
+        ob_start(); ?>
+        <div class="cb-meeting-details cb-webhook-confirmation" data-source="calendly-webhook">
+          <div class="cb-confirmation-header"><p class="cb-confirmation-eyebrow"><?php echo esc_html($request_session ? __('Session request confirmation', 'calendly-bookings') : __('Booking confirmation', 'calendly-bookings')); ?></p><?php if($session): ?><h1><?php echo esc_html($session); ?></h1><?php endif; ?><p class="cb-confirmation-status"><?php echo esc_html($status); ?></p></div>
+          <section><h2><?php esc_html_e('Session Details','calendly-bookings'); ?></h2><?php if($start): ?><p><strong><?php esc_html_e('Date:','calendly-bookings'); ?></strong> <?php echo esc_html(wp_date('l, F j, Y',strtotime($start),wp_timezone())); ?></p><p><strong><?php esc_html_e('Time:','calendly-bookings'); ?></strong> <?php echo esc_html(wp_date('g:i A T',strtotime($start),wp_timezone())); ?></p><?php endif; ?><?php if($start&&$end): ?><p><strong><?php esc_html_e('Duration:','calendly-bookings'); ?></strong> <?php echo esc_html(max(1,(int)round((strtotime($end)-strtotime($start))/60)).' minutes'); ?></p><?php endif; ?></section>
+          <?php if($kind||$loc||$join): ?><section><h2><?php echo esc_html($request_session ? __('Session Details', 'calendly-bookings') : __('Meeting Details', 'calendly-bookings')); ?></h2><?php if($kind): ?><p><strong><?php esc_html_e('Meeting Type:','calendly-bookings'); ?></strong> <?php echo esc_html(ucwords(str_replace('_',' ',$kind))); ?></p><?php endif; ?><?php if($loc): ?><p><strong><?php esc_html_e('Location:','calendly-bookings'); ?></strong> <?php echo nl2br(esc_html($loc)); ?></p><?php endif; ?><?php if($join): ?><p><strong><?php esc_html_e('Join:','calendly-bookings'); ?></strong> <a href="<?php echo esc_url($join); ?>" target="_blank" rel="noopener noreferrer nofollow"><?php echo esc_html($request_session ? __('Join Session', 'calendly-bookings') : __('Join Meeting', 'calendly-bookings')); ?></a></p><?php endif; ?><?php if($password): ?><p><strong><?php esc_html_e('Password:','calendly-bookings'); ?></strong> <?php echo esc_html($password); ?></p><?php endif; ?><?php if($physical&&$loc): $map='https://www.google.com/maps?q='.rawurlencode($loc).'&output=embed'; ?><div class="cb-map-wrapper"><iframe title="<?php esc_attr_e('Meeting location map','calendly-bookings'); ?>" src="<?php echo esc_url($map); ?>" loading="lazy"></iframe></div><p><a href="<?php echo esc_url('https://www.google.com/maps/search/?api=1&query='.rawurlencode($loc)); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e('Open location in Google Maps','calendly-bookings'); ?></a></p><?php endif; ?></section><?php endif; ?>
+          <?php if($host||$iname||$iemail): ?><section><h2><?php esc_html_e('Participants','calendly-bookings'); ?></h2><?php if($host): ?><p><strong><?php esc_html_e('Host:','calendly-bookings'); ?></strong> <?php echo esc_html($host); ?></p><?php endif; ?><?php if($iname): ?><p><strong><?php esc_html_e('Invitee:','calendly-bookings'); ?></strong> <?php echo esc_html($iname); ?></p><?php endif; ?><?php if($iemail): ?><p><strong><?php esc_html_e('Email:','calendly-bookings'); ?></strong> <?php echo esc_html($iemail); ?></p><?php endif; ?></section><?php endif; ?>
+          <div class="cb-actions"><?php if(!empty($invitee['cancel_url'])): ?><a class="button" href="<?php echo esc_url($invitee['cancel_url']); ?>" rel="nofollow"><?php echo esc_html($request_session ? __('Cancel Session', 'calendly-bookings') : __('Cancel Meeting', 'calendly-bookings')); ?></a><?php endif; ?><?php if(!empty($invitee['reschedule_url'])): ?><a class="button" href="<?php echo esc_url($invitee['reschedule_url']); ?>" rel="nofollow"><?php esc_html_e('Reschedule','calendly-bookings'); ?></a><?php endif; ?></div>
         </div>
-        <?php
-        return ob_get_clean();
+        <?php return (string)ob_get_clean();
     }
+    private static function pending_confirmation(): string { return '<div class="cb-meeting-details cb-meeting-pending"><h2>'.esc_html__('Booking confirmation pending','calendly-bookings').'</h2><p>'.esc_html__('Your order was received. We are waiting for the Calendly confirmation webhook. Please refresh this page shortly.','calendly-bookings').'</p></div>'; }
 }

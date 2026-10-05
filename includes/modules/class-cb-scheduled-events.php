@@ -111,10 +111,12 @@ final class CB_Scheduled_Events {
         if (!in_array($orderby, $allowed_orderby, true)) {
             $orderby = 'start_time';
         }
-    
         if (!in_array($order, ['ASC', 'DESC'], true)) {
             $order = 'DESC';
         }
+        $orderby_sql = match ($orderby) {
+            'event_name' => 'se.name', 'invitee_name' => 'inv.name', 'order_id' => 'se.order_id', 'location' => 'ml.name', 'event_type' => 'et.name', default => 'se.' . $orderby,
+        };
     
         // Pagination
         $limit  = isset($args['limit'])  ? intval($args['limit'])  : 50;
@@ -131,7 +133,7 @@ final class CB_Scheduled_Events {
             LEFT JOIN {$this->table_locations} ml ON se.location_id = ml.id
             LEFT JOIN {$this->table_invitees} inv ON inv.scheduled_event_uuid = se.uuid
             {$where_sql}
-            ORDER BY {$orderby} {$order}
+            ORDER BY {$orderby_sql} {$order}
             LIMIT %d OFFSET %d
         ";
     
@@ -173,6 +175,7 @@ final class CB_Scheduled_Events {
         foreach ($rows as $row) {
             $history[] = [
                 'event_id'     => $row['uuid'],
+                'start_time_iso' => str_replace(' ', 'T', $row['start_time']) . 'Z',
                 'event_name'   => $row['event_name'],
                 'start_time'   => get_date_from_gmt(
                     $row['start_time'],
@@ -196,13 +199,15 @@ final class CB_Scheduled_Events {
      */
     public function get_invitee_history_by_email($email) {
         global $wpdb;
+        $email = sanitize_email((string) $email);
+        if (!$email) return null;;
     
         $sql = $wpdb->prepare(
             "SELECT se.uuid, se.name AS event_name, se.start_time, ml.name AS location,
                     se.notes, se.status, i.email AS invitee_email, i.name AS invitee_name
              FROM {$this->table_scheduled_events} se
              INNER JOIN {$this->table_invitees} i ON se.uuid = i.scheduled_event_uuid
-             INNER JOIN {$this->table_locations} ml ON se.location_id = ml.id
+             LEFT JOIN {$this->table_locations} ml ON se.location_id = ml.id
              WHERE i.email = %s
              ORDER BY se.start_time DESC",
             $email
@@ -217,6 +222,7 @@ final class CB_Scheduled_Events {
         foreach ($rows as $row) {
             $history[] = [
                 'event_id'     => $row['uuid'],
+                'start_time_iso' => str_replace(' ', 'T', $row['start_time']) . 'Z',
                 'event_name'   => $row['event_name'],
                 'start_time'   => get_date_from_gmt(
                     $row['start_time'],
@@ -233,6 +239,7 @@ final class CB_Scheduled_Events {
         return $history;
     }
 
+
 	
     /**
      * Count events for pagination.
@@ -240,31 +247,16 @@ final class CB_Scheduled_Events {
      * @return int
      */
     public function count_events(array $filters = []): int {
-
-        $where = [];
-        $params = [];
-
-        if (!empty($filters['status'])) {
-            $where[] = "status = %s";
-            $params[] = $filters['status'];
-        }
-
-        if (!empty($filters['start_date'])) {
-            $where[] = "DATE(start_time) >= %s";
-            $params[] = $filters['start_date'];
-        }
-
-        if (!empty($filters['end_date'])) {
-            $where[] = "DATE(start_time) <= %s";
-            $params[] = $filters['end_date'];
-        }
-
-        $where_sql = $where ? "WHERE " . implode(" AND ", $where) : "";
-
-        $sql = "SELECT COUNT(*) FROM {$this->table_scheduled_events} {$where_sql}";
-
-        return (int) ($params ? $this->db->get_var($this->db->prepare($sql, $params))
-                              : $this->db->get_var($sql));
+        $where=[]; $params=[];
+        if (!empty($filters['name'])) { $like='%'.$this->db->esc_like($filters['name']).'%'; $where[]='(inv.name LIKE %s OR se.name LIKE %s)'; $params[]=$like; $params[]=$like; }
+        if (!empty($filters['status'])) { $where[]='se.status = %s'; $params[]=$filters['status']; }
+        if (!empty($filters['start_date'])) { $where[]='DATE(se.start_time) >= %s'; $params[]=$filters['start_date']; }
+        if (!empty($filters['end_date'])) { $where[]='DATE(se.start_time) <= %s'; $params[]=$filters['end_date']; }
+        if (!empty($filters['email'])) { $where[]='inv.email LIKE %s'; $params[]='%'.$this->db->esc_like($filters['email']).'%'; }
+        if (!empty($filters['event_type'])) { $where[]='et.name = %s'; $params[]=$filters['event_type']; }
+        $where_sql=$where?'WHERE '.implode(' AND ',$where):'';
+        $sql="SELECT COUNT(DISTINCT se.id) FROM {$this->table_scheduled_events} se LEFT JOIN {$this->table_event_types} et ON se.event_type_id=et.id LEFT JOIN {$this->table_invitees} inv ON inv.scheduled_event_uuid=se.uuid {$where_sql}";
+        return (int)($params?$this->db->get_var($this->db->prepare($sql,...$params)):$this->db->get_var($sql));
     }
 
 	/**
@@ -385,6 +377,6 @@ final class CB_Scheduled_Events {
     public function get_locations(): array {
         $sql = "SELECT id, uuid, type, name FROM {$this->table_locations} ORDER BY name ASC";
         $data = $this->db->get_results($sql, ARRAY_A);
-        return $data ? ['success' => true, 'data' => $data] : null;
+        return ['success' => true, 'data' => $data ?: []];
     }
 }

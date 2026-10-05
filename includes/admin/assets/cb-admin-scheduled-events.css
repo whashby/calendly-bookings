@@ -114,3 +114,13 @@
 }
 
 
+
+body.calendly-bookings_page_calendly-bookings-scheduled-events #TB_window {
+ top:50% !important; left:50% !important; transform:translate(-50%,-50%); margin:0 !important;
+ width:min(760px,calc(100vw - 32px)) !important; height:min(780px,calc(100vh - 80px)) !important;
+ display:flex; flex-direction:column;
+}
+body.calendly-bookings_page_calendly-bookings-scheduled-events #TB_ajaxContent {
+ flex:1; min-height:0; height:auto !important; max-width:none; box-sizing:border-box; overflow:auto; margin:0;
+}
+@media(max-width:600px){.cb-field-row{flex-direction:column;gap:0;}}

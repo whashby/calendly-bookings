@@ -3,7 +3,7 @@
  * Plugin Name: Calendly Bookings
  * Plugin URI: https://github.com/whashby/calendly-bookings
  * Description: A CMS for managing Calendly events, clients and WooCommerce products.
- * Version: 6.9.251
+ * Version: 6.12.7
  * Requires at least: 5.2
  * Requires PHP: 8.3
  * Author:      Wafiq Harris-Ashby
@@ -49,6 +49,10 @@ add_action('admin_init', function () {
 });
 // --- Plugin bootstrap ---
 require_once __DIR__ . '/includes/constants.php';
+
+// Activation/deactivation must be registered from the actual plugin bootstrap file.
+register_activation_hook(__FILE__, ['Calendly_Bookings\CB_Installer', 'activate']);
+register_deactivation_hook(__FILE__, ['Calendly_Bookings\CB_Installer', 'deactivate']);
 require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/updater.php';
 

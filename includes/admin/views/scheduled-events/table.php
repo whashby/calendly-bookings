@@ -28,8 +28,8 @@
             <?php if (!empty($event['invitee_email'])) : ?>
               <a href="#"
                  class="cb-view-history"
-                 data-invitee="<?php echo esc_attr($invitee_name); ?>" data-uuid="<?php echo esc_attr($event['uuid']); ?>">
-                 <?php echo esc_html_e($event['invitee_name']); ?>
+                 data-invitee="<?php echo esc_attr($invitee_name); ?>" data-email="<?php echo esc_attr($event['invitee_email']); ?>" data-uuid="<?php echo esc_attr($event['uuid']); ?>">
+                 <?php echo esc_html($event['invitee_name']); ?>
               </a>
             <?php else : ?>
               <?php esc_html_e('(Invitee not listed)', 'calendly-bookings'); ?>

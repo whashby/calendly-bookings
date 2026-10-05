@@ -41,7 +41,7 @@ jQuery(function($) {
       if (res.success) {
         location.reload();
       } else {
-        alert(res.data || 'Error creating product.');
+        alert(res.message || res.data?.message || 'Error creating product.');
       }
     });
   });
@@ -64,8 +64,22 @@ jQuery(function($) {
       if (res.success) {
         location.reload();
       } else {
-        alert(res.data || 'Error linking product.');
+        alert(res.message || res.data?.message || 'Error linking product.');
       }
     });
   });
+  $(document).on('click', '.cb-unlink', function(e) {
+    e.preventDefault();
+    const uuid = $(this).data('uuid');
+    if (!uuid || !confirm('Unlink this WooCommerce product from the Calendly event?')) return;
+    fetch(`${CB_REST.root}wc/unlink-product`, {
+      method: 'POST',
+      headers: { 'X-WP-Nonce': CB_REST.nonce, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ uuid: uuid })
+    }).then(r => r.json()).then(res => {
+      if (res.success) location.reload();
+      else alert(res.message || res.data?.message || 'Unable to unlink product.');
+    });
+  });
+
 });

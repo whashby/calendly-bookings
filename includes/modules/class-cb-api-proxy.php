@@ -21,16 +21,6 @@ final class CB_API_Proxy {
     public static function register_routes(): void {
         $ns = 'calendly-bookings/v1';
 
-		// Debug: dump event types
-		register_rest_route($ns, '/debug-event-types', [
-			'methods'  => 'GET',
-			'callback' => [__CLASS__, 'rest_debug_event_types'],
-			'permission_callback' => 'can_manage',
-			'args' => [
-				'uuid' => ['required' => false, 'type' => 'string']
-			],
-		]);
-
         // Sync
         register_rest_route($ns, '/sync', [
             'methods'             => 'POST',
@@ -113,8 +103,8 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
     return new \WP_REST_Response([
         'success'               => true,
         'message'               => __('Sync complete', 'calendly-bookings'),
-        'event_types_upserted'  => $res['event_types_upserted'] ?? 0,
-        'events_upserted'       => $res['events_upserted'] ?? 0,
+        'event_types_upserted'  => $res['results']['event_types']['upserted'] ?? 0,
+        'events_upserted'       => $res['results']['scheduled_events']['upserted'] ?? 0,
         'scheduled_events'      => $events,
         'errors'                => $res['errors'] ?? []
     ], 200);
@@ -131,19 +121,15 @@ public static function rest_sync(\WP_REST_Request $r): \WP_REST_Response|\WP_Err
     }
 
     public static function rest_event_availability(\WP_REST_Request $r): \WP_REST_Response {
-        $uri  = sanitize_text_field((string) ($r->get_param('event_type_uri') ?: ''));
+        $uri = sanitize_text_field((string) ($r->get_param('event_type_uri') ?: ''));
         $uuid = sanitize_text_field((string) ($r->get_param('uuid') ?: ''));
         $start_iso = sanitize_text_field((string) ($r->get_param('start_iso') ?: gmdate('c')));
-
-        if (!$uri && $uuid) {
-            $uri = 'https://api.calendly.com/event_types/' . $uuid;
-        }
-        if (!$uri || !str_starts_with($uri, 'https://api.calendly.com/event_types/')) {
-            return new \WP_REST_Response(['success'=>false,'message'=>'Invalid event_type'], 400);
-        }
-
-        $res = CB_API::instance()->get_event_type_available_times($uuid, $start_iso);
-        if (!empty($res['error'])) return new \WP_REST_Response(['success'=>false,'message'=>$res['error']], 200);
+        // The public API endpoint requires the Calendly Event Type URI. Accept the
+        // stored UUID for backwards compatibility and construct the required URI.
+        if (!$uri && $uuid) $uri = 'https://api.calendly.com/event_types/' . rawurlencode($uuid);
+        if (!$uri || !preg_match('~^https://api\.calendly\.com/event_types/[A-Za-z0-9-]+$~', $uri)) return new \WP_REST_Response(['success'=>false,'message'=>'Invalid Calendly Event Type URI.'], 400);
+        $res = CB_API::instance()->get_event_type_availability($uri, $start_iso);
+        if (!empty($res['error'])) return new \WP_REST_Response(['success'=>false,'message'=>(string)($res['message'] ?? 'Availability request failed.')], absint($res['status'] ?? 500) ?: 500);
         return new \WP_REST_Response(['success'=>true,'data'=>$res['collection'] ?? []], 200);
     }
 

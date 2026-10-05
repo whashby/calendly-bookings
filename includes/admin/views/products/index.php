@@ -5,20 +5,6 @@ if (!defined('ABSPATH')) exit;
 
 global $wpdb;
 
-// Handle unlink action
-if (!empty($_GET['cb_unlink'])) {
-    $uuid = sanitize_text_field($_GET['cb_unlink']);
-    $wpdb->update(
-        "{$wpdb->prefix}cb_event_types",
-        ['product_id' => null],
-        ['uuid' => $uuid],
-        ['%d'],
-        ['%s']
-    );
-    add_action('admin_notices', function() {
-        echo '<div class="notice notice-success"><p>' . esc_html__('Product unlinked successfully.', 'calendly-bookings') . '</p></div>';
-    });
-}
 
 // Fetch Calendly event types
 $event_types = $wpdb->get_results("
@@ -93,9 +79,9 @@ function cb_shorten_description($desc, $maxLen = 600) {
                 <a class="button " data-uuid="<?php echo esc_attr($et->uuid); ?>" href="post.php?post=<?php echo esc_attr($et->product_id); ?>&action=edit&classic-editor=1">
                   <?php esc_html_e('Manage Product', 'calendly-bookings'); ?>
                 </a>
-                <a href="<?php echo esc_url(add_query_arg(['cb_unlink' => $et->uuid])); ?>" class="button cb-unlink">
+                <button type="button" class="button cb-unlink" data-uuid="<?php echo esc_attr($et->uuid); ?>">
                   <?php esc_html_e('Unlink', 'calendly-bookings'); ?>
-                </a>
+                </button>
               <?php else: ?>
                 <button class="button button-primary cb-create-btn"
                         data-uuid="<?php echo esc_attr($et->uuid); ?>"

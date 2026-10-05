@@ -15,9 +15,9 @@ final class CB_Dashboard {
     }
 
     public static function enqueue_assets(string $hook): void {
-        if ($hook !== 'index.php') return;
+        if ($hook !== 'index.php' || !current_user_can('manage_options')) return;
 		wp_enqueue_script( 
-			'chartjs', 'https://cdn.jsdelivr.net/npm/chart.js', 
+			'chartjs', 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js', 
 			[], 
 			'4.4.0', 
 			true 
@@ -34,7 +34,7 @@ final class CB_Dashboard {
         wp_enqueue_script(
             'cb-dashboard-charts',
             CB_Constants::url('includes/admin/assets/dashboard-charts.js'),
-            ['jquery'],
+            ['cb-dashboard', 'chartjs'],
             CB_Constants::VERSION,
             true
         );
@@ -42,6 +42,9 @@ final class CB_Dashboard {
 		$data = [
 			'root'  => esc_url_raw( rest_url( 'calendly-bookings/v1/' ) ),
 			'nonce' => wp_create_nonce( 'wp_rest' ),
+            'timezone' => wp_timezone()->getName(),
+            'currency' => get_woocommerce_currency(),
+            'utc_offset' => wp_timezone()->getOffset(new \DateTimeImmutable('now')) / 60,
 		];
 		wp_add_inline_script(
 			'cb-dashboard',
@@ -68,6 +71,7 @@ final class CB_Dashboard {
 
 
 	public static function register_widgets(): void {
+        if (!current_user_can('manage_options')) return;
 		wp_add_dashboard_widget('cb_widget_availability', __('Next Available Slots','calendly-bookings'), [__CLASS__, 'render_availability']);
 		wp_add_dashboard_widget('cb_widget_integrity', __('Data Integrity','calendly-bookings'), [__CLASS__, 'render_data_integrity']);
 		wp_add_dashboard_widget('cb_widget_health', __('API Health & Sync','calendly-bookings'), [__CLASS__, 'render_api_health']);
