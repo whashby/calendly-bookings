@@ -265,7 +265,7 @@ private static function items_list(array $items): string {
                 %4$s
             </div>',
             esc_html($title),
-            !empty($date) ? ' – ' . esc_html($date) : '',
+            !empty($date) ? ' – ' . (!empty($item['utc']) ? CB_Customer_Time::html($item['utc']) : esc_html($date)) : '',
             !empty($location) ? '<p class="hier-card__location">'.esc_html($location).'</p>' : '',
             !empty($actions) ? '<p class="hier-card__actions">'.$actions.'</p>' : ''
         );
@@ -343,6 +343,7 @@ private static function upcoming_bookings_list(array $events): string {
         return [
             'title'    => $ev['event_name'] ?? 'Booking',
             'date'     => !empty($ev['start_time']) ? self::format_site_time($ev['start_time']) : '',
+            'utc'      => $ev['start_time'] ?? '',
             'location' => $ev['location'] ?? '—',
             'actions'  => self::render_actions($ev),
         ];
@@ -458,7 +459,7 @@ private static function render_actions(array $ev): string {
                     <td>%3$s</td>
                 </tr>',
                 esc_html($ev['event_name'] ?? 'Booking'),
-                esc_html(!empty($ev['start_time']) ? self::format_site_time($ev['start_time']) : ''),
+                !empty($ev['start_time']) ? CB_Customer_Time::html($ev['start_time']) : '',
                 esc_html(ucfirst($ev['status'] ?? 'completed'))
             );
         }
@@ -560,9 +561,7 @@ private static function user_has_calendly_product(int $user_id): bool {
 
     private static function format_site_time(string $utc_datetime): string {
         // Convert UTC to site timezone for display
-        $ts = strtotime($utc_datetime);
-        if (!$ts) return '';
-        return wp_date('M d, Y H:i', $ts);
+        return CB_Customer_Time::format($utc_datetime, CB_Customer_Time::viewer_timezone());
     }
 
 	public static function hide_woocommerce_account_navigation(): void {

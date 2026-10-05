@@ -9,7 +9,8 @@
   // GET /event_type_available_times.
   const eventTypeUri = $form.data('event-type-uri') || rest.event_type_uri || (uuid ? 'https://api.calendly.com/event_types/' + uuid : '');
   const nonce = rest.nonce || '';
-  const siteTimezone = (window.CB_TZ_DATA && CB_TZ_DATA.site_timezone) || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const siteTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  $form.find('input[name="cb_timezone"]').val(siteTimezone);
   let availabilityByDate = {};
   let datePicker = null;
 
@@ -117,10 +118,19 @@
     });
     fetchAvailability(new Date().toISOString());
 
-    $(document).on('change', '#cb_meeting_location', function(){
-      const idx = $(this).find(':selected').data('location-index');
+    function updateLocationDetails(){
+      const $location = $('#cb_meeting_location');
+      const $selected = $location.is('select') ? $location.find(':selected') : $location;
+      const idx = $selected.data('location-index');
+      const kind = $selected.data('location-kind');
       $('#cb_meeting_location_details').val(idx == null ? '' : String(idx));
-    });
+      const required = kind === 'ask_invitee' || kind === 'outbound_call';
+      const $detail = $('#cb_meeting_location_detail_text');
+      $detail.prop('required', required).prop('disabled', !required).toggle(required);
+      $('label[for="cb_meeting_location_detail_text"]').toggle(required);
+    }
+    $(document).on('change', '#cb_meeting_location', updateLocationDetails);
+    updateLocationDetails();
 
     $(document).on('submit', 'form.cart', function(e){
       if (!$form.length) return;

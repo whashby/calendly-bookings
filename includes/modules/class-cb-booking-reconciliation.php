@@ -35,7 +35,7 @@ final class CB_Booking_Reconciliation {
 
     public static function queue_paid_order(int $order_id): void {
         $order = wc_get_order($order_id);
-        if (!$order || (float) $order->get_total() <= 0) {
+        if (!$order || !CB_Checkout::order_has_meeting($order) || (float) $order->get_total() <= 0) {
             return;
         }
         if (!$order->is_paid()) {
@@ -46,7 +46,7 @@ final class CB_Booking_Reconciliation {
 
     public static function queue_free_order(int $order_id, array $posted_data = [], object $order = null): void {
         $wc_order = $order instanceof \WC_Order ? $order : wc_get_order($order_id);
-        if (!$wc_order || (float) $wc_order->get_total() > 0) {
+        if (!$wc_order || !CB_Checkout::order_has_meeting($wc_order) || (float) $wc_order->get_total() > 0) {
             return;
         }
         self::enqueue($order_id, 0, 'free');
@@ -78,7 +78,7 @@ final class CB_Booking_Reconciliation {
                     $order->update_meta_data('_cb_booking_queued_at', gmdate('c'));
                     $order->save();
                 }
-                error_log('[CB Booking] Queued order #' . $order_id . ' as Action Scheduler action #' . $action_id . ' (' . sanitize_key($reason) . ').');
+                CB_Logger::debug('[CB Booking] Queued order #' . $order_id . ' as Action Scheduler action #' . $action_id . ' (' . sanitize_key($reason) . ').');
                 return true;
             }
             return false;
@@ -96,12 +96,14 @@ final class CB_Booking_Reconciliation {
             return;
         }
 
-        error_log('[CB Booking] Processing WooCommerce order #' . $order_id . '.');
+        CB_Logger::debug('[CB Booking] Processing WooCommerce order #' . $order_id . '.');
 
         $status = (string) $order->get_meta('_cb_calendly_booking_status', true);
         if ($status === 'confirmed' || $status === 'created' || $status === 'canceled' || $status === 'rescheduled') {
             return;
         }
+
+        if ($status === 'awaiting_webhook' && $order->get_meta('_cb_calendly_invitee_uri', true)) return;
 
         $is_free = (float) $order->get_total() <= 0;
         if (!$is_free && !$order->is_paid()) {
@@ -123,7 +125,7 @@ final class CB_Booking_Reconciliation {
             $event_uuid = self::get_event_uuid($order);
             $start_time = self::get_start_time($order);
             $email = sanitize_email($order->get_billing_email());
-            error_log('[CB Booking] Order #' . $order_id . ' booking inputs: event_uuid=' . ($event_uuid ?: 'MISSING') . ', start_time=' . ($start_time ?: 'MISSING') . ', billing_email=' . ($email ? 'present' : 'MISSING') . '.');
+            CB_Logger::debug('[CB Booking] Order #' . $order_id . ' booking inputs: event_uuid=' . ($event_uuid ?: 'MISSING') . ', start_time=' . ($start_time ?: 'MISSING') . ', billing_email=' . ($email ? 'present' : 'MISSING') . '.');
             $first = sanitize_text_field($order->get_billing_first_name());
             $last = sanitize_text_field($order->get_billing_last_name());
 
@@ -142,10 +144,16 @@ final class CB_Booking_Reconciliation {
             }
 
             $payload = self::build_payload($order, $event_type['resource'], $event_uuid, $start_time, $first, $last, $email);
-            error_log('[CB Booking] Order #' . $order_id . ' Scheduling API payload prepared: questions=' . count((array) ($payload['questions_and_answers'] ?? [])) . ', location=' . (!empty($payload['location']) ? 'present' : 'event-type/default') . '.');
+            CB_Logger::debug('[CB Booking] Order #' . $order_id . ' Scheduling API payload prepared: questions=' . count((array) ($payload['questions_and_answers'] ?? [])) . ', location=' . (!empty($payload['location']) ? 'present' : 'event-type/default') . '.');
+            $order->update_meta_data('_cb_calendly_create_request', wp_json_encode($payload));
+            $order->save();
             $response = $api->create_invitee($payload);
+            $order->update_meta_data('_cb_calendly_create_http_status', absint($response['status'] ?? 0));
+            $order->update_meta_data('_cb_calendly_create_response_body', wp_json_encode($response['body'] ?? $response));
+            $order->update_meta_data('_cb_calendly_create_received_at', gmdate('c'));
+            $order->save();
 
-            if (empty($response['resource'])) {
+            if (!empty($response['error']) || empty($response['resource']['uri']) || empty($response['resource']['event'])) {
                 $message = $response['message'] ?? ('Calendly booking failed (HTTP ' . absint($response['status'] ?? 0) . ').');
                 throw new \RuntimeException($message);
             }
@@ -194,13 +202,15 @@ final class CB_Booking_Reconciliation {
                 'first_name' => $first,
                 'last_name' => $last,
                 'name' => trim($first . ' ' . $last),
-                'timezone' => wp_timezone_string(),
+                'timezone' => CB_Customer_Time::valid(CB_Customer_Time::order_timezone($order)->getName()) ?: 'UTC',
             ],
             'tracking' => [
                 'utm_source' => 'wordpress',
                 'utm_campaign' => 'hierlife',
-                'utm_content' => (string) $order->get_order_number(),
+                'utm_content' => (string) $order->get_id(),
                 'utm_medium' => 'woocommerce',
+                'utm_term' => null,
+                'salesforce_uuid' => null,
             ],
         ];
 
@@ -230,24 +240,32 @@ final class CB_Booking_Reconciliation {
             $kind = strtolower((string) ($location['kind'] ?? $location['type'] ?? ''));
             $key = 'loc_' . $index . '_' . substr(hash('sha256', wp_json_encode($location)), 0, 12);
             if ($selected && hash_equals($key, $selected)) {
-                $resolved = $location;
-                if (in_array($kind, ['ask_invitee','outbound_call'], true) && $detail_text !== '') {
-                    $resolved['location'] = $detail_text;
-                }
-                return $resolved;
+                return self::scheduling_location($location, $detail_text);
             }
             if ($detail_index !== '' && (string)$index === $detail_index) {
-                $resolved = $location;
-                if (in_array($kind, ['ask_invitee','outbound_call'], true) && $detail_text !== '') $resolved['location'] = $detail_text;
-                return $resolved;
+                return self::scheduling_location($location, $detail_text);
             }
         }
+        if (count($locations) === 1) return self::scheduling_location($locations[0], $detail_text);
         // Legacy compatibility with the old 1=remote / 2=physical selector.
         foreach ($locations as $location) {
             $kind = strtolower((string) ($location['kind'] ?? $location['type'] ?? ''));
-            if (($selected === '1' && in_array($kind, ['zoom','zoom_conference','google_conference','microsoft_teams','phone','outbound_call'], true)) || ($selected === '2' && in_array($kind, ['physical','custom'], true))) return $location;
+            if (($selected === '1' && in_array($kind, ['zoom','zoom_conference','google_conference','microsoft_teams','phone','outbound_call'], true)) || ($selected === '2' && in_array($kind, ['physical','custom'], true))) return self::scheduling_location($location, $detail_text);
         }
-        return null;
+        throw new \RuntimeException('The selected Calendly location no longer matches this event type.');
+    }
+
+    private static function scheduling_location(array $location, string $detail): array {
+        $kind = (string) ($location['kind'] ?? $location['type'] ?? '');
+        if ($kind === '') throw new \RuntimeException('Calendly location kind is missing.');
+        $result = ['kind' => $kind];
+        if (in_array($kind, ['ask_invitee','outbound_call'], true)) {
+            if ($detail === '') throw new \RuntimeException('Please provide the required Calendly location details.');
+            $result['location'] = $detail;
+        } elseif (!empty($location['location'])) {
+            $result['location'] = (string) $location['location'];
+        }
+        return $result;
     }
 
     private static function build_questions(\WC_Order $order, array $event_type): array {
@@ -260,9 +278,13 @@ final class CB_Booking_Reconciliation {
         $answers = [];
         foreach ($configured as $position => $question) {
             if (!is_array($question) || empty($question['enabled'])) continue;
-            $name = trim((string) ($question['name'] ?? ''));
-            if ($name === '' || preg_match('/^order\s*id(?:\b|\s*\()/i', $name)) continue;
-            $key = 'cbq_' . substr(hash('sha256', absint($question['position'] ?? $position) . '|' . $name), 0, 20);
+            $name = (string) ($question['name'] ?? '');
+            if (trim($name) === '') continue;
+            if (preg_match('/^order\s*id(?:\b|\s*\()/i', trim($name))) {
+                $answers[] = ['question' => $name, 'answer' => (string) $order->get_id(), 'position' => absint($question['position'] ?? $position)];
+                continue;
+            }
+            $key = CB_Frontend::question_key($question);
             $value = $stored[$key] ?? '';
             if (is_array($value)) $value = implode(', ', array_map('sanitize_text_field', $value));
             else $value = sanitize_textarea_field((string) $value);

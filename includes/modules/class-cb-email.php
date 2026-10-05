@@ -100,6 +100,7 @@ final class CB_Email {
             '{timezone}'        => 'Meeting timezone',
             '{duration}'        => 'Meeting duration',
             '{location}'        => 'Meeting location',
+            '{meeting_details}' => 'Submitted meeting form details',
             '{join_link}'       => 'Join link',
             '{confirmation_url}'=> 'HIER Life confirmation page',
             '{cancel_url}'      => 'Calendly cancellation link',
@@ -121,7 +122,7 @@ final class CB_Email {
 
         return [
             'subject' => self::replace_tokens($template['subject'], $context),
-            'body' => self::replace_tokens($template['body'], $context),
+            'body' => self::replace_tokens($template['body'], $context, true),
         ];
     }
 
@@ -140,7 +141,8 @@ final class CB_Email {
         }
 
         $subject = self::replace_tokens($template['subject'], $context);
-        $body = self::replace_tokens($template['body'], $context);
+        $body = self::replace_tokens($template['body'], $context, true);
+        if (!str_contains($template['body'], '{meeting_details}')) $body .= CB_Checkout::render_meeting_details($order);
         $headers = [
             'Content-Type: text/html; charset=UTF-8',
         ];
@@ -227,6 +229,7 @@ final class CB_Email {
             'timezone' => wp_timezone_string() ?: 'UTC',
             'duration' => '',
             'location' => '',
+            'meeting_details' => '',
             'join_link' => '',
             'confirmation_url' => '',
             'cancel_url' => '',
@@ -250,7 +253,7 @@ final class CB_Email {
         }
 
         $start = (string) ($event['start_time'] ?? $invitee['start_time'] ?? $order->get_meta('_cb_meeting_start_iso', true));
-        $tz = (string) ($event['timezone'] ?? $invitee['timezone'] ?? '');
+        $tz = CB_Customer_Time::valid((string) ($invitee['timezone'] ?? '')) ?: CB_Customer_Time::order_timezone($order)->getName();
         if ($tz === '') $tz = wp_timezone_string() ?: 'UTC';
         $date = $time = '';
         if ($start) {
@@ -266,7 +269,9 @@ final class CB_Email {
 
         $event_name = (string) ($event['name'] ?? $order->get_meta('_cb_calendly_event_name', true));
         if ($event_name === '') {
-            $event_name = $order->get_item_count() ? (string) $order->get_items()[0]->get_name() : 'Meeting';
+            $items = $order->get_items();
+            $first_item = reset($items);
+            $event_name = $first_item ? (string) $first_item->get_name() : 'Meeting';
         }
 
         $location = $event['location']['location'] ?? $event['location']['type'] ?? $order->get_meta('_cb_meeting_location_detail_text', true);
@@ -302,7 +307,8 @@ final class CB_Email {
             'time' => $time,
             'timezone' => $tz,
             'duration' => $duration !== '' ? $duration . (is_numeric($duration) ? ' minutes' : '') : '',
-            'location' => wp_strip_all_tags((string) $location),
+            'location' => wp_strip_all_tags((string) $location) ?: (CB_Checkout::meeting_details($order)['Location'] ?? ''),
+            'meeting_details' => CB_Checkout::render_meeting_details($order),
             'join_link' => $join ? '<p><a href="' . esc_url($join) . '">Join meeting</a></p>' : '',
             'confirmation_url' => $confirmation,
             'cancel_url' => $cancel,
@@ -314,10 +320,12 @@ final class CB_Email {
         ]);
     }
 
-    private static function replace_tokens(string $text, array $context): string {
+    private static function replace_tokens(string $text, array $context, bool $html = false): string {
         $replace = [];
         foreach (self::tokens() as $token => $label) {
-            $replace[$token] = (string) ($context[trim($token, '{}')] ?? '');
+            $key = trim($token, '{}');
+            $value = (string) ($context[$key] ?? '');
+            $replace[$token] = !$html || in_array($key, ['join_link','meeting_details'], true) ? $value : (str_ends_with($key, '_url') ? esc_url($value) : nl2br(esc_html($value)));
         }
         return strtr($text, $replace);
     }

@@ -300,12 +300,14 @@ final class CB_API {
             return [
                 'error' => true,
                 'status' => $status,
-                'message' => (string) ($body['message'] ?? 'Calendly scheduling request failed.'),
+                'message' => self::api_error_message(is_array($body) ? $body : [], 'Calendly scheduling request failed.'),
                 'body' => $body,
                 'retry_after' => $status === 429 ? $this->record_rate_limit($response) : 0,
             ];
         }
-        return is_array($body) ? $body : ['resource' => []];
+        if (!is_array($body) || !is_array($body['resource'] ?? null)) return ['error' => true, 'status' => $status, 'message' => 'Invalid Calendly scheduling response.', 'body' => $body];
+        $body['status'] = $status;
+        return $body;
     }
 
     public function get_event_types($unused = null, $unused2 = null): array {

@@ -41,13 +41,13 @@ $questions  = is_array($event_type['custom_questions'] ?? null) ? $event_type['c
       <label for="cb_meeting_location"><?php esc_html_e('Location', 'calendly-bookings'); ?></label>
       <?php if (count($locations) === 1 && strtolower((string) ($locations[0]['kind'] ?? '')) !== 'ask_invitee'): ?>
         <?php $loc = $locations[0]; $key = CB_Frontend::location_key($loc, 0); ?>
-        <input type="hidden" name="cb_meeting_location" id="cb_meeting_location" value="<?php echo esc_attr($key); ?>">
+        <input type="hidden" name="cb_meeting_location" id="cb_meeting_location" data-location-kind="<?php echo esc_attr((string) ($loc['kind'] ?? '')); ?>" value="<?php echo esc_attr($key); ?>">
         <div class="cb-location-summary"><strong><?php echo esc_html(ucwords(str_replace('_', ' ', (string) ($loc['kind'] ?? '')))); ?></strong><?php if (!empty($loc['location'])): ?> — <?php echo esc_html($loc['location']); ?><?php endif; ?></div>
       <?php else: ?>
         <select id="cb_meeting_location" name="cb_meeting_location" required>
           <option value=""><?php esc_html_e('Select a location', 'calendly-bookings'); ?></option>
           <?php foreach ($locations as $i => $loc): $key = CB_Frontend::location_key($loc, $i); $kind = strtolower((string) ($loc['kind'] ?? '')); ?>
-            <option value="<?php echo esc_attr($key); ?>" data-location-index="<?php echo esc_attr($i); ?>"><?php echo esc_html(ucwords(str_replace('_', ' ', $kind))); ?><?php if (!empty($loc['location'])): ?> — <?php echo esc_html($loc['location']); ?><?php endif; ?></option>
+            <option value="<?php echo esc_attr($key); ?>" data-location-kind="<?php echo esc_attr($kind); ?>" data-location-index="<?php echo esc_attr($i); ?>"><?php echo esc_html(ucwords(str_replace('_', ' ', $kind))); ?><?php if (!empty($loc['location'])): ?> — <?php echo esc_html($loc['location']); ?><?php endif; ?></option>
           <?php endforeach; ?>
         </select>
       <?php endif; ?>
@@ -94,6 +94,7 @@ $questions  = is_array($event_type['custom_questions'] ?? null) ? $event_type['c
         <?php elseif ($type === 'multi_select'): ?>
           <div class="cb-choice-list">
             <?php foreach ($choices as $i => $choice): ?><label><input type="checkbox" name="<?php echo esc_attr($field_name); ?>[]" value="<?php echo esc_attr($choice); ?>"> <?php echo esc_html($choice); ?></label><?php endforeach; ?>
+            <?php if (!empty($question['include_other'])): ?><label><input type="checkbox" name="<?php echo esc_attr($field_name); ?>[]" value="Other"> <?php esc_html_e('Other', 'calendly-bookings'); ?></label><?php endif; ?>
           </div>
         <?php elseif ($type === 'text'): ?>
           <textarea id="<?php echo esc_attr($key); ?>" name="<?php echo esc_attr($field_name); ?>" rows="4" <?php echo $required ? 'required' : ''; ?>></textarea>
@@ -104,12 +105,13 @@ $questions  = is_array($event_type['custom_questions'] ?? null) ? $event_type['c
         <?php else: ?>
           <input type="text" id="<?php echo esc_attr($key); ?>" name="<?php echo esc_attr($field_name); ?>" <?php echo $required ? 'required' : ''; ?>>
         <?php endif; ?>
-        <?php if (!empty($question['include_other']) && $type === 'multi_select'): ?>
+        <?php if (!empty($question['include_other']) && in_array($type, ['single_select','multi_select'], true)): ?>
           <input type="text" name="cb_calendly_answers_other[<?php echo esc_attr($key); ?>]" class="cb-other-answer" placeholder="<?php esc_attr_e('Please specify if other', 'calendly-bookings'); ?>">
         <?php endif; ?>
       </div>
   <?php endforeach; ?>
 
+  <input type="hidden" name="cb_timezone" value="">
   <input type="hidden" name="cb_prefill" value="1">
   <input type="hidden" name="cb_event_uuid" value="<?php echo esc_attr($event_uuid); ?>">
   <input type="hidden" name="cb_event_type_uri" value="<?php echo esc_attr((string) ($event_type['uri'] ?? '')); ?>">

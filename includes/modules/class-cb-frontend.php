@@ -380,6 +380,22 @@ add_action('woocommerce_before_add_to_cart_button', [__CLASS__, 'output_before_c
             }
         }
 
+        $locations = (array) ($definition['locations'] ?? []);
+        if ($locations && strtolower((string) ($definition['pooling_type'] ?? '')) !== 'round_robin') {
+            $selected_key = sanitize_text_field(wp_unslash((string) ($_POST['cb_meeting_location'] ?? '')));
+            $selected_location = null;
+            foreach ($locations as $index => $location) {
+                if (is_array($location) && self::location_key($location, (int) $index) === $selected_key) $selected_location = $location;
+            }
+            if (!$selected_location) {
+                wc_add_notice(__('Please select a valid meeting location.', 'calendly-bookings'), 'error');
+                return false;
+            }
+            if (in_array($selected_location['kind'] ?? '', ['ask_invitee','outbound_call'], true) && trim((string) ($_POST['cb_meeting_location_detail_text'] ?? '')) === '') {
+                wc_add_notice(__('Please provide the meeting location details.', 'calendly-bookings'), 'error');
+                return false;
+            }
+        }
         return $passed;
     }
 

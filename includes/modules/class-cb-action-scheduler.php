@@ -70,9 +70,9 @@ final class CB_Action_Scheduler {
             if (!$event_uuid || !$start_iso) {
                 // The line-item snapshot can still be promoted by the booking
                 // worker, so queue it rather than abandoning the order.
-                error_log('[CB Booking] Recovering orphan meeting order #' . $order->get_id() . ' from persisted line-item booking data.');
+                CB_Logger::debug('[CB Booking] Recovering orphan meeting order #' . $order->get_id() . ' from persisted line-item booking data.');
             } else {
-                error_log('[CB Booking] Recovering orphan meeting order #' . $order->get_id() . '.');
+                CB_Logger::debug('[CB Booking] Recovering orphan meeting order #' . $order->get_id() . '.');
             }
             CB_Booking_Reconciliation::enqueue((int) $order->get_id(), 0, 'orphan-recovery');
         }

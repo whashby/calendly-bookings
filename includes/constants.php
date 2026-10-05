@@ -7,7 +7,15 @@ if (!defined('ABSPATH')) {
 }
 
 final class CB_Constants {
+<<<<<<< Updated upstream
     public const VERSION = '7.0.0';
+=======
+<<<<<<< HEAD
+    public const VERSION = '6.12.10';
+=======
+    public const VERSION = '7.0.0';
+>>>>>>> 7087d179d1f8341096ff4c41d614ff5471c77e4b
+>>>>>>> Stashed changes
     public const OPT_GROUP = 'calendly_bookings';
 
     public const OPT_API_TOKEN = 'cb_api_token';
